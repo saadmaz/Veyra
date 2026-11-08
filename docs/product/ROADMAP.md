@@ -24,7 +24,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
-| 3     | Organisation and property management     | In progress: Parts 1-2 done; Part 3 (structure API) next |
+| 3     | Organisation and property management     | In progress: Parts 1-3 done; Part 4 (console) next |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
@@ -85,8 +85,8 @@ Also in Phase 2: structured JSON logging with request ids.
 | ---- | ----- | ------ |
 | 1 | Data foundation: properties, buildings, floors, units, common areas; composite tenant foreign keys; RLS; archive-only; unit-number rules; membership/invitation scope trigger; database tests | ✅ Done |
 | 2 | Property-scoped roles (property manager) with downward-only scope inheritance; property create, list (filtered) and view; property-scoped invitations; cross-property isolation tests | ✅ Done |
-| 3 | API: update and archive properties; buildings, floors, units and common areas | Next |
-| 4 | Console: property list and detail, building and unit structure, invite a property manager | |
+| 3 | API: property settings and lifecycle (activate, archive with cascade); buildings, floors, units and common areas with archive rules, parent checks and race-safe locking | ✅ Done |
+| 4 | Console: property list and detail, building and unit structure, invite a property manager | Next |
 
 Deferred from Phase 2 and tracked in [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md): MFA, email
 verification, password reset, structured logging, secret scanning, console CSP, production roles
@@ -112,6 +112,8 @@ readiness, user training and release communication, and known limitations docume
   embedded-postgres). The Redis service container is now used by the rate-limiter tests.
 - Authentication gaps listed in [AUTHENTICATION section 8](../security/AUTHENTICATION.md):
   sign-up email enumeration, no sign-out-everywhere, rate-limited attempts not audited.
+- Units cannot move between buildings yet; optional address fields cannot be cleared once set.
+- Restoring an archived property or structure is not supported (archive is final for now).
 - No expired-session cleanup job yet (rows stay until a worker job prunes them).
 - Production database role provisioning (veyra_owner / veyra_app from a secrets manager) not yet
   scripted.

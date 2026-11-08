@@ -243,7 +243,12 @@ describe('a property manager of P1', () => {
 
   it('can open P1, and P2 looks like it does not exist', async () => {
     const own = await as(pam).get(`/api/v1/organisations/${orgA}/properties/${p1.id}`).expect(200);
-    expect(own.body.permissions).toEqual(['property.profile.read']);
+    expect(own.body.permissions).toEqual([
+      'property.profile.read',
+      'property.settings.manage',
+      'property.structure.manage',
+      'property.structure.read',
+    ]);
     const other = await as(pam)
       .get(`/api/v1/organisations/${orgA}/properties/${p2.id}`)
       .expect(404);

@@ -105,8 +105,10 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
 
 - **Permissions** are a closed list in `access-control/domain/permissions.ts`. Today:
   `organisation.profile.read`, `organisation.settings.manage`, `organisation.member.read`,
-  `organisation.member.manage`, `organisation.member.invite`, `organisation.property.create`
-  and `property.profile.read`. Each module adds its permissions with its first endpoint.
+  `organisation.member.manage`, `organisation.member.invite`, `organisation.property.create`,
+  `property.profile.read`, `property.settings.manage`, `property.lifecycle.manage`,
+  `property.structure.read` and `property.structure.manage`. Each module adds its permissions
+  with its first endpoint.
 - **Two evaluation scopes.** `property.*` permissions are evaluated against the route's
   `:propertyId`; all other permissions against the organisation.
 - **System roles** live in `access-control/domain/roles.ts`:
@@ -114,8 +116,8 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | Role | Grantable at | Permissions today |
   | ---- | ------------ | ----------------- |
   | `ORGANISATION_ADMIN` | Organisation | Every registered permission |
-  | `PROPERTY_MANAGER` | Property | `property.profile.read` (structure and operations permissions arrive with their endpoints) |
-  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read` (finance arrives in Phase 6) |
+  | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins) |
+  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read` (finance arrives in Phase 6) |
 
   Security, maintenance, owner and tenant roles arrive with their phases. A role key in the
   database that the registry does not know grants nothing.
