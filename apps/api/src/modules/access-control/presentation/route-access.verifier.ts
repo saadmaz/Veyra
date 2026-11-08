@@ -2,8 +2,8 @@ import { Injectable, type OnApplicationBootstrap } from '@nestjs/common';
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { ROUTE_ACCESS, type RouteAccess } from '../../../platform/auth/route-access';
-import { isPermission } from '../domain/permissions';
-import { ORGANISATION_ID_PARAM } from './require-permission.decorator';
+import { isPermission, permissionScope } from '../domain/permissions';
+import { ORGANISATION_ID_PARAM, PROPERTY_ID_PARAM } from './require-permission.decorator';
 
 const toArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String) : value === undefined ? [''] : [String(value)];
@@ -60,6 +60,13 @@ export class RouteAccessVerifier implements OnApplicationBootstrap {
         const paths = controllerPaths.flatMap((c) => toArray(methodPath).map((m) => `${c}/${m}`));
         if (!paths.every((path) => path.includes(`:${ORGANISATION_ID_PARAM}`))) {
           problems.push(`${name}: permission route without :${ORGANISATION_ID_PARAM} in its path`);
+        }
+        if (
+          isPermission(access.permission) &&
+          permissionScope(access.permission) === 'property' &&
+          !paths.every((path) => path.includes(`:${PROPERTY_ID_PARAM}`))
+        ) {
+          problems.push(`${name}: property permission without :${PROPERTY_ID_PARAM} in its path`);
         }
       }
     }

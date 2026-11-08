@@ -21,7 +21,7 @@ import {
   TextField,
 } from '@/components/ui';
 import { ApiRequestError, api } from '@/lib/api-client';
-import { errorMessage, fieldErrors, ROLE_LABELS, roleLabel } from '@/lib/messages';
+import { errorMessage, fieldErrors, ORGANISATION_ROLES, roleLabel } from '@/lib/messages';
 import { invitationLink } from '@/lib/navigation';
 import { useApiQuery } from '@/lib/use-api';
 
@@ -192,9 +192,9 @@ function Invitations({ organisationId }: { organisationId: string }) {
         {error ? <Alert>{errorMessage(error)}</Alert> : null}
         <TextField label="Email" name="email" type="email" required error={fields.email} />
         <SelectField label="Role" name="role" defaultValue="FINANCE_OFFICER" error={fields.role}>
-          {Object.entries(ROLE_LABELS).map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
+          {ORGANISATION_ROLES.map((role) => (
+            <option key={role} value={role}>
+              {roleLabel(role)}
             </option>
           ))}
         </SelectField>

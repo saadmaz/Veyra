@@ -49,6 +49,20 @@ class UnknownPermissionController {
   thing() {}
 }
 
+@Controller(':organisationId/properties')
+class MissingPropertyParamController {
+  @Get()
+  @RequirePermission('property.profile.read')
+  list() {}
+}
+
+@Controller(':organisationId/properties/:propertyId')
+class PropertyRouteController {
+  @Get()
+  @RequirePermission('property.profile.read')
+  get() {}
+}
+
 async function verify(...controllers: (new () => unknown)[]) {
   @Module({ imports: [DiscoveryModule], controllers, providers: [RouteAccessVerifier] })
   class TestModule {}
@@ -75,6 +89,13 @@ describe('route access check at startup', () => {
   it('refuses permission routes without :organisationId in the path', async () => {
     await expect(verify(MissingOrganisationParamController)).rejects.toThrow(
       /without :organisationId/,
+    );
+  });
+
+  it('requires :propertyId for property-scoped permissions', async () => {
+    await expect(verify(PropertyRouteController)).resolves.toBeUndefined();
+    await expect(verify(MissingPropertyParamController)).rejects.toThrow(
+      /property permission without :propertyId/,
     );
   });
 

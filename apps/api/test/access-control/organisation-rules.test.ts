@@ -52,6 +52,24 @@ describe('invitation input', () => {
         .success,
     ).toBe(false);
   });
+
+  it('accepts an optional property scope, as a normalised UUID', () => {
+    const id = '0193B5A2-7C1D-7E3F-8A9B-0C1D2E3F4A5B';
+    expect(
+      createInvitationSchema.parse({
+        email: 'pm@example.test',
+        role: 'PROPERTY_MANAGER',
+        propertyId: id,
+      }).propertyId,
+    ).toBe(id.toLowerCase());
+    expect(
+      createInvitationSchema.safeParse({
+        email: 'pm@example.test',
+        role: 'PROPERTY_MANAGER',
+        propertyId: 'P1',
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('membership transitions', () => {

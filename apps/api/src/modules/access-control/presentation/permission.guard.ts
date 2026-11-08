@@ -4,8 +4,8 @@ import type { Request } from 'express';
 import { ROUTE_ACCESS, type RouteAccess } from '../../../platform/auth/route-access';
 import { ApiError } from '../../../platform/errors/api-error';
 import { AccessControlService } from '../application/access-control.service';
-import { isPermission } from '../domain/permissions';
-import { ORGANISATION_ID_PARAM } from './require-permission.decorator';
+import { isPermission, permissionScope } from '../domain/permissions';
+import { ORGANISATION_ID_PARAM, PROPERTY_ID_PARAM } from './require-permission.decorator';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -41,9 +41,22 @@ export class PermissionGuard implements CanActivate {
         if (typeof organisationId !== 'string' || !UUID.test(organisationId)) {
           throw new ApiError(404, 'NOT_FOUND', 'Organisation not found');
         }
-        req.access = await this.accessControl.authorise(
+        if (permissionScope(access.permission) === 'organisation') {
+          req.access = await this.accessControl.authorise(
+            userId,
+            organisationId.toLowerCase(),
+            access.permission,
+          );
+          return true;
+        }
+        const propertyId = req.params[PROPERTY_ID_PARAM];
+        if (typeof propertyId !== 'string' || !UUID.test(propertyId)) {
+          throw new ApiError(404, 'NOT_FOUND', 'Not found');
+        }
+        req.access = await this.accessControl.authoriseProperty(
           userId,
           organisationId.toLowerCase(),
+          propertyId.toLowerCase(),
           access.permission,
         );
         return true;

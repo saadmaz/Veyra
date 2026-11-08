@@ -1,7 +1,7 @@
 # Access Control
 
-> Status: Phase 2. Organisation-level authorisation is implemented (section 6). Property, unit
-> and derived (owner/tenant) grants arrive with Phases 3 and 4.
+> Status: Phase 3. Organisation- and property-level authorisation are implemented (section 6).
+> Building and unit scopes and derived (owner/tenant) grants arrive with later parts and Phase 4.
 
 ## 1. Model: RBAC + resource scope + time
 
@@ -105,13 +105,23 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
 
 - **Permissions** are a closed list in `access-control/domain/permissions.ts`. Today:
   `organisation.profile.read`, `organisation.settings.manage`, `organisation.member.read`,
-  `organisation.member.manage`, `organisation.member.invite`. Each module adds its permissions
-  with its first endpoint.
-- **System roles** live in `access-control/domain/roles.ts`. Only roles grantable at today's
-  scopes exist: `ORGANISATION_ADMIN` (all organisation permissions) and `FINANCE_OFFICER`
-  (`organisation.profile.read` until finance exists). Property-, building- and unit-scoped
-  roles are added with Phases 3 and 4. A role key in the database that the registry does not
-  know grants nothing.
+  `organisation.member.manage`, `organisation.member.invite`, `organisation.property.create`
+  and `property.profile.read`. Each module adds its permissions with its first endpoint.
+- **Two evaluation scopes.** `property.*` permissions are evaluated against the route's
+  `:propertyId`; all other permissions against the organisation.
+- **System roles** live in `access-control/domain/roles.ts`:
+
+  | Role | Grantable at | Permissions today |
+  | ---- | ------------ | ----------------- |
+  | `ORGANISATION_ADMIN` | Organisation | Every registered permission |
+  | `PROPERTY_MANAGER` | Property | `property.profile.read` (structure and operations permissions arrive with their endpoints) |
+  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read` (finance arrives in Phase 6) |
+
+  Security, maintenance, owner and tenant roles arrive with their phases. A role key in the
+  database that the registry does not know grants nothing.
+- **Member baseline:** every effective member, at any scope, may read the organisation's basic
+  profile (`organisation.profile.read`), so a property manager's console can name the
+  organisation. Nothing else reaches upward.
 - Custom per-organisation roles are not implemented.
 
 ### 6.2 Declaring access
@@ -122,10 +132,11 @@ Every route carries exactly one declaration:
 | --------- | ------- |
 | `@Public()` | No session (health, sign-up, sign-in) |
 | `@Authenticated()` | Any signed-in user, no organisation context (my organisations, create organisation, accept invitation, sign-out) |
-| `@RequirePermission('…')` | Signed-in effective member of the route's `:organisationId` holding the permission |
+| `@RequirePermission('…')` | Signed-in effective member of the route's `:organisationId` holding the permission; for `property.*` permissions, at the route's `:propertyId` |
 
 At startup, `RouteAccessVerifier` stops the application if a route has no declaration, names an
-unregistered permission, or requires a permission without `:organisationId` in its path.
+unregistered permission, requires a permission without `:organisationId` in its path, or
+requires a `property.*` permission without `:propertyId`.
 
 ### 6.3 Evaluation (per request, no cache)
 
@@ -141,6 +152,17 @@ Global guards run in a fixed order: `AuthGuard` (session), then `PermissionGuard
 5. Organisation `SUSPENDED` or `OFFBOARDING`: only `.read` permissions remain. `ARCHIVED`:
    nothing.
 
+For property-scoped permissions (`property.*`), additionally:
+
+6. The property id comes from the path and must belong to the organisation; otherwise 404.
+7. Only grants that **cover** the property count: organisation-scoped grants, or a grant on that
+   exact property. A property manager of P1 holds nothing over P2 and gets **404** there, so
+   they cannot tell P2 exists. A building- or unit-scoped grant does not cover its property.
+8. Covered but without the permission: 403. An `ARCHIVED` property keeps only `.read`
+   permissions.
+9. Lists (e.g. properties) are filtered server-side to the properties the caller's grants reach
+   (`propertiesWithPermission`), never by a client-supplied filter.
+
 Because grants are read on every request, suspension, revocation and expiry apply to the very
 next request of an existing session.
 
@@ -149,7 +171,11 @@ next request of an existing session.
 - **Creation:** any signed-in user can create an organisation (5 per day), becoming its first
   `ORGANISATION_ADMIN` in the same transaction.
 - **Anti-escalation:** inviting to a role, or changing someone's membership, requires holding
-  every permission of that role (`ROLE_NOT_ASSIGNABLE`).
+  every permission of that role **over the target scope** (`ROLE_NOT_ASSIGNABLE`): all
+  permissions of the actor's grants covering that scope (`permissionsForAssignment`). Nothing is
+  assignable in a read-only organisation or an archived property.
+- **Role scope:** a role can only be given at a scope it allows (`ROLE_SCOPE_MISMATCH`, 422):
+  a property manager needs a `propertyId`; the property must belong to the organisation (404).
 - **Last admin:** the last effective organisation admin cannot be suspended or revoked
   (`LAST_ADMIN`). Admin rows are locked during the check, so concurrent requests cannot both pass.
 - **Transitions:** ACTIVE ↔ SUSPENDED, either → REVOKED. REVOKED is final; access returns only
@@ -159,7 +185,7 @@ next request of an existing session.
   - the token is shown once to the inviter and stored as a SHA-256 hash;
   - only an account with the invited email can accept (`INVITATION_EMAIL_MISMATCH`);
   - concurrent acceptances are serialised by a conditional update;
-  - one pending invitation per email and role (`INVITATION_PENDING`); an expired one is retired
+  - one pending invitation per email, role and scope (`INVITATION_PENDING`); an expired one is retired
     automatically.
 - Every change writes a tenant audit record in the same transaction: `organisation.created`,
   `organisation.updated`, `membership.granted`, `membership.status_changed`,
@@ -169,6 +195,7 @@ next request of an existing session.
 
 - MFA for privileged mutations (rule 7) depends on MFA in authentication (ADR 0005 gap).
 - Subscription entitlements (rule 5): Phase 13.
-- Property/building/unit scopes and derived owner/tenant grants: Phases 3 and 4.
+- Building and unit scopes and derived owner/tenant grants: later Phase 3 parts and Phase 4.
+- Property managers cannot invite others to their property yet (organisation admins do).
 - Platform super admin support access.
 - Permission caching with invalidation events (not needed while reads are cheap).

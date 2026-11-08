@@ -32,8 +32,8 @@ Every error uses one envelope:
 | 401  | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` |
 | 403  | `FORBIDDEN`, `ORIGIN_NOT_ALLOWED`, `ROLE_NOT_ASSIGNABLE`, `INVITATION_EMAIL_MISMATCH` |
 | 404  | `NOT_FOUND` (also returned for resources in another tenant, to avoid leaking existence), `INVITATION_NOT_FOUND` |
-| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED` |
-| 422  | domain rule violations, e.g. `BOOKING_SLOT_TAKEN` |
+| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `PROPERTY_CODE_TAKEN`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED` |
+| 422  | domain rule violations, e.g. `BOOKING_SLOT_TAKEN`, `ROLE_SCOPE_MISMATCH` |
 | 429  | `RATE_LIMITED` (with `Retry-After`) |
 | 500  | `INTERNAL_ERROR` (no internals in the message) |
 | 503  | `SERVICE_UNAVAILABLE` |
@@ -57,6 +57,17 @@ mobile clients `Authorization: Bearer`. Details: [AUTHENTICATION](../security/AU
 | GET | `/organisations/{organisationId}/invitations` | `organisation.member.invite` |
 | POST | `/organisations/{organisationId}/invitations/{invitationId}/revoke` | `organisation.member.invite` |
 | POST | `/invitations/accept` | Authenticated (`{ token }`; the account email must match; 10 attempts per 15 min) |
+
+Invitations take an optional `propertyId` to grant a role for one property (e.g.
+`PROPERTY_MANAGER`); responses include `scopeType` and `scopeId`.
+
+## Properties (Phase 3)
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| POST | `/organisations/{organisationId}/properties` | `organisation.property.create` (country, time zone and currency default to the organisation's) |
+| GET | `/organisations/{organisationId}/properties` | Any member; filtered to the properties the caller's grants reach |
+| GET | `/organisations/{organisationId}/properties/{propertyId}` | `property.profile.read` at that property (includes the caller's `permissions`) |
 
 ## Pagination
 

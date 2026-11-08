@@ -10,10 +10,12 @@ export interface RoleDefinition {
 }
 
 /**
- * System roles (ACCESS_CONTROL section 4). Memberships store the key. Only roles that can be
- * granted with today's scopes are defined: property-, building- and unit-scoped roles
- * (property manager, security, maintenance, owner, tenant...) arrive with properties (Phase 3)
- * and residents (Phase 4). An unknown key in the database grants nothing.
+ * System roles (ACCESS_CONTROL section 4). Memberships store the key. Roles appear as their
+ * scopes and permissions become real: security, maintenance, owner and tenant roles arrive with
+ * later phases. An unknown key in the database grants nothing.
+ *
+ * A role's permissions apply at the scope it is granted and below: an organisation-scoped grant
+ * covers every property; a property-scoped grant covers only that property.
  */
 export const ROLES = {
   ORGANISATION_ADMIN: {
@@ -25,13 +27,21 @@ export const ROLES = {
       'organisation.member.read',
       'organisation.member.manage',
       'organisation.member.invite',
+      'organisation.property.create',
+      'property.profile.read',
     ],
+  },
+  PROPERTY_MANAGER: {
+    name: 'Property manager',
+    grantableAt: ['PROPERTY'],
+    // Structure and operations permissions are added with their endpoints (Phase 3 Part 3 on).
+    permissions: ['property.profile.read'],
   },
   FINANCE_OFFICER: {
     name: 'Finance officer',
-    grantableAt: ['ORGANISATION'],
+    grantableAt: ['ORGANISATION', 'PROPERTY'],
     // Finance permissions are added with the finance module (Phase 6).
-    permissions: ['organisation.profile.read'],
+    permissions: ['organisation.profile.read', 'property.profile.read'],
   },
 } as const satisfies Record<string, RoleDefinition>;
 

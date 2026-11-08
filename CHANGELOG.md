@@ -21,6 +21,12 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 3 property access**: property-scoped permissions (`property.*`, evaluated at the
+  route's `:propertyId`) with downward-only inheritance; `PROPERTY_MANAGER` role; finance
+  officers grantable per property; property create, list (filtered to reachable properties)
+  and view endpoints; property-scoped invitations (`propertyId`, `scopeType`/`scopeId` in
+  responses); anti-escalation evaluated at the target scope; every member may read the
+  organisation's basic profile. Pending-invitation uniqueness is now per scope.
 - **Phase 3 data foundation**: properties, buildings, floors, units and common areas with
   composite tenant foreign keys, row-level security, archive-only lifecycle, case-insensitive
   unit numbering (including building-less villas), and a trigger that keeps membership and

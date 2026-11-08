@@ -161,12 +161,16 @@ export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
 export interface CreateInvitationRequest {
   email: string;
   role: string;
+  /** Limits the role to one property; omit for an organisation-wide role. */
+  propertyId?: string;
 }
 
 export interface InvitationDto {
   id: string;
   email: string;
   role: string;
+  scopeType: 'ORGANISATION' | 'PROPERTY' | 'BUILDING' | 'UNIT';
+  scopeId: string;
   status: InvitationStatus;
   expiresAt: string;
   createdAt: string;
@@ -185,4 +189,57 @@ export interface AcceptInvitationRequest {
 export interface AcceptInvitationResponse {
   organisation: OrganisationDto;
   role: string;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Properties (Phase 3)
+// ---------------------------------------------------------------------------------------------
+
+export type PropertyType =
+  | 'CONDOMINIUM'
+  | 'APARTMENT_COMPLEX'
+  | 'GATED_COMMUNITY'
+  | 'MIXED_USE'
+  | 'OTHER';
+
+export type PropertyStatus = 'ONBOARDING' | 'ACTIVE' | 'ARCHIVED';
+
+export interface CreatePropertyRequest {
+  name: string;
+  /** Unique in the organisation; upper-case letters, digits and hyphens, 2-20 characters. */
+  code: string;
+  type: PropertyType;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  region?: string;
+  postalCode?: string;
+  /** Defaults to the organisation's country. */
+  countryCode?: string;
+  /** IANA time zone; defaults to the organisation's. */
+  timeZone?: string;
+  /** ISO 4217; defaults to the organisation's. */
+  currency?: string;
+}
+
+export interface PropertyDto {
+  id: string;
+  name: string;
+  code: string;
+  type: PropertyType;
+  status: PropertyStatus;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  region: string | null;
+  postalCode: string | null;
+  countryCode: string;
+  timeZone: string;
+  currency: string;
+  createdAt: string;
+}
+
+/** GET a property: the property plus the caller's permissions on it (for UI only). */
+export interface PropertyDetailResponse extends PropertyDto {
+  permissions: string[];
 }

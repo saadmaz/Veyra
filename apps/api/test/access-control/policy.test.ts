@@ -3,26 +3,46 @@ import {
   isPermission,
   PERMISSIONS,
   type Permission,
+  permissionScope,
 } from '../../src/modules/access-control/domain/permissions';
 import {
+  type AccessScope,
   canAssignRole,
   type Grant,
+  hasCoveringGrant,
   isGrantEffective,
   organisationPermissions,
+  permissionsAt,
+  permissionsForAssignment,
+  propertiesWithPermission,
 } from '../../src/modules/access-control/domain/policy';
 import { ROLES, type RoleDefinition } from '../../src/modules/access-control/domain/roles';
 
 const now = new Date('2026-11-08T12:00:00Z');
 const at = (offsetMs: number) => new Date(now.getTime() + offsetMs);
 const HOUR = 3_600_000;
+const ORG = '00000000-0000-7000-8000-000000000001';
+const P1 = '00000000-0000-7000-8000-0000000000a1';
+const P2 = '00000000-0000-7000-8000-0000000000a2';
 
 const grant = (overrides: Partial<Grant> = {}): Grant => ({
   role: 'ORGANISATION_ADMIN',
   scopeType: 'ORGANISATION',
+  scopeId: ORG,
   status: 'ACTIVE',
   validFrom: at(-HOUR),
   validUntil: null,
   ...overrides,
+});
+const managerOf = (propertyId: string, overrides: Partial<Grant> = {}) =>
+  grant({ role: 'PROPERTY_MANAGER', scopeType: 'PROPERTY', scopeId: propertyId, ...overrides });
+const property = (
+  propertyId: string,
+  status: 'ONBOARDING' | 'ACTIVE' | 'ARCHIVED' = 'ACTIVE',
+): AccessScope => ({
+  type: 'PROPERTY',
+  propertyId,
+  propertyStatus: status,
 });
 
 describe('registry', () => {
@@ -32,15 +52,18 @@ describe('registry', () => {
     }
   });
 
-  it('organisation admins hold every organisation permission', () => {
+  it('organisation admins hold every registered permission', () => {
     const admin = new Set<string>(ROLES.ORGANISATION_ADMIN.permissions);
-    for (const permission of PERMISSIONS.filter((p) => p.startsWith('organisation.'))) {
-      expect(admin.has(permission)).toBe(true);
-    }
+    for (const permission of PERMISSIONS) expect(admin.has(permission)).toBe(true);
   });
 
   it('permission names follow <module>.<resource>.<action>', () => {
     for (const permission of PERMISSIONS) expect(permission).toMatch(/^[a-z]+\.[a-z_]+\.[a-z_]+$/);
+  });
+
+  it('classifies property.* permissions as property-scoped, everything else as organisation', () => {
+    expect(permissionScope('property.profile.read')).toBe('property');
+    expect(permissionScope('organisation.property.create')).toBe('organisation');
   });
 });
 
@@ -66,29 +89,31 @@ describe('isGrantEffective', () => {
   });
 });
 
-describe('organisationPermissions', () => {
-  it('unions the permissions of effective organisation-scoped grants', () => {
+describe('organisation-level permissions', () => {
+  it('unions the organisation permissions of effective organisation grants', () => {
     const permissions = organisationPermissions(
-      [
-        grant({ role: 'FINANCE_OFFICER' }),
-        grant({ role: 'ORGANISATION_ADMIN', status: 'REVOKED' }),
-      ],
+      [grant({ role: 'FINANCE_OFFICER' }), grant({ status: 'REVOKED' })],
       'ACTIVE',
       now,
     );
     expect([...permissions]).toEqual(['organisation.profile.read']);
   });
 
-  it('ignores property-scoped grants (inheritance flows downwards only)', () => {
-    expect(organisationPermissions([grant({ scopeType: 'PROPERTY' })], 'ACTIVE', now).size).toBe(0);
+  it('gives a property-scoped member only the baseline profile read, never more', () => {
+    expect([...organisationPermissions([managerOf(P1)], 'ACTIVE', now)]).toEqual([
+      'organisation.profile.read',
+    ]);
   });
 
   it('grants nothing for an unknown role key (deny by default)', () => {
-    expect(organisationPermissions([grant({ role: 'SUPER_USER' })], 'ACTIVE', now).size).toBe(0);
-    expect(organisationPermissions([grant({ role: '__proto__' })], 'ACTIVE', now).size).toBe(0);
+    for (const role of ['SUPER_USER', '__proto__', 'constructor']) {
+      const permissions = organisationPermissions([grant({ role })], 'ACTIVE', now);
+      // Only the member baseline; the unknown role itself adds nothing.
+      expect([...permissions]).toEqual(['organisation.profile.read']);
+    }
   });
 
-  it('keeps only read permissions while suspended or offboarding', () => {
+  it('keeps only read permissions while suspended or offboarding, nothing when archived', () => {
     for (const status of ['SUSPENDED', 'OFFBOARDING'] as const) {
       const permissions = organisationPermissions([grant()], status, now);
       expect([...permissions].sort()).toEqual([
@@ -96,14 +121,85 @@ describe('organisationPermissions', () => {
         'organisation.profile.read',
       ]);
     }
-  });
-
-  it('grants nothing in an archived organisation', () => {
     expect(organisationPermissions([grant()], 'ARCHIVED', now).size).toBe(0);
   });
 });
 
-describe('canAssignRole (anti-escalation)', () => {
+describe('property-level permissions (downward-only inheritance)', () => {
+  it('an organisation grant covers every property', () => {
+    expect(permissionsAt([grant()], 'ACTIVE', property(P1), now).has('property.profile.read')).toBe(
+      true,
+    );
+    expect(permissionsAt([grant()], 'ACTIVE', property(P2), now).has('property.profile.read')).toBe(
+      true,
+    );
+  });
+
+  it('a property grant covers its own property and no other', () => {
+    expect(hasCoveringGrant([managerOf(P1)], property(P1), now)).toBe(true);
+    expect(hasCoveringGrant([managerOf(P1)], property(P2), now)).toBe(false);
+    expect(permissionsAt([managerOf(P1)], 'ACTIVE', property(P2), now).size).toBe(0);
+  });
+
+  it('a property grant never reaches upward to organisation permissions', () => {
+    const atProperty = permissionsAt([managerOf(P1)], 'ACTIVE', property(P1), now);
+    expect([...atProperty]).toEqual(['property.profile.read']);
+    expect(hasCoveringGrant([managerOf(P1)], { type: 'ORGANISATION' }, now)).toBe(false);
+  });
+
+  it('building- and unit-scoped grants do not cover the whole property', () => {
+    const buildingGrant = grant({ role: 'PROPERTY_MANAGER', scopeType: 'BUILDING', scopeId: P1 });
+    expect(hasCoveringGrant([buildingGrant], property(P1), now)).toBe(false);
+  });
+
+  it('ignores suspended or expired property grants', () => {
+    expect(hasCoveringGrant([managerOf(P1, { status: 'SUSPENDED' })], property(P1), now)).toBe(
+      false,
+    );
+    expect(hasCoveringGrant([managerOf(P1, { validUntil: at(-1) })], property(P1), now)).toBe(
+      false,
+    );
+  });
+
+  it('makes an archived property read-only', () => {
+    const permissions = permissionsAt([grant()], 'ACTIVE', property(P1, 'ARCHIVED'), now);
+    expect([...permissions]).toEqual(['property.profile.read']);
+  });
+});
+
+describe('propertiesWithPermission (list filtering)', () => {
+  it('returns all properties for an organisation-wide role', () => {
+    expect(
+      propertiesWithPermission(
+        [grant({ role: 'FINANCE_OFFICER' })],
+        'ACTIVE',
+        'property.profile.read',
+        now,
+      ),
+    ).toEqual({
+      all: true,
+    });
+  });
+
+  it('returns exactly the covered properties for property-scoped roles', () => {
+    const result = propertiesWithPermission(
+      [managerOf(P1), managerOf(P2, { status: 'SUSPENDED' }), managerOf(P1)],
+      'ACTIVE',
+      'property.profile.read',
+      now,
+    );
+    expect(result).toEqual({ all: false, propertyIds: [P1] });
+  });
+
+  it('returns nothing in an archived organisation', () => {
+    expect(propertiesWithPermission([grant()], 'ARCHIVED', 'property.profile.read', now)).toEqual({
+      all: false,
+      propertyIds: [],
+    });
+  });
+});
+
+describe('anti-escalation', () => {
   const roles: Record<string, RoleDefinition> = {
     READER: {
       name: 'Reader',
@@ -120,7 +216,7 @@ describe('canAssignRole (anti-escalation)', () => {
   const lookup = (key: string) => roles[key];
   const holding = (...permissions: Permission[]) => new Set(permissions);
 
-  it('allows assigning a role whose permissions the actor holds', () => {
+  it('allows assigning a role whose permissions the actor holds, refuses any missing one', () => {
     expect(
       canAssignRole(
         holding('organisation.profile.read', 'organisation.member.invite'),
@@ -129,9 +225,6 @@ describe('canAssignRole (anti-escalation)', () => {
         lookup,
       ),
     ).toBe(true);
-  });
-
-  it('refuses a role with any permission the actor lacks', () => {
     expect(
       canAssignRole(holding('organisation.member.invite'), 'MANAGER', 'ORGANISATION', lookup),
     ).toBe(false);
@@ -140,12 +233,46 @@ describe('canAssignRole (anti-escalation)', () => {
   it('refuses unknown roles and scopes the role does not allow', () => {
     expect(canAssignRole(holding(), 'NOPE', 'ORGANISATION', lookup)).toBe(false);
     expect(canAssignRole(holding(), 'UNIT_ROLE', 'ORGANISATION', lookup)).toBe(false);
+    expect(
+      canAssignRole(holding('property.profile.read'), 'PROPERTY_MANAGER', 'ORGANISATION'),
+    ).toBe(false);
   });
 
-  it('with the real registry: a finance officer cannot assign organisation admin', () => {
-    const financeOfficer = new Set<Permission>(ROLES.FINANCE_OFFICER.permissions);
-    expect(canAssignRole(financeOfficer, 'ORGANISATION_ADMIN', 'ORGANISATION')).toBe(false);
-    const admin = new Set<Permission>(ROLES.ORGANISATION_ADMIN.permissions);
-    expect(canAssignRole(admin, 'FINANCE_OFFICER', 'ORGANISATION')).toBe(true);
+  it('an organisation admin may assign every system role at its allowed scopes', () => {
+    const atOrg = permissionsForAssignment([grant()], 'ACTIVE', { type: 'ORGANISATION' }, now);
+    const atP1 = permissionsForAssignment([grant()], 'ACTIVE', property(P1), now);
+    expect(canAssignRole(atOrg, 'FINANCE_OFFICER', 'ORGANISATION')).toBe(true);
+    expect(canAssignRole(atOrg, 'ORGANISATION_ADMIN', 'ORGANISATION')).toBe(true);
+    expect(canAssignRole(atP1, 'PROPERTY_MANAGER', 'PROPERTY')).toBe(true);
+  });
+
+  it('a property manager holds nothing over another property or over the organisation', () => {
+    expect(permissionsForAssignment([managerOf(P1)], 'ACTIVE', property(P2), now).size).toBe(0);
+    const overOrg = permissionsForAssignment(
+      [managerOf(P1)],
+      'ACTIVE',
+      { type: 'ORGANISATION' },
+      now,
+    );
+    expect(canAssignRole(overOrg, 'FINANCE_OFFICER', 'ORGANISATION')).toBe(false);
+  });
+
+  it('a finance officer cannot assign organisation admin', () => {
+    const held = permissionsForAssignment(
+      [grant({ role: 'FINANCE_OFFICER' })],
+      'ACTIVE',
+      { type: 'ORGANISATION' },
+      now,
+    );
+    expect(canAssignRole(held, 'ORGANISATION_ADMIN', 'ORGANISATION')).toBe(false);
+  });
+
+  it('nothing is assignable in a read-only organisation or an archived property', () => {
+    expect(
+      permissionsForAssignment([grant()], 'SUSPENDED', { type: 'ORGANISATION' }, now).size,
+    ).toBe(0);
+    expect(permissionsForAssignment([grant()], 'ACTIVE', property(P1, 'ARCHIVED'), now).size).toBe(
+      0,
+    );
   });
 });

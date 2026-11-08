@@ -2,7 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK, type Clock } from '../../../platform/clock';
 import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
-import { canAssignRole, isGrantEffective, type OrganisationAccess } from '../../access-control';
+import {
+  AccessControlService,
+  canAssignRole,
+  isGrantEffective,
+  type OrganisationAccess,
+} from '../../access-control';
 import {
   canTransitionMembership,
   type MembershipStatus,
@@ -22,6 +27,7 @@ export class MembershipsService {
   constructor(
     @Inject(ORGANISATIONS_REPOSITORY) private readonly repository: OrganisationsRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly accessControl: AccessControlService,
   ) {}
 
   list(
@@ -63,7 +69,16 @@ export class MembershipsService {
             `A ${target.status.toLowerCase()} membership cannot become ${status.toLowerCase()}`,
           );
         }
-        if (!canAssignRole(access.permissions, target.role, target.scopeType)) {
+        // Anti-escalation at the target's scope: managing a property manager of P1 requires
+        // holding that role's permissions over P1 (an organisation admin does).
+        const held = await this.accessControl.permissionsForAssignment(
+          access.userId,
+          access.organisationId,
+          target.scopeType === 'PROPERTY'
+            ? { type: 'PROPERTY', propertyId: target.scopeId }
+            : { type: 'ORGANISATION' },
+        );
+        if (!held || !canAssignRole(held, target.role, target.scopeType)) {
           throw new ApiError(
             403,
             'ROLE_NOT_ASSIGNABLE',
