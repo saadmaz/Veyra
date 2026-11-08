@@ -210,12 +210,19 @@ class PrismaOrganisationUnitOfWork implements OrganisationUnitOfWork {
     return toPage(rows, page.limit);
   }
 
-  findPendingInvitation(email: string, role: string): Promise<InvitationRecord | null> {
+  findPendingInvitation(
+    email: string,
+    role: string,
+    scopeType: InvitationRecord['scopeType'],
+    scopeId: string,
+  ): Promise<InvitationRecord | null> {
     return this.tx.invitation.findFirst({
       where: {
         organisationId: this.organisationId,
         email,
         role,
+        scopeType,
+        scopeId,
         acceptedAt: null,
         revokedAt: null,
       },
@@ -238,7 +245,7 @@ class PrismaOrganisationUnitOfWork implements OrganisationUnitOfWork {
         select: INVITATION_SELECT,
       });
     } catch (error) {
-      // invitations_one_pending_per_role: a concurrent request created the same invitation.
+      // invitations_one_pending_per_scope: a concurrent request created the same invitation.
       if (isUniqueViolation(error)) throw new InvitationPendingError();
       throw error;
     }

@@ -247,6 +247,8 @@ export class FakeApi {
       id: i.id,
       email: i.email,
       role: i.role,
+      scopeType: 'ORGANISATION',
+      scopeId: i.organisationId,
       status: i.status,
       expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
       createdAt: new Date().toISOString(),

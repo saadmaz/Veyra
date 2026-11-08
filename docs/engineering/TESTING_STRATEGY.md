@@ -136,6 +136,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   organisation.
 - Prisma reads the nested structure inside tenant context and nothing outside it.
 
+### Part 2: property-scoped access
+
+- `apps/api` integration (18): property defaults from the organisation, per-organisation codes,
+  validation, creation limited to admins, audit; a property manager of P1 is a member with only
+  the baseline organisation permission, sees only P1 in lists, gets 404 on P2 and on other
+  organisations' properties by either path, loses and regains access with suspension; a
+  finance officer sees every property of the organisation only; non-members get 404 on all
+  property routes; property-scoped invitations, role/scope mismatch (422), foreign property
+  (404), pending invitations per scope.
+- `apps/api` unit: downward-only coverage (organisation grant covers all properties, property
+  grant only its own, building grants not the property), no upward reach, archived property
+  read-only, list filtering, anti-escalation at the target scope, startup check for
+  `:propertyId`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

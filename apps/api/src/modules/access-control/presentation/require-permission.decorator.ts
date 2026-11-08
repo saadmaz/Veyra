@@ -14,9 +14,13 @@ declare module 'express-serve-static-core' {
 /** The route's organisation comes from the `:organisationId` path parameter. */
 export const ORGANISATION_ID_PARAM = 'organisationId';
 
+/** Property-scoped permissions (property.*) take the property from the `:propertyId` parameter. */
+export const PROPERTY_ID_PARAM = 'propertyId';
+
 /**
  * Requires a signed-in member of the route's :organisationId holding `permission`. The route
- * path must contain :organisationId (checked at startup).
+ * path must contain :organisationId, and :propertyId for property.* permissions (checked at
+ * startup).
  */
 export const RequirePermission = (permission: Permission) =>
   SetMetadata(ROUTE_ACCESS, { kind: 'permission', permission } satisfies RouteAccess);

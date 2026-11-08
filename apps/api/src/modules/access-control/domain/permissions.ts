@@ -15,9 +15,24 @@ export const PERMISSIONS = [
   'organisation.member.manage',
   /** Create, list and revoke invitations. */
   'organisation.member.invite',
+  /** Add a property to the organisation. */
+  'organisation.property.create',
+  /** View a property's profile. Property-scoped: evaluated against the route's :propertyId. */
+  'property.profile.read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+
+export type PermissionScope = 'organisation' | 'property';
+
+/**
+ * Where a permission is evaluated. `property.*` permissions apply to one property (the route's
+ * :propertyId) and are granted by organisation-scoped grants or grants on that property.
+ * Everything else applies to the whole organisation and only organisation-scoped grants count.
+ */
+export function permissionScope(permission: Permission): PermissionScope {
+  return permission.startsWith('property.') ? 'property' : 'organisation';
+}
 
 const REGISTERED: ReadonlySet<string> = new Set(PERMISSIONS);
 

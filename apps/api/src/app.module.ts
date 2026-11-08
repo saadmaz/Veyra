@@ -10,6 +10,7 @@ import { PermissionGuard } from './modules/access-control/presentation/permissio
 import { IdentityModule } from './modules/identity/identity.module';
 import { AuthGuard } from './modules/identity/presentation/auth.guard';
 import { OrganisationsModule } from './modules/organisations/organisations.module';
+import { PropertiesModule } from './modules/properties/properties.module';
 import { ConfigModule } from './platform/config/config.module';
 import type { ApiEnv } from './platform/config/env';
 import { ApiExceptionFilter } from './platform/errors/api-exception.filter';
@@ -29,6 +30,7 @@ export class AppModule implements NestModule {
         IdentityModule,
         AccessControlModule,
         OrganisationsModule,
+        PropertiesModule,
       ],
       controllers: [HealthController],
       providers: [

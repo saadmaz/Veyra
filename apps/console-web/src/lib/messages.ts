@@ -26,6 +26,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     'This invitation was sent to a different email address. Sign in with that address.',
   ORIGIN_NOT_ALLOWED: 'This request was blocked for your security. Reload the page and try again.',
   VALIDATION_FAILED: 'Some fields need attention.',
+  ROLE_SCOPE_MISMATCH: 'This role has to be given for a specific property.',
+  PROPERTY_CODE_TAKEN: 'Another property already uses this code. Choose another.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';
@@ -48,6 +50,10 @@ export function fieldErrors(error: unknown): Record<string, string> {
 export const ROLE_LABELS: Record<string, string> = {
   ORGANISATION_ADMIN: 'Organisation admin',
   FINANCE_OFFICER: 'Finance officer',
+  PROPERTY_MANAGER: 'Property manager',
 };
+
+/** Roles that can be given for the whole organisation (property managers are per property). */
+export const ORGANISATION_ROLES = ['FINANCE_OFFICER', 'ORGANISATION_ADMIN'] as const;
 
 export const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;

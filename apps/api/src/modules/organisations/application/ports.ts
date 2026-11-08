@@ -91,7 +91,12 @@ export interface OrganisationUnitOfWork {
   findUserMemberships(userId: string): Promise<MembershipRecord[]>;
 
   listInvitations(page: PageRequest): Promise<Page<InvitationRecord>>;
-  findPendingInvitation(email: string, role: string): Promise<InvitationRecord | null>;
+  findPendingInvitation(
+    email: string,
+    role: string,
+    scopeType: ScopeType,
+    scopeId: string,
+  ): Promise<InvitationRecord | null>;
   createInvitation(data: {
     email: string;
     role: string;

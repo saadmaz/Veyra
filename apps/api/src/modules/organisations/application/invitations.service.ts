@@ -9,6 +9,7 @@ import {
   isWellFormedOpaqueToken,
 } from '../../../platform/security/opaque-token';
 import {
+  AccessControlService,
   canAssignRole,
   isGrantEffective,
   type OrganisationAccess,
@@ -53,6 +54,7 @@ export class InvitationsService {
     @Inject(ORGANISATIONS_REPOSITORY) private readonly repository: OrganisationsRepository,
     @Inject(RATE_LIMITER) private readonly limiter: RateLimiter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly accessControl: AccessControlService,
   ) {}
 
   async create(
@@ -60,8 +62,30 @@ export class InvitationsService {
     input: CreateInvitationInput,
     meta: RequestMeta,
   ): Promise<IssuedInvitation> {
-    // Anti-escalation: you can only invite to roles whose permissions you hold yourself.
-    if (!canAssignRole(access.permissions, input.role, 'ORGANISATION')) {
+    const scope =
+      input.propertyId === undefined
+        ? { scopeType: 'ORGANISATION' as const, scopeId: access.organisationId }
+        : { scopeType: 'PROPERTY' as const, scopeId: input.propertyId };
+
+    if (!roleDefinition(input.role)?.grantableAt.includes(scope.scopeType)) {
+      throw new ApiError(
+        422,
+        'ROLE_SCOPE_MISMATCH',
+        scope.scopeType === 'ORGANISATION'
+          ? 'This role must be given for a specific property'
+          : 'This role cannot be limited to a single property',
+      );
+    }
+    // Anti-escalation: you can only invite to roles whose permissions you hold over the target.
+    const held = await this.accessControl.permissionsForAssignment(
+      access.userId,
+      access.organisationId,
+      scope.scopeType === 'PROPERTY'
+        ? { type: 'PROPERTY', propertyId: scope.scopeId }
+        : { type: 'ORGANISATION' },
+    );
+    if (!held) throw new ApiError(404, 'NOT_FOUND', 'Property not found');
+    if (!canAssignRole(held, input.role, scope.scopeType)) {
       throw new ApiError(403, 'ROLE_NOT_ASSIGNABLE', 'You cannot invite members with this role');
     }
     const now = this.clock.now();
@@ -78,14 +102,22 @@ export class InvitationsService {
             const memberships = await uow.findUserMemberships(existingUserId);
             const alreadyHasRole = memberships.some(
               (m) =>
-                m.role === input.role && m.scopeType === 'ORGANISATION' && isGrantEffective(m, now),
+                m.role === input.role &&
+                m.scopeType === scope.scopeType &&
+                m.scopeId === scope.scopeId &&
+                isGrantEffective(m, now),
             );
             if (alreadyHasRole) {
               throw new ApiError(409, 'ALREADY_MEMBER', 'This person already has this role');
             }
           }
 
-          const pending = await uow.findPendingInvitation(input.email, input.role);
+          const pending = await uow.findPendingInvitation(
+            input.email,
+            input.role,
+            scope.scopeType,
+            scope.scopeId,
+          );
           if (pending) {
             if (invitationStatus(pending, now) === 'PENDING') throw new InvitationPendingError();
             // Expired but never answered: retire it so a fresh one can be issued.
@@ -95,8 +127,7 @@ export class InvitationsService {
           const invitation = await uow.createInvitation({
             email: input.email,
             role: input.role,
-            scopeType: 'ORGANISATION',
-            scopeId: access.organisationId,
+            ...scope,
             tokenHash: hashOpaqueToken(token),
             expiresAt: new Date(now.getTime() + INVITATION_LIFETIME_MS),
             invitedById: access.userId,
@@ -105,7 +136,7 @@ export class InvitationsService {
             action: 'invitation.created',
             resourceType: 'invitation',
             resourceId: invitation.id,
-            metadata: { role: input.role },
+            metadata: { role: input.role, scopeType: scope.scopeType },
           });
           return { invitation, token };
         },
@@ -115,7 +146,7 @@ export class InvitationsService {
         throw new ApiError(
           409,
           'INVITATION_PENDING',
-          'An invitation for this email and role is already pending',
+          'An invitation for this email, role and scope is already pending',
         );
       }
       throw error;

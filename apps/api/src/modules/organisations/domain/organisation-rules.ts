@@ -1,27 +1,12 @@
-import { isCountryCode } from '@veyra/domain';
 import { z } from 'zod';
+import {
+  countryCodeSchema,
+  currencySchema,
+  timeZoneSchema,
+} from '../../../platform/validation/common-schemas';
 import { ROLE_KEYS, type RoleKey } from '../../access-control';
 
-const TIME_ZONES: ReadonlySet<string> = new Set(Intl.supportedValuesOf('timeZone'));
-const CURRENCIES: ReadonlySet<string> = new Set(Intl.supportedValuesOf('currency'));
-
-/** IANA zone such as "Asia/Karachi". "UTC" is accepted explicitly. */
-export const timeZoneSchema = z
-  .string()
-  .refine((value) => value === 'UTC' || TIME_ZONES.has(value), 'Unknown IANA time zone');
-
-const countryCodeSchema = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z]{2}$/, 'Use an ISO 3166-1 alpha-2 code')
-  .refine(isCountryCode, 'Unknown country code');
-
-const currencySchema = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .refine((code) => CURRENCIES.has(code), 'Unknown ISO 4217 currency code');
+export { type ListQuery, listQuerySchema } from '../../../platform/validation/common-schemas';
 
 const nameSchema = z.string().trim().min(2).max(120);
 
@@ -60,6 +45,11 @@ export const createInvitationSchema = z.object({
     .pipe(z.email({ message: 'Enter a valid email address' }))
     .transform((email) => email.toLowerCase()),
   role: z.enum(ROLE_KEYS as [RoleKey, ...RoleKey[]]),
+  /** Limits the role to one property. Omitted: the role applies to the whole organisation. */
+  propertyId: z
+    .uuid()
+    .transform((id) => id.toLowerCase())
+    .optional(),
 });
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>;
 
@@ -99,9 +89,3 @@ export function invitationStatus(
 }
 
 export const ORGANISATION_ADMIN_ROLE: RoleKey = 'ORGANISATION_ADMIN';
-
-export const listQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  cursor: z.uuid().optional(),
-});
-export type ListQuery = z.infer<typeof listQuerySchema>;

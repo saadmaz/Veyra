@@ -40,6 +40,8 @@ export function toInvitationDto(invitation: InvitationRecord, now: Date): Invita
     id: invitation.id,
     email: invitation.email,
     role: invitation.role,
+    scopeType: invitation.scopeType,
+    scopeId: invitation.scopeId,
     status: invitationStatus(invitation, now),
     expiresAt: invitation.expiresAt.toISOString(),
     createdAt: invitation.createdAt.toISOString(),

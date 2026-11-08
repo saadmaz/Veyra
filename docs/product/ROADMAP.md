@@ -24,7 +24,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
-| 3     | Organisation and property management     | In progress: Part 1 (data foundation) done |
+| 3     | Organisation and property management     | In progress: Parts 1-2 done; Part 3 (structure API) next |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
@@ -84,8 +84,8 @@ Also in Phase 2: structured JSON logging with request ids.
 | Part | Scope | Status |
 | ---- | ----- | ------ |
 | 1 | Data foundation: properties, buildings, floors, units, common areas; composite tenant foreign keys; RLS; archive-only; unit-number rules; membership/invitation scope trigger; database tests | ✅ Done |
-| 2 | Property-scoped roles (property manager) with downward-only scope inheritance; cross-property isolation tests | Next |
-| 3 | API: create, list, update and archive properties, buildings, floors, units and common areas | |
+| 2 | Property-scoped roles (property manager) with downward-only scope inheritance; property create, list (filtered) and view; property-scoped invitations; cross-property isolation tests | ✅ Done |
+| 3 | API: update and archive properties; buildings, floors, units and common areas | Next |
 | 4 | Console: property list and detail, building and unit structure, invite a property manager | |
 
 Deferred from Phase 2 and tracked in [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md): MFA, email
