@@ -9,7 +9,12 @@ updates:
       minor-and-patch:
         update-types: ["minor", "patch"]
 
+  # All action bumps arrive as one PR: separate PRs edit the same workflow file and each one
+  # falls behind main as soon as another is merged.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
