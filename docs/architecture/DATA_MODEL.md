@@ -77,4 +77,52 @@ Invariants:
 3. Invoices, payments, credit notes and late fees are business documents that **produce**
    journal entries when posted; balances are derived from lines, never stored as a mutable
    number without a reconciliation check.
-4. Payment provider callbacks are idempotent on `(provider, provider_event_id)`.
+4. Payment provider callbacks are authenticated and idempotent on `(provider, provider_event_id)`.
+5. Invoice balance is derived from valid charges, credits, allocations and reversals, never from
+   a client-editable status field.
+6. Accounting policy is defined with qualified finance professionals before VEYRA claims
+   statutory accounting support.
+
+Finance entities (Phase 6): `ChargeDefinition`, `ChargeSchedule`, `Invoice`, `InvoiceLine`,
+`CreditNote`, `Payment`, `PaymentAllocation`, `Refund`, `Account` (ledger account),
+`JournalEntry` (ledger transaction), `JournalLine` (ledger entry), `ReconciliationBatch`,
+`ReconciliationItem`, `Expense`, `Budget`.
+
+## 6. Identity vs person vs relationship
+
+A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
+holds the personal fields the product needs and may exist without a login. Relationships to
+units (ownership, tenancy, household membership) are separate, effective-dated records. One
+person may relate to many units and properties, and hold many roles.
+
+## 7. Conceptual entity catalogue (later phases)
+
+Starting point for discovery, not a final schema. Validate entities and cardinalities when the
+owning module is built.
+
+| Area | Entities |
+| ---- | -------- |
+| Property inventory | `CommonArea`, `Facility`, `ParkingSpace` |
+| Visitors and access | `VisitorInvitation`, `VisitorPass`, `VisitorVisit`, `VehicleUnitAssignment`, `AccessEvent` |
+| Maintenance and operations | `MaintenanceRequest`, `WorkOrder`, `WorkOrderAssignment`, `Inspection`, `Task`, `Shift`, `Incident` |
+| Assets and vendors | `Asset`, `AssetMaintenancePlan`, `AssetServiceRecord`, `Vendor`, `VendorContract` |
+| Facilities | `FacilitySchedule`, `Reservation`, `ReservationPolicy`, `FacilityClosure` |
+| Governance | `Committee`, `CommitteeMembership`, `Meeting`, `MeetingAgendaItem`, `MeetingMinute`, `Resolution`, `ApprovalRequest`, `ApprovalStep`, `Vote` (only where legal requirements are validated) |
+| Documents and communications | `Document`, `DocumentVersion`, `DocumentAccessGrant`, `Announcement`, `AnnouncementAudience`, `Notification`, `NotificationDelivery`, `MessageTemplate` |
+
+File bytes live in object storage. The database stores metadata, ownership, access policy,
+checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
+server-side authorisation check.
+
+## 8. Data lifecycle
+
+- Retention is defined per data category and jurisdiction.
+- Correction and deletion are supported where legally required.
+- Financial and audit records are preserved where retention obligations apply.
+- Data is anonymised or pseudonymised where appropriate.
+- Access is revoked promptly when a tenancy, employment or vendor engagement ends.
+- Legal holds and investigations follow a controlled workflow.
+- Data exports and privileged access are recorded.
+- Soft deletion is not a substitute for a retention policy.
+- No unbounded JSON blobs for core relational business data.
+- Indexes are added based on measured query patterns.

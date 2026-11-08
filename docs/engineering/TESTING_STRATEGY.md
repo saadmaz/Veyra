@@ -18,7 +18,7 @@
   opt-in smoke suite runs against provider sandboxes.
 - A failing test is fixed or the change is reverted. Tests are never skipped to get green.
 
-## Current coverage (Phase 1)
+## Current coverage (Phase 1, written but not yet run: see ROADMAP blocker)
 
 - `packages/domain`: Money arithmetic, parsing, allocation, precision, currency safety; tenant
   context and job envelope validation.

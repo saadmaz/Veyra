@@ -344,3 +344,58 @@ before building visible features.
 - Report actual test results.
 - Explain important architectural decisions.
 - Identify technical debt.
+
+## 18. First actions on any task
+
+1. Read `README.md` and the relevant files under `docs/` (start with `docs/product/PRD.md`,
+   `docs/architecture/ARCHITECTURE.md` and `docs/security/ACCESS_CONTROL.md`).
+2. Inspect the actual repository. Do not assume the documented target structure already exists
+   (see the "current vs target" note in `docs/engineering/REPOSITORY_STRUCTURE.md`).
+3. Identify the current branch, working tree changes, package manager, scripts, test status and
+   existing conventions.
+4. Summarise what exists, what is missing, risks, and a small implementation plan.
+5. Ask for clarification only when a decision materially blocks safe implementation. Otherwise
+   state a conservative assumption and proceed in small increments.
+
+## 19. Additional non-negotiable rules
+
+- Do not replace working systems or rewrite modules without evidence and an approved migration plan.
+- Keep business logic out of controllers, UI components and ORM hooks.
+- Never trust tenant, organisation, property, role, price, payment status or approval values
+  supplied by a client without server-side validation.
+- Never expose secrets, tokens, private resident data, financial data or internal audit details
+  in logs or client errors.
+- Never use real personal data in fixtures, screenshots, tests or seed data.
+- Use parameterised database access and validated input schemas.
+- Use transactions for financial postings, ownership/tenancy transitions and other
+  multi-record invariants.
+- Do not assume every currency has two decimal places.
+- Do not silently change public API contracts. Version and document breaking changes.
+- Do not add a dependency without explaining why it is needed.
+- Do not introduce microservices, Kafka, Kubernetes, event sourcing or other operational
+  complexity without a documented requirement and ADR.
+- Do not create empty modules to match a list; introduce a module with its first real use case.
+- Do not introduce biometrics or facial recognition without a separate legal and privacy assessment.
+- All user-facing flows need loading, empty, error, permission-denied and success states.
+- Accessibility (WCAG 2.2 AA target), responsive layouts and localisation are product
+  requirements, not polish.
+
+## 20. Required workflow for each task
+
+1. State the objective and acceptance criteria.
+2. Identify impacted modules, data, API contracts, permissions, migrations and user journeys.
+3. Implement the smallest coherent vertical slice.
+4. Add or update unit, integration, contract and end-to-end tests as appropriate.
+5. Run formatting, lint, typecheck, tests and build for affected workspaces.
+6. Review the diff for security, tenant isolation, data integrity, accessibility, performance
+   and unintended scope.
+7. Update docs and ADRs where needed.
+8. Report files changed, commands run, results, known limitations and follow-up work.
+
+## 21. Definition of done
+
+A task is not complete merely because code compiles. It must meet its acceptance criteria, have
+appropriate tests, enforce permissions server-side, preserve tenant isolation, handle failures,
+be observable, and have documentation updated. Known limitations must be stated.
+
+The longer agent brief in `docs/AI_BUILD_PROMPT.md` carries the same rules in prompt form.

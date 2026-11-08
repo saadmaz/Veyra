@@ -9,6 +9,10 @@
 | Docker  | Desktop / Engine with Compose | Local PostgreSQL and Redis |
 | Flutter | stable  | Only for `apps/mobile` (not created yet) |
 
+The checkout must be on an NTFS (or other link-capable) filesystem. Bun workspaces link
+packages with symlinks, which exFAT and FAT32 drives do not support: `bun install` fails with
+`EISDIR` there.
+
 ## First run
 
 ```powershell

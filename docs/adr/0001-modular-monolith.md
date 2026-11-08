@@ -27,4 +27,15 @@ Build the backend as a **modular monolith** in NestJS:
 - Negative: one bad deploy affects every module; module discipline must be enforced by
   review and tooling rather than network boundaries.
 - Extraction of a module into a service remains possible when a concrete need arises
-  (see [ARCHITECTURE](../architecture/ARCHITECTURE.md#6-extraction-path)).
+  (see [ARCHITECTURE](../architecture/ARCHITECTURE.md#9-extraction-path)).
+
+## Revisit when
+
+- A module has materially different scaling requirements.
+- A team needs independent ownership and release cadence.
+- Fault isolation requirements justify separation.
+- A provider or device integration needs a distinct runtime boundary.
+- Operational evidence shows the monolith is a bottleneck.
+
+Any extraction requires a new ADR with a data ownership plan, API contract, migration strategy,
+observability plan and rollback approach.
