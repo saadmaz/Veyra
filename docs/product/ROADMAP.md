@@ -24,8 +24,8 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
-| 3     | Organisation and property management     | Done (Parts 1-4); exit review next |
-| 4     | Resident and unit management             | |
+| 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
+| 4     | Resident and unit management             | Next |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
