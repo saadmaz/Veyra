@@ -16,6 +16,11 @@
       "dependsOn": ["^build", "generate"],
       "outputs": []
     },
+    "test:integration": {
+      "dependsOn": ["^build", "generate"],
+      "outputs": [],
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true

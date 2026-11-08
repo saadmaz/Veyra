@@ -48,6 +48,10 @@ export default async function setup(project: TestProject) {
     password: 'postgres',
     port,
     persistent: false,
+    // Linux and macOS binaries need shared-library symlinks that the platform package's
+    // postinstall script normally creates. Bun skips untrusted postinstall scripts (CI runs on
+    // Linux), so recreate any missing symlinks on start instead.
+    autoRehydrateSymlinks: true,
     onLog: () => undefined,
     onError: (error: unknown) => console.error('[embedded-postgres]', error),
   });

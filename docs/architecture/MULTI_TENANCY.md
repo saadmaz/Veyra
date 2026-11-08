@@ -1,6 +1,7 @@
 # Multi-Tenancy
 
-> Status: Phase 0 baseline. Decision recorded in [ADR 0002](../adr/0002-multi-tenancy.md).
+> Status: Phase 2. Decision recorded in [ADR 0002](../adr/0002-multi-tenancy.md). Database
+> enforcement (roles, context functions, RLS) is implemented: see section 3.
 
 ## 1. Tenant hierarchy
 
@@ -35,10 +36,80 @@ connection-pool fragmentation and cross-tenant platform reporting are expensive 
 cost-conscious product. A dedicated deployment can still be offered to an enterprise
 customer by running a separate stack with identical code.
 
-RLS is introduced in Phase 2 with the first tenant-owned tables, together with a test that
-proves a query without tenant context returns zero rows.
+## 3. Database enforcement (implemented, Phase 2)
 
-## 3. Tenant context propagation
+Source: `packages/db/prisma/migrations/20261108120000_identity_and_tenancy/migration.sql`
+(hand-written section below the generated DDL). Proven by
+`packages/db/test/integration/rls.int.test.ts` against a real PostgreSQL 17.
+
+### 3.1 Database roles
+
+| Role | Used by | Privileges |
+| ---- | ------- | ---------- |
+| `veyra_owner` | `prisma migrate` (`MIGRATION_DATABASE_URL`) | Owns the database and schema. Not a superuser. Dev only: `CREATEDB` for Prisma's shadow database. |
+| `veyra_app` | API and worker (`DATABASE_URL`) | `NOSUPERUSER NOBYPASSRLS`. Only the table privileges granted in the migration: no DDL, no `TRUNCATE`, no `DELETE` on organisations, memberships, invitations or audit logs. |
+| superuser (`postgres`) | Administration only | Bypasses RLS. **The application must never connect as a superuser.** |
+
+Local and test roles come from `packages/db/sql/bootstrap-roles.sql` (development passwords).
+Production roles and passwords are created by the deployment from a secrets manager. The
+migration grants to `veyra_app`, so the role must exist before migrations run.
+
+### 3.2 Request context
+
+The application sets two transaction-local settings (`set_config(name, value, true)`, the
+function form of `SET LOCAL`, with the value bound as a parameter). The policies read them
+through two SQL functions:
+
+| Setting | Function | Set by |
+| ------- | -------- | ------ |
+| `app.organisation_id` | `app_current_organisation_id()` | `withTenantTransaction(client, tenant, work, { userId })` |
+| `app.user_id` | `app_current_user_id()` | `withTenantTransaction` (optional `userId`) and `withUserTransaction(client, userId, work)` |
+
+Both functions return `NULL` when the setting is absent or reset (`NULLIF(..., '')`), so a
+query without context matches no policy and sees no rows. Settings end with the transaction,
+so pooled connections never carry one request's tenant into the next (tested).
+
+### 3.3 Policies
+
+`ENABLE` **and** `FORCE ROW LEVEL SECURITY`: FORCE applies the policies to the table owner
+too, so a migration-role connection cannot read across tenants by accident. An operation with
+no policy is denied.
+
+| Table | SELECT | INSERT / UPDATE | DELETE |
+| ----- | ------ | --------------- | ------ |
+| `organisations` | Current tenant, **or** organisations where the current user has an `ACTIVE` membership | Current tenant only | No grant |
+| `memberships` | Current tenant's rows, **or** the current user's own rows | Current tenant only (`WITH CHECK` stops moving a row to another tenant) | No grant |
+| `invitations` | Current tenant only | Current tenant only | No grant |
+| `audit_logs` | Current tenant only | Current tenant, or platform events (`organisation_id IS NULL`) | Rejected by trigger |
+
+**User context.** Before an organisation is chosen ("list my organisations"),
+`withUserTransaction` sets only `app.user_id`. The user then sees their own memberships and the
+organisations they actively belong to, nothing else. Suspending or revoking a membership
+removes that visibility immediately. Membership validity windows (`valid_from` /
+`valid_until`) are checked by the permission engine (Part 5), not by RLS.
+
+**Global tables without RLS.** `users`, `password_credentials`, `sessions` and
+`outbox_events` are not tenant-owned. They are reachable only through the identity module and
+the worker's outbox relay; they are never exposed through tenant-scoped endpoints.
+
+**Audit log.** Append-only for every role: a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE`,
+including from a superuser. Platform events (sign-in, sign-up) are written with no tenant and
+are invisible to tenants.
+
+### 3.4 Caveats
+
+- Superusers and roles with `BYPASSRLS` ignore every policy. A test asserts `veyra_app` has
+  neither attribute; production connection strings must be reviewed for the same.
+- RLS is defence in depth. Repositories still filter by `organisation_id`, and the permission
+  guard (Part 5) still authorises every request.
+- Composite tenant foreign keys arrive in Phase 3 with the first tenant-owned child tables
+  (properties, buildings, units). Today the only cross-table scope check is
+  `memberships_org_scope_matches` (an organisation-scoped membership must point at its own
+  organisation).
+- Invitation acceptance by token (no tenant context yet) needs a narrow `SECURITY DEFINER`
+  lookup function, added with the invitations feature (Part 5).
+
+## 4. Tenant context propagation
 
 | Entry point       | How the tenant is resolved |
 | ----------------- | -------------------------- |
@@ -51,7 +122,7 @@ proves a query without tenant context returns zero rows.
 The resolved context is held in request-scoped `AsyncLocalStorage` and is read-only for the
 rest of the request. The shared type lives in `packages/domain` (`TenantContext`).
 
-## 4. Tenant lifecycle
+## 5. Tenant lifecycle
 
 `PENDING_ONBOARDING -> ACTIVE -> SUSPENDED -> (ACTIVE | OFFBOARDING) -> ARCHIVED -> DELETED`
 
@@ -60,13 +131,13 @@ rest of the request. The shared type lives in `packages/domain` (`TenantContext`
 - **Deleted**: personal data hard-deleted after the contractual retention period. Financial
   records retained only where legally required, then deleted.
 
-## 5. Configuration and entitlements
+## 6. Configuration and entitlements
 
 - Organisation- and property-level settings are typed, versioned rows, not untyped JSON.
 - Feature entitlements come from the subscription (Phase 13) and are checked server-side
   alongside permissions: "allowed by role" **and** "included in plan".
 
-## 6. Required tests (Phase 2 onwards)
+## 7. Required tests (Phase 2 onwards)
 
 - A user of organisation A cannot read, list, update or delete organisation B's data through
   any endpoint (parameterised across all routes).
