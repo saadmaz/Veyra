@@ -2,8 +2,9 @@
 // Intent and invariants: docs/architecture/DATA_MODEL.md and docs/architecture/MULTI_TENANCY.md.
 // The connection URL lives in prisma.config.ts (Prisma 7), not here.
 //
-// Phase 1 defines no business models. Phase 2 adds identity and tenancy tables together with
-// composite tenant foreign keys and row-level security policies (raw SQL in the migration).
+// Row-level security policies, database grants, check constraints and the audit-log immutability
+// trigger are NOT expressible in Prisma. They live as raw SQL in the migrations and are covered by
+// integration tests (test/integration). Never edit an applied migration; add a new one.
 
 generator client {
   provider     = "prisma-client"
@@ -14,4 +15,198 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------------------------
+// Identity (global: a person has one account across all organisations)
+// ---------------------------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id              String     @id @default(uuid(7)) @db.Uuid
+  /// Always stored lower-case and trimmed (enforced by a CHECK constraint).
+  email           String     @unique
+  displayName     String     @map("display_name")
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  passwordCredential PasswordCredential?
+  sessions           Session[]
+  memberships        Membership[]
+
+  @@map("users")
+}
+
+/// Built-in password authentication (ADR 0005). Removed or bypassed when an external identity
+/// provider is adopted.
+model PasswordCredential {
+  userId       String   @id @map("user_id") @db.Uuid
+  /// argon2id PHC string. Never logged, never returned by the API.
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_credentials")
+}
+
+/// Server-side session. The client holds an opaque random token; only its SHA-256 hash is stored.
+model Session {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt        DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  idleExpiresAt     DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(3)
+  ipAddress         String?   @map("ip_address")
+  userAgent         String?   @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tenancy (tenant-owned tables carry organisation_id and are protected by row-level security)
+// ---------------------------------------------------------------------------------------------
+
+enum OrganisationStatus {
+  PENDING_ONBOARDING
+  ACTIVE
+  SUSPENDED
+  OFFBOARDING
+  ARCHIVED
+}
+
+model Organisation {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  name            String
+  /// URL-safe unique identifier, lower-case.
+  slug            String             @unique
+  /// ISO 3166-1 alpha-2.
+  countryCode     String             @map("country_code") @db.Char(2)
+  /// ISO 4217.
+  defaultCurrency String             @map("default_currency") @db.Char(3)
+  /// IANA time zone, e.g. "Asia/Karachi".
+  defaultTimeZone String             @map("default_time_zone")
+  status          OrganisationStatus @default(ACTIVE)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  invitations Invitation[]
+
+  @@map("organisations")
+}
+
+enum ScopeType {
+  ORGANISATION
+  PROPERTY
+  BUILDING
+  UNIT
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+/// Grants a role (defined in code, docs/security/ACCESS_CONTROL.md) to a user at a scope for a
+/// validity period. Scope ids for PROPERTY/BUILDING/UNIT get composite tenant FKs in Phase 3.
+model Membership {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organisationId String           @map("organisation_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           String
+  scopeType      ScopeType        @default(ORGANISATION) @map("scope_type")
+  scopeId        String           @map("scope_id") @db.Uuid
+  status         MembershipStatus @default(ACTIVE)
+  validFrom      DateTime         @default(now()) @map("valid_from") @db.Timestamptz(3)
+  validUntil     DateTime?        @map("valid_until") @db.Timestamptz(3)
+  grantedById    String?          @map("granted_by_id") @db.Uuid
+  revokedAt      DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  revokedById    String?          @map("revoked_by_id") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([organisationId, userId, role, scopeType, scopeId])
+  @@index([userId])
+  @@index([organisationId, scopeType, scopeId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  email          String
+  role           String
+  scopeType      ScopeType @default(ORGANISATION) @map("scope_type")
+  scopeId        String    @map("scope_id") @db.Uuid
+  /// SHA-256 of the single-use invitation token.
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt     DateTime? @map("accepted_at") @db.Timestamptz(3)
+  acceptedById   String?   @map("accepted_by_id") @db.Uuid
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  invitedById    String    @map("invited_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+
+  @@index([organisationId])
+  @@map("invitations")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Platform records
+// ---------------------------------------------------------------------------------------------
+
+/// Append-only (UPDATE/DELETE rejected by trigger). organisation_id is null for platform events
+/// such as sign-in. No foreign keys: audit records outlive the rows they describe.
+model AuditLog {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String
+  resourceType   String   @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  metadata       Json     @default("{}")
+  requestId      String?  @map("request_id")
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([organisationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+/// Transactional outbox: written in the same transaction as the state change, relayed to BullMQ
+/// by the worker. Internal only (never exposed through the API), so not tenant-filtered by RLS.
+model OutboxEvent {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String?   @map("organisation_id") @db.Uuid
+  type           String
+  payload        Json
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  availableAt    DateTime  @default(now()) @map("available_at") @db.Timestamptz(3)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(3)
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+
+  @@index([publishedAt, availableAt])
+  @@map("outbox_events")
 }

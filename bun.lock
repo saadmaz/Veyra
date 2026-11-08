@@ -131,6 +131,9 @@
         "@veyra/domain": "workspace:*",
       },
       "devDependencies": {
+        "@types/pg": "^8.23.1",
+        "embedded-postgres": "17.11.0-beta.19",
+        "pg": "^8.23.1",
         "prisma": "7.10.1",
       },
     },
@@ -327,6 +330,22 @@
     "@electric-sql/pglite-socket": ["@electric-sql/pglite-socket@0.1.3", "", { "peerDependencies": { "@electric-sql/pglite": "0.4.3" }, "bin": { "pglite-server": "dist/scripts/server.js" } }, "sha512-LAciWM0M1dCL8hlsxu2venbVZcdxema0BtDfpWYVqr+Y468UADw0pFWidhKw1M8sfJ8rdLT71tjMmnirf/IZRQ=="],
 
     "@electric-sql/pglite-tools": ["@electric-sql/pglite-tools@0.3.3", "", { "peerDependencies": { "@electric-sql/pglite": "0.4.3" } }, "sha512-AlzLJTRJ8+UFgK8CmxIpyIpJ0+YaFw02IiOSdYrqxwPXdSyeIShz8aa9Tq+tYFXdPwcaMp/Fc80mQZ1dkOQ/wg=="],
+
+    "@embedded-postgres/darwin-arm64": ["@embedded-postgres/darwin-arm64@17.11.0-beta.19", "", { "os": "darwin", "cpu": "arm64", "hasInstallScript": true }, "sha512-t7SxepOERtwqrkt0lfqLWjeDdYoOvjYRuVFVke7vYJ7XSxMq1sRLRekG6zvcN/zm46XouzXkmrd/E5/RPhlAvw=="],
+
+    "@embedded-postgres/darwin-x64": ["@embedded-postgres/darwin-x64@17.11.0-beta.19", "", { "os": "darwin", "cpu": "x64", "hasInstallScript": true }, "sha512-4p3AnzAizgUGsDt+/mCL5YmfkUubBFvWhbVjZQmjDhnE3UrxFSd6wfKQkhlv4VKMRpfNyLiTrtXWNGi76t5M3Q=="],
+
+    "@embedded-postgres/linux-arm": ["@embedded-postgres/linux-arm@17.11.0-beta.19", "", { "os": "linux", "cpu": "arm", "hasInstallScript": true }, "sha512-Fe5GXAQ+nPBYQEVUQIzBKG3zTnetWj+tLvMPSYlam3dy+a4A5FlsN7JARnHFhNN6wcQRgbssfQUsXCc2l7mIQQ=="],
+
+    "@embedded-postgres/linux-arm64": ["@embedded-postgres/linux-arm64@17.11.0-beta.19", "", { "os": "linux", "cpu": "arm64", "hasInstallScript": true }, "sha512-Rl7wWkWFa8TYT9ZdMSGETq0EiE8Y4djD7oAVbaUHl/KWXpQm8rPLGgGYTYyqfHG3dg0uKhBIlN/Cs3wvP7dqew=="],
+
+    "@embedded-postgres/linux-ia32": ["@embedded-postgres/linux-ia32@17.11.0-beta.19", "", { "os": "linux", "cpu": "ia32", "hasInstallScript": true }, "sha512-6pfA/iHpNbNhP2uTpIG5HeCnuU6S0Uru3prGkHNbl903IBma/V/dAubYJAVyRb3RUi9ZecBZrtAoYOn1KGEBJA=="],
+
+    "@embedded-postgres/linux-ppc64": ["@embedded-postgres/linux-ppc64@17.11.0-beta.19", "", { "os": "linux", "cpu": "ppc64", "hasInstallScript": true }, "sha512-PC20tUFD/tuJRRhpX+X3TqHsbvwCAurvuZr+Tg3Lx58tFW+O264jdmdS3uQSdYzWsXRXHmgxn26bo3tsMVxaVQ=="],
+
+    "@embedded-postgres/linux-x64": ["@embedded-postgres/linux-x64@17.11.0-beta.19", "", { "os": "linux", "cpu": "x64", "hasInstallScript": true }, "sha512-Mg2SUiVf0TW9vECO8qfv41730WgJOKguOaK4acUuIB4L8HeVuiYgQzlIj2kh73Q3OLxRdeub7D8C/SkExMlqrg=="],
+
+    "@embedded-postgres/windows-x64": ["@embedded-postgres/windows-x64@17.11.0-beta.19", "", { "os": "win32", "cpu": "x64", "hasInstallScript": true }, "sha512-z1/SIyBulCYPWYsLWDkgniAYqSd2KBc48zwPOPpyu2YGYIoQ5kRCU6bEJ2q/lcsBuseAdWAn1lBg7KiI/pIg4Q=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 
@@ -1110,6 +1129,8 @@
 
     "elkjs": ["elkjs@0.11.1", "", {}, "sha512-zxxR9k+rx5ktMwT/FwyLdPCrq7xN6e4VGGHH8hA01vVYKjTFik7nHOxBnAYtrgYUB1RpAiLvA1/U2YraWxyKKg=="],
 
+    "embedded-postgres": ["embedded-postgres@17.11.0-beta.19", "", { "dependencies": { "exit-hook": "^5.1.0", "pg": "^8.23.1" }, "optionalDependencies": { "@embedded-postgres/darwin-arm64": "^17.11.0-beta.19", "@embedded-postgres/darwin-x64": "^17.11.0-beta.19", "@embedded-postgres/linux-arm": "^17.11.0-beta.19", "@embedded-postgres/linux-arm64": "^17.11.0-beta.19", "@embedded-postgres/linux-ia32": "^17.11.0-beta.19", "@embedded-postgres/linux-ppc64": "^17.11.0-beta.19", "@embedded-postgres/linux-x64": "^17.11.0-beta.19", "@embedded-postgres/windows-x64": "^17.11.0-beta.19" } }, "sha512-7weAEptF45qGnDg9DjjFrFGB/TYgS8SwSq2ipO69Q0lupdA1VNcwQd6siHALIOgw6vYu65/MqMd8lSMeYXqvSg=="],
+
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
     "empathic": ["empathic@2.0.0", "", {}, "sha512-i6UzDscO/XfAcNYD75CfICkmfLedpyPDdozrLMmQc5ORaQcdMoc21OnlEylMIqI7U8eniKrPMxxtj8k0vhmJhA=="],
@@ -1141,6 +1162,8 @@
     "estree-walker": ["estree-walker@3.0.3", "", { "dependencies": { "@types/estree": "^1.0.0" } }, "sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g=="],
 
     "etag": ["etag@1.8.1", "", {}, "sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg=="],
+
+    "exit-hook": ["exit-hook@5.1.0", "", {}, "sha512-INjr2xyxHo7bhAqf5ong++GZPPnpcuBcaXUKt03yf7Fie9yWD7FapL4teOU0+awQazGs5ucBh7xWs/AD+6nhog=="],
 
     "expect-type": ["expect-type@1.4.0", "", {}, "sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA=="],
 
