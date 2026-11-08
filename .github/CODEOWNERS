@@ -1,0 +1,9 @@
+# Default reviewer for everything. Add team members per area as the team grows.
+*                         @saadmaz
+
+# High-risk areas: changes here need the owner's review.
+/packages/db/             @saadmaz
+/packages/domain/         @saadmaz
+/apps/api/src/platform/   @saadmaz
+/docs/security/           @saadmaz
+/.github/                 @saadmaz

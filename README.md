@@ -121,6 +121,9 @@ validated, or the platform is production-ready.
 
 ## Contribution workflow
 
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+Release history: [CHANGELOG.md](CHANGELOG.md).
+
 - Short-lived branches from `main`: `feat/<ticket>-desc`, `fix/<ticket>-desc`, `chore/<desc>`.
 - Focused changes with tests; pull request with CI passing and review before merge.
 - Keep `main` protected.
