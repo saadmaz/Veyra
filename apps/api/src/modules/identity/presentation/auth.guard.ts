@@ -1,7 +1,7 @@
 import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import { IS_PUBLIC } from '../../../platform/auth/public.decorator';
+import { ROUTE_ACCESS, type RouteAccess } from '../../../platform/auth/route-access';
 import { API_ENV, type ApiEnv } from '../../../platform/config/env';
 import { ApiError } from '../../../platform/errors/api-error';
 import { IDENTITY_PROVIDER, type IdentityProvider } from '../application/identity-provider';
@@ -40,11 +40,11 @@ export class AuthGuard implements CanActivate {
       throw new ApiError(403, 'ORIGIN_NOT_ALLOWED', 'Request origin is not allowed');
     }
 
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [
+    const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ROUTE_ACCESS, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
+    if (access?.kind === 'public') return true;
 
     const credential = readCredential(req, this.cookie);
     const principal = credential ? await this.identity.authenticate(credential) : null;

@@ -79,14 +79,14 @@ no policy is denied.
 | ----- | ------ | --------------- | ------ |
 | `organisations` | Current tenant, **or** organisations where the current user has an `ACTIVE` membership | Current tenant only | No grant |
 | `memberships` | Current tenant's rows, **or** the current user's own rows | Current tenant only (`WITH CHECK` stops moving a row to another tenant) | No grant |
-| `invitations` | Current tenant only | Current tenant only | No grant |
+| `invitations` | Current tenant, **or** the single row whose `token_hash` the caller presents (`app.invitation_token_hash`) | Current tenant only | No grant |
 | `audit_logs` | Current tenant only | Current tenant, or platform events (`organisation_id IS NULL`) | Rejected by trigger |
 
 **User context.** Before an organisation is chosen ("list my organisations"),
 `withUserTransaction` sets only `app.user_id`. The user then sees their own memberships and the
 organisations they actively belong to, nothing else. Suspending or revoking a membership
 removes that visibility immediately. Membership validity windows (`valid_from` /
-`valid_until`) are checked by the permission engine (Part 5), not by RLS.
+`valid_until`) are checked by the permission engine (access-control module), not by RLS.
 
 **Global tables without RLS.** `users`, `password_credentials`, `sessions` and
 `outbox_events` are not tenant-owned. They are reachable only through the identity module and
@@ -101,13 +101,17 @@ are invisible to tenants.
 - Superusers and roles with `BYPASSRLS` ignore every policy. A test asserts `veyra_app` has
   neither attribute; production connection strings must be reviewed for the same.
 - RLS is defence in depth. Repositories still filter by `organisation_id`, and the permission
-  guard (Part 5) still authorises every request.
+  guard still authorises every request ([ACCESS_CONTROL](../security/ACCESS_CONTROL.md)).
 - Composite tenant foreign keys arrive in Phase 3 with the first tenant-owned child tables
   (properties, buildings, units). Today the only cross-table scope check is
   `memberships_org_scope_matches` (an organisation-scoped membership must point at its own
   organisation).
-- Invitation acceptance by token (no tenant context yet) needs a narrow `SECURITY DEFINER`
-  lookup function, added with the invitations feature (Part 5).
+- **Invitation acceptance** happens before the invitee has tenant context. Instead of the
+  planned `SECURITY DEFINER` function (it would run as `veyra_owner`, which FORCE RLS also
+  restricts), the SELECT policy admits the one invitation whose token hash the caller sets in
+  `app.invitation_token_hash` (`withInvitationTokenTransaction`). Knowing the hash requires the
+  256-bit token. The setting grants read only; acceptance then runs in the invitation's tenant
+  context. Migration `20261108160000_invitation_token_lookup`.
 
 ## 4. Tenant context propagation
 

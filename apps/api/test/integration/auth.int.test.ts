@@ -8,12 +8,14 @@ import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/bootstrap';
 import type { AuthenticatedPrincipal } from '../../src/modules/identity/application/identity-provider';
 import { CurrentPrincipal } from '../../src/modules/identity/presentation/current-principal.decorator';
+import { Authenticated } from '../../src/platform/auth/route-access';
 import { loadApiEnv } from '../../src/platform/config/env';
 import { REDIS_CLIENT } from '../../src/platform/infrastructure/infrastructure.module';
 import { RATE_LIMITER } from '../../src/platform/rate-limit/rate-limiter';
 import { InMemoryRateLimiter } from '../support/in-memory-rate-limiter';
 
 /** A protected route with no @Public(): proves the guard is global and deny-by-default. */
+@Authenticated()
 @Controller('probe')
 class ProtectedProbeController {
   @Get('whoami')

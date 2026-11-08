@@ -2,7 +2,7 @@ import { Body, Controller, Get, Header, HttpCode, Inject, Post, Req, Res } from 
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { AuthResponse, CurrentSessionResponse } from '@veyra/api-contracts';
 import type { Request, Response } from 'express';
-import { Public } from '../../../platform/auth/public.decorator';
+import { Authenticated, Public } from '../../../platform/auth/route-access';
 import { API_ENV, type ApiEnv } from '../../../platform/config/env';
 import { ZodValidationPipe } from '../../../platform/validation/zod-validation.pipe';
 import {
@@ -74,6 +74,7 @@ export class AuthController {
     return this.respond(await this.passwordAuth.signIn(body, requestMeta(req)), res);
   }
 
+  @Authenticated()
   @Post('sign-out')
   @HttpCode(204)
   @ApiCookieAuth()
@@ -87,6 +88,7 @@ export class AuthController {
     if (principal.client === 'WEB') clearSessionCookie(res, this.cookie);
   }
 
+  @Authenticated()
   @Get('session')
   @Header('Cache-Control', 'no-store')
   @ApiCookieAuth()

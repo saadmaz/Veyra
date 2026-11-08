@@ -23,7 +23,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | ----- | ---------------------------------------- | ------ |
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
-| 2     | Identity and multi-tenancy               | In progress: Parts 3-4 done; Part 5 (tenancy and authorisation) next |
+| 2     | Identity and multi-tenancy               | In progress: Parts 3-5 done; Part 6 (console UI) next |
 | 3     | Organisation and property management     | |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
@@ -74,8 +74,8 @@ Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, 
 | 1-2 | Authentication decision: built-in auth behind an identity port ([ADR 0005](../adr/0005-built-in-authentication.md)) | ✅ Decided |
 | 3 | Data foundation: User, PasswordCredential, Session, Organisation, Membership, Invitation, AuditLog, OutboxEvent; migration with CHECK constraints, RLS (ENABLE + FORCE), append-only audit trigger, least-privilege `veyra_app` role; tenant/user transaction helpers; embedded-PostgreSQL integration harness (24 tests) in CI | ✅ Done |
 | 4 | Authentication: sign-up, sign-in, sign-out, sessions (hashed opaque token, idle + absolute expiry, revocation, transport binding), argon2id, cookie (web) / bearer (mobile), Redis rate limiting, Origin check, audit events, global deny-by-default guard ([AUTHENTICATION](../security/AUTHENTICATION.md)) | ✅ Done |
-| 5 | Tenancy and authorisation: create organisation, memberships, invitations (SECURITY DEFINER token lookup), role/permission registry in code, permission guard with boot-time "every route declares a permission" check, cross-tenant and expired-membership API tests | Next |
-| 6 | Console UI: sign-in, sign-up, organisation switcher | |
+| 5 | Tenancy and authorisation: create organisation, memberships (suspend/reactivate/revoke, last-admin guard), invitations (token-hash RLS lookup), role/permission registry in code, permission guard, startup check that every route declares its access, anti-escalation, cross-tenant and expired-membership API tests ([ACCESS_CONTROL](../security/ACCESS_CONTROL.md)) | ✅ Done |
+| 6 | Console UI: sign-in, sign-up, organisation switcher | Next |
 
 Also in Phase 2: structured JSON logging with request ids.
 
@@ -105,6 +105,14 @@ readiness, user training and release communication, and known limitations docume
 - `dev` scripts for api/worker build once and run; no watch mode yet.
 - Module-boundary lint check to be added when the second business module exists.
 - Worker `main.ts` (Redis wiring, health server) has no automated test; covered by the Phase 2 integration harness.
-- Worker does not yet send emails; `@veyra/emails` is ready for the Phase 2 invitation flow.
+- Invitation emails are not sent yet: the API returns the one-time token to the inviter, who
+  shares the link. Sending moves to the notifications module (`@veyra/emails` has the template).
+- Invitations are bound to an email address, but sign-up does not verify email ownership yet
+  (ADR 0005 gap), so a token leaked to someone who registers that address could be accepted.
+- Membership and invitation lists use keyset pagination; no filters or search yet.
+- Effective permissions are read from the database on every request (no cache). Add the
+  Redis cache with invalidation events only when measurements require it.
+- No module-boundary lint rule yet: modules import each other only through their `index.ts`
+  by convention.
 - No Content-Security-Policy yet on the web apps (added per app once script/style sources are known).
 - Dependency and secret scanning not yet in CI.

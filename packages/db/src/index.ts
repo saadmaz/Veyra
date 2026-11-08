@@ -10,6 +10,7 @@ export * from './generated/prisma/enums';
 export {
   type SqlExecutor,
   type TransactionRunner,
+  withInvitationTokenTransaction,
   withTenantTransaction,
   withUserTransaction,
 } from './tenant-transaction';

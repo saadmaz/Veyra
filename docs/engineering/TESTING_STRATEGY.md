@@ -89,6 +89,25 @@ verification, malformed hashes, rehash detection; service rules with fakes (rate
 and per email, fail-closed limiter, timing equalisation, disabled accounts, transport binding,
 expiry, rehash on sign-in, idempotent sign-out).
 
+### Part 5: tenancy and authorisation
+
+- `apps/api` integration (18): organisation creation makes the creator admin; slug conflicts and
+  input validation; **every organisation route returns 404 to non-members**; unknown and
+  malformed ids behave like foreign ones; finance officer gets 403 on members, settings and
+  invitations; suspension, reactivation and revocation apply on the next request; revoked is
+  final; expired and future-dated memberships denied; last admin protected; suspended
+  organisation read-only; invitation tokens shown once; email-bound, single-use acceptance
+  (concurrent attempts: one wins); unknown, revoked, expired and duplicate invitations; no
+  revoking another organisation's invitation; tenant audit trail; keyset pagination.
+- `apps/api` unit (32): permission registry consistency, grant validity windows (inclusive
+  start, exclusive end), downward-only scope, unknown roles grant nothing, suspended/archived
+  organisations, anti-escalation, organisation and invitation input rules, membership
+  transitions, startup route-access check (undeclared route, unknown permission, missing
+  `:organisationId`).
+- `packages/db` integration (6): invitation token-hash RLS lookup exposes exactly one row and
+  grants no writes; malformed hashes rejected; one pending invitation per email and role;
+  accepted/revoked exclusive.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

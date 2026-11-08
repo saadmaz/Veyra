@@ -1,6 +1,7 @@
 # Access Control
 
-> Status: Phase 0 baseline. Implemented in Phase 2.
+> Status: Phase 2. Organisation-level authorisation is implemented (section 6). Property, unit
+> and derived (owner/tenant) grants arrive with Phases 3 and 4.
 
 ## 1. Model: RBAC + resource scope + time
 
@@ -94,3 +95,80 @@ reason-logged grant that is visible to the tenant.
 - Cross-organisation: any membership in org A grants nothing in org B.
 - Revocation during an active session takes effect on the next request.
 - Every route declares a permission or is explicitly public (boot-time check test).
+
+## 6. Implementation (Phase 2)
+
+Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup check) and
+`apps/api/src/modules/organisations` (organisations, memberships, invitations).
+
+### 6.1 Registry
+
+- **Permissions** are a closed list in `access-control/domain/permissions.ts`. Today:
+  `organisation.profile.read`, `organisation.settings.manage`, `organisation.member.read`,
+  `organisation.member.manage`, `organisation.member.invite`. Each module adds its permissions
+  with its first endpoint.
+- **System roles** live in `access-control/domain/roles.ts`. Only roles grantable at today's
+  scopes exist: `ORGANISATION_ADMIN` (all organisation permissions) and `FINANCE_OFFICER`
+  (`organisation.profile.read` until finance exists). Property-, building- and unit-scoped
+  roles are added with Phases 3 and 4. A role key in the database that the registry does not
+  know grants nothing.
+- Custom per-organisation roles are not implemented.
+
+### 6.2 Declaring access
+
+Every route carries exactly one declaration:
+
+| Decorator | Meaning |
+| --------- | ------- |
+| `@Public()` | No session (health, sign-up, sign-in) |
+| `@Authenticated()` | Any signed-in user, no organisation context (my organisations, create organisation, accept invitation, sign-out) |
+| `@RequirePermission('…')` | Signed-in effective member of the route's `:organisationId` holding the permission |
+
+At startup, `RouteAccessVerifier` stops the application if a route has no declaration, names an
+unregistered permission, or requires a permission without `:organisationId` in its path.
+
+### 6.3 Evaluation (per request, no cache)
+
+Global guards run in a fixed order: `AuthGuard` (session), then `PermissionGuard`. For
+`@RequirePermission` routes:
+
+1. The organisation id comes from the path only. A malformed id is treated as unknown.
+2. The organisation and **all** of the user's memberships in it are read inside that tenant's
+   RLS context.
+3. No effective membership (rule 2) or no such organisation: **404 `NOT_FOUND`**. Outsiders
+   cannot tell which organisations exist.
+4. Effective member without the permission: **403 `FORBIDDEN`**.
+5. Organisation `SUSPENDED` or `OFFBOARDING`: only `.read` permissions remain. `ARCHIVED`:
+   nothing.
+
+Because grants are read on every request, suspension, revocation and expiry apply to the very
+next request of an existing session.
+
+### 6.4 Rules enforced by the organisations module
+
+- **Creation:** any signed-in user can create an organisation (5 per day), becoming its first
+  `ORGANISATION_ADMIN` in the same transaction.
+- **Anti-escalation:** inviting to a role, or changing someone's membership, requires holding
+  every permission of that role (`ROLE_NOT_ASSIGNABLE`).
+- **Last admin:** the last effective organisation admin cannot be suspended or revoked
+  (`LAST_ADMIN`). Admin rows are locked during the check, so concurrent requests cannot both pass.
+- **Transitions:** ACTIVE ↔ SUSPENDED, either → REVOKED. REVOKED is final; access returns only
+  through a new invitation.
+- **Invitations:**
+  - bound to an email address, valid for 7 days and single use;
+  - the token is shown once to the inviter and stored as a SHA-256 hash;
+  - only an account with the invited email can accept (`INVITATION_EMAIL_MISMATCH`);
+  - concurrent acceptances are serialised by a conditional update;
+  - one pending invitation per email and role (`INVITATION_PENDING`); an expired one is retired
+    automatically.
+- Every change writes a tenant audit record in the same transaction: `organisation.created`,
+  `organisation.updated`, `membership.granted`, `membership.status_changed`,
+  `invitation.created`, `invitation.revoked`, `invitation.accepted`.
+
+### 6.5 Not yet implemented
+
+- MFA for privileged mutations (rule 7) depends on MFA in authentication (ADR 0005 gap).
+- Subscription entitlements (rule 5): Phase 13.
+- Property/building/unit scopes and derived owner/tenant grants: Phases 3 and 4.
+- Platform super admin support access.
+- Permission caching with invalidation events (not needed while reads are cheap).
