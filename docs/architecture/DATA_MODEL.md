@@ -63,6 +63,12 @@ tenant foreign keys (`ON DELETE/UPDATE RESTRICT`) and no DELETE privilege: rows 
 | `units` | id, organisation_id, property_id, building_id?, floor_id?, number, type, area_sqm?, share_ratio?, status | Building optional (villas); floor requires a building. Number unique per building, or per property without one, case-insensitive (`NULLS NOT DISTINCT`). Area and share ratio positive (DECIMAL, never float). |
 | `common_areas` | id, organisation_id, property_id, building_id?, name, type, status | Name unique per property. Optional building (a gym inside tower A). |
 
+Behaviour (API, Phase 3 Part 3): archiving a property archives its whole structure in one
+transaction; a building or floor can only be archived without active units (a building takes
+its floors and common areas with it); nothing is created under an archived parent. Creating
+takes a share lock on the parent and archiving an update lock on the archived row, so the two
+are serialised. Country and currency change only while the property is `ONBOARDING`.
+
 Not yet modelled: parking inventory (Phase 3 later part or Phase 9), unit categories beyond
 `type`, property branding and operational policies.
 

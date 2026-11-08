@@ -32,7 +32,7 @@ Every error uses one envelope:
 | 401  | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` |
 | 403  | `FORBIDDEN`, `ORIGIN_NOT_ALLOWED`, `ROLE_NOT_ASSIGNABLE`, `INVITATION_EMAIL_MISMATCH` |
 | 404  | `NOT_FOUND` (also returned for resources in another tenant, to avoid leaking existence), `INVITATION_NOT_FOUND` |
-| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `PROPERTY_CODE_TAKEN`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED` |
+| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `PROPERTY_CODE_TAKEN`, `BUILDING_CODE_TAKEN`, `FLOOR_LEVEL_TAKEN`, `UNIT_NUMBER_TAKEN`, `COMMON_AREA_NAME_TAKEN`, `STRUCTURE_IN_USE`, `ARCHIVED`, `PROPERTY_FINANCIALS_LOCKED`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED` |
 | 422  | domain rule violations, e.g. `BOOKING_SLOT_TAKEN`, `ROLE_SCOPE_MISMATCH` |
 | 429  | `RATE_LIMITED` (with `Retry-After`) |
 | 500  | `INTERNAL_ERROR` (no internals in the message) |
@@ -68,6 +68,20 @@ Invitations take an optional `propertyId` to grant a role for one property (e.g.
 | POST | `/organisations/{organisationId}/properties` | `organisation.property.create` (country, time zone and currency default to the organisation's) |
 | GET | `/organisations/{organisationId}/properties` | Any member; filtered to the properties the caller's grants reach |
 | GET | `/organisations/{organisationId}/properties/{propertyId}` | `property.profile.read` at that property (includes the caller's `permissions`) |
+| PATCH | `…/properties/{propertyId}` | `property.settings.manage` (country and currency only while `ONBOARDING`) |
+| POST | `…/properties/{propertyId}/activate`, `…/archive` | `property.lifecycle.manage` (archive cascades to the whole structure) |
+
+Structure, all under `…/properties/{propertyId}`; reading needs `property.structure.read`, every
+change `property.structure.manage`. Lists show active rows; `?status=ARCHIVED` shows the archive.
+
+| Resource | Endpoints |
+| -------- | --------- |
+| Buildings | `GET/POST buildings`, `PATCH buildings/{id}`, `POST buildings/{id}/archive` (no active units; archives its floors and common areas) |
+| Floors | `GET/POST buildings/{buildingId}/floors`, `PATCH …/floors/{id}`, `POST …/floors/{id}/archive` (no active units) |
+| Units | `GET units?buildingId=&floorId=`, `POST units`, `PATCH units/{id}`, `POST units/{id}/archive` |
+| Common areas | `GET/POST common-areas`, `PATCH common-areas/{id}`, `POST common-areas/{id}/archive` |
+
+Unit `areaSqm` and `shareRatio` are decimal strings (`"85.50"`), never JSON numbers.
 
 ## Pagination
 

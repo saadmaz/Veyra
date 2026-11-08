@@ -243,3 +243,125 @@ export interface PropertyDto {
 export interface PropertyDetailResponse extends PropertyDto {
   permissions: string[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Property structure (Phase 3): buildings, floors, units, common areas
+// ---------------------------------------------------------------------------------------------
+
+export type StructureStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface UpdatePropertyRequest {
+  name?: string;
+  type?: PropertyType;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  region?: string;
+  postalCode?: string;
+  timeZone?: string;
+  /** Only while the property is ONBOARDING. */
+  countryCode?: string;
+  /** Only while the property is ONBOARDING. */
+  currency?: string;
+}
+
+export interface BuildingDto {
+  id: string;
+  propertyId: string;
+  name: string;
+  code: string;
+  status: StructureStatus;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateBuildingRequest {
+  name: string;
+  /** Unique in the property; letters, digits and hyphens, up to 20 characters. */
+  code: string;
+}
+
+export interface FloorDto {
+  id: string;
+  propertyId: string;
+  buildingId: string;
+  /** 0 = ground, negative = basement. Unique per building. */
+  level: number;
+  name: string;
+  status: StructureStatus;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateFloorRequest {
+  level: number;
+  name: string;
+}
+
+export type UnitType =
+  | 'APARTMENT'
+  | 'PENTHOUSE'
+  | 'STUDIO'
+  | 'DUPLEX'
+  | 'VILLA'
+  | 'TOWNHOUSE'
+  | 'SHOP'
+  | 'OFFICE'
+  | 'STORAGE'
+  | 'OTHER';
+
+export interface UnitDto {
+  id: string;
+  propertyId: string;
+  /** Null for units directly in the property (e.g. villas). */
+  buildingId: string | null;
+  floorId: string | null;
+  number: string;
+  type: UnitType;
+  /** Square metres as a decimal string with 2 decimals, e.g. "85.50". Never a JSON number. */
+  areaSqm: string | null;
+  /** Decimal string with 6 decimals, used to apportion shared charges. */
+  shareRatio: string | null;
+  status: StructureStatus;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateUnitRequest {
+  number: string;
+  type: UnitType;
+  buildingId?: string;
+  /** Requires buildingId; must be a floor of that building. */
+  floorId?: string;
+  areaSqm?: string;
+  shareRatio?: string;
+}
+
+export type CommonAreaType =
+  | 'LOBBY'
+  | 'POOL'
+  | 'GYM'
+  | 'CLUBHOUSE'
+  | 'FUNCTION_ROOM'
+  | 'SPORTS_FACILITY'
+  | 'PLAYGROUND'
+  | 'GARDEN'
+  | 'PARKING'
+  | 'OTHER';
+
+export interface CommonAreaDto {
+  id: string;
+  propertyId: string;
+  buildingId: string | null;
+  name: string;
+  type: CommonAreaType;
+  status: StructureStatus;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateCommonAreaRequest {
+  name: string;
+  type: CommonAreaType;
+  buildingId?: string;
+}

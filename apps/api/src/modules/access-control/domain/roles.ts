@@ -29,19 +29,28 @@ export const ROLES = {
       'organisation.member.invite',
       'organisation.property.create',
       'property.profile.read',
+      'property.settings.manage',
+      'property.lifecycle.manage',
+      'property.structure.read',
+      'property.structure.manage',
     ],
   },
   PROPERTY_MANAGER: {
     name: 'Property manager',
     grantableAt: ['PROPERTY'],
-    // Structure and operations permissions are added with their endpoints (Phase 3 Part 3 on).
-    permissions: ['property.profile.read'],
+    // Runs the property day to day; archiving or activating it stays with organisation admins.
+    permissions: [
+      'property.profile.read',
+      'property.settings.manage',
+      'property.structure.read',
+      'property.structure.manage',
+    ],
   },
   FINANCE_OFFICER: {
     name: 'Finance officer',
     grantableAt: ['ORGANISATION', 'PROPERTY'],
     // Finance permissions are added with the finance module (Phase 6).
-    permissions: ['organisation.profile.read', 'property.profile.read'],
+    permissions: ['organisation.profile.read', 'property.profile.read', 'property.structure.read'],
   },
 } as const satisfies Record<string, RoleDefinition>;
 

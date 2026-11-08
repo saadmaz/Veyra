@@ -143,7 +143,8 @@ describe('property-level permissions (downward-only inheritance)', () => {
 
   it('a property grant never reaches upward to organisation permissions', () => {
     const atProperty = permissionsAt([managerOf(P1)], 'ACTIVE', property(P1), now);
-    expect([...atProperty]).toEqual(['property.profile.read']);
+    expect(atProperty.size).toBeGreaterThan(0);
+    for (const permission of atProperty) expect(permission.startsWith('property.')).toBe(true);
     expect(hasCoveringGrant([managerOf(P1)], { type: 'ORGANISATION' }, now)).toBe(false);
   });
 
@@ -163,7 +164,8 @@ describe('property-level permissions (downward-only inheritance)', () => {
 
   it('makes an archived property read-only', () => {
     const permissions = permissionsAt([grant()], 'ACTIVE', property(P1, 'ARCHIVED'), now);
-    expect([...permissions]).toEqual(['property.profile.read']);
+    expect([...permissions].sort()).toEqual(['property.profile.read', 'property.structure.read']);
+    expect(permissions.has('property.structure.manage')).toBe(false);
   });
 });
 

@@ -21,6 +21,12 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 3 structure API**: property settings, activation and archiving (cascading to the
+  whole structure); buildings, floors, units and common areas with create, update, archive and
+  list endpoints; archive rules (no active units), parent checks, unique-rule conflicts mapped to
+  stable codes, race-safe row locking, audit for every change; unit area and share ratio as
+  decimal strings. New permissions `property.settings.manage`, `property.lifecycle.manage`,
+  `property.structure.read`, `property.structure.manage`.
 - **Phase 3 property access**: property-scoped permissions (`property.*`, evaluated at the
   route's `:propertyId`) with downward-only inheritance; `PROPERTY_MANAGER` role; finance
   officers grantable per property; property create, list (filtered to reachable properties)

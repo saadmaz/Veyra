@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Query, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Paginated, PropertyDetailResponse, PropertyDto } from '@veyra/api-contracts';
 import type { Request } from 'express';
@@ -8,7 +8,9 @@ import { ZodValidationPipe } from '../../../platform/validation/zod-validation.p
 import { CurrentAccess, type OrganisationAccess, RequirePermission } from '../../access-control';
 import type { PropertyRecord } from '../application/ports';
 import { PropertiesService } from '../application/properties.service';
+import { StructureService } from '../application/structure.service';
 import { type CreatePropertyInput, createPropertySchema } from '../domain/property-rules';
+import { type UpdatePropertyInput, updatePropertySchema } from '../domain/structure-rules';
 
 function toPropertyDto(property: PropertyRecord): PropertyDto {
   return {
@@ -32,7 +34,10 @@ function toPropertyDto(property: PropertyRecord): PropertyDto {
 @ApiTags('properties')
 @Controller('organisations/:organisationId/properties')
 export class PropertiesController {
-  constructor(private readonly properties: PropertiesService) {}
+  constructor(
+    private readonly properties: PropertiesService,
+    private readonly structure: StructureService,
+  ) {}
 
   @Post()
   @RequirePermission('organisation.property.create')
@@ -64,5 +69,40 @@ export class PropertiesController {
   async get(@CurrentAccess() access: OrganisationAccess): Promise<PropertyDetailResponse> {
     const property = await this.properties.get(access);
     return { ...toPropertyDto(property), permissions: [...access.permissions].sort() };
+  }
+
+  @Patch(':propertyId')
+  @RequirePermission('property.settings.manage')
+  @ApiOperation({
+    summary: 'Edit name, type, address or time zone; country and currency only while onboarding.',
+  })
+  async update(
+    @CurrentAccess() access: OrganisationAccess,
+    @Body(new ZodValidationPipe(updatePropertySchema)) body: UpdatePropertyInput,
+    @Req() req: Request,
+  ): Promise<PropertyDto> {
+    return toPropertyDto(await this.structure.updateProperty(access, body, requestMeta(req)));
+  }
+
+  @Post(':propertyId/activate')
+  @HttpCode(200)
+  @RequirePermission('property.lifecycle.manage')
+  @ApiOperation({ summary: 'Finish onboarding: ONBOARDING -> ACTIVE.' })
+  async activate(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<PropertyDto> {
+    return toPropertyDto(await this.structure.activateProperty(access, requestMeta(req)));
+  }
+
+  @Post(':propertyId/archive')
+  @HttpCode(200)
+  @RequirePermission('property.lifecycle.manage')
+  @ApiOperation({ summary: 'Archive the property and its whole structure. It stays readable.' })
+  async archive(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<PropertyDto> {
+    return toPropertyDto(await this.structure.archiveProperty(access, requestMeta(req)));
   }
 }

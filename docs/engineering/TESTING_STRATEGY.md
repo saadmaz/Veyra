@@ -150,6 +150,23 @@ expiry, rehash on sign-in, idempotent sign-out).
   read-only, list filtering, anti-escalation at the target scope, startup check for
   `:propertyId`.
 
+### Part 3: structure API
+
+- `apps/api` integration (15): property manager builds and edits their property but cannot
+  activate or archive it; finance officer reads only; another property's manager and outsiders
+  get 404; per-property building codes, per-building floor levels, unit numbers per building
+  and per property (case-insensitive); exact decimals returned as strings and JSON numbers
+  rejected; another building's floor or another property's building refused; filtering;
+  archive refused while units are active, then cascades to floors; nothing created under an
+  archived parent; create-versus-archive race (5 rounds) never leaves an active unit in an
+  archived building; country/currency only while onboarding; property archive cascades and
+  freezes writes while reads continue.
+- The race test checks outcomes, not timing: the guarantee comes from the row locks
+  (share on the parent when creating, update on the row when archiving), and the test cannot
+  force the bad interleaving every run.
+- `apps/api` unit (20): decimal strings (bounds, scale, no JSON numbers), floor requires
+  building, code normalisation, at-least-one-field updates, default list status.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

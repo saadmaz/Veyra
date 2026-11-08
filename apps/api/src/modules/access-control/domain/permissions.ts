@@ -19,6 +19,14 @@ export const PERMISSIONS = [
   'organisation.property.create',
   /** View a property's profile. Property-scoped: evaluated against the route's :propertyId. */
   'property.profile.read',
+  /** Edit a property's name, type, address and time zone (country and currency while onboarding). */
+  'property.settings.manage',
+  /** Activate or archive a property. Archiving archives its whole structure. */
+  'property.lifecycle.manage',
+  /** View buildings, floors, units and common areas. */
+  'property.structure.read',
+  /** Create, edit and archive buildings, floors, units and common areas. */
+  'property.structure.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
