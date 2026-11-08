@@ -1,14 +1,17 @@
 import { Global, Inject, Logger, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { createDbClient, type DbClient } from '@veyra/db';
 import { Redis } from 'ioredis';
+import { CLOCK, systemClock } from '../clock';
 import { API_ENV, type ApiEnv } from '../config/env';
 import { HEALTH_CHECKS, type HealthCheck } from '../health/health.service';
+import { RATE_LIMITER, RedisRateLimiter } from '../rate-limit/rate-limiter';
 
 export const DB_CLIENT = Symbol('DB_CLIENT');
 export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
 
 /**
- * Owns connections to PostgreSQL and Redis and registers their readiness checks.
+ * Owns connections to PostgreSQL and Redis, the services built directly on them (rate limiter)
+ * and the clock, and registers readiness checks.
  * Connections are lazy so the process boots (and reports "not ready") even when a
  * dependency is down, instead of crash-looping.
  */
@@ -38,6 +41,12 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
       },
     },
     {
+      provide: RATE_LIMITER,
+      inject: [REDIS_CLIENT],
+      useFactory: (redis: Redis) => new RedisRateLimiter(redis),
+    },
+    { provide: CLOCK, useValue: systemClock },
+    {
       provide: HEALTH_CHECKS,
       inject: [DB_CLIENT, REDIS_CLIENT],
       useFactory: (db: DbClient, redis: Redis): HealthCheck[] => [
@@ -56,7 +65,7 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
       ],
     },
   ],
-  exports: [DB_CLIENT, REDIS_CLIENT, HEALTH_CHECKS],
+  exports: [DB_CLIENT, REDIS_CLIENT, RATE_LIMITER, CLOCK, HEALTH_CHECKS],
 })
 export class InfrastructureModule implements OnApplicationShutdown {
   constructor(

@@ -21,6 +21,15 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 2 authentication** (`apps/api` identity module, ADR 0005): sign-up, sign-in, sign-out
+  and current-session endpoints; argon2id passwords; opaque session tokens stored as SHA-256
+  hashes, bound to web (httpOnly cookie) or mobile (bearer); idle and absolute expiry; Redis
+  rate limits per IP and per email that fail closed; Origin check against CSRF and login CSRF;
+  global deny-by-default guard with `@Public()`; audit events. See docs/security/AUTHENTICATION.md.
+- `sessions.client` column (migration `20261108140000_session_client`).
+- `@veyra/db/testing` (`startTestDatabase`), a migration drift test and time-zone tests; API
+  integration tests against the real database; Redis rate-limiter tests in CI.
+- `API_TRUST_PROXY` setting for the client IP behind proxies.
 - **Phase 2 data foundation** (`packages/db`): Prisma models for users, password credentials,
   sessions, organisations, memberships, invitations, audit logs and outbox events; first
   migration with CHECK constraints, row-level security (ENABLE + FORCE) on tenant tables,
@@ -41,6 +50,10 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Fixed
 
+- Timestamps read through Prisma were shifted by the database server's UTC offset when its
+  time zone was not UTC (Prisma pg adapter). Application connections now pin `TimeZone=UTC`.
+- Integration test teardown no longer fails on Windows when PostgreSQL briefly holds its data
+  directory after stopping.
 - `Money` used `Intl` display conventions for currency decimals, which reject valid amounts in
   currencies such as PKR (Intl: 0 decimals, ISO 4217: 2). It now uses the ISO 4217 table.
 

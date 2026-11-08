@@ -51,6 +51,13 @@ change (old `veyra`/`veyra` user), recreate the volume, which **deletes local da
 
 Details: [MULTI_TENANCY section 3](../architecture/MULTI_TENANCY.md).
 
+## Signing in locally
+
+The API serves `/api/v1/auth/sign-up` and `/sign-in` ([AUTHENTICATION](../security/AUTHENTICATION.md)).
+It needs Redis for rate limiting: without it, sign-in returns `503` by design. The web console
+(port 3000) must be listed in `API_CORS_ORIGINS`, or its sign-in requests are rejected with
+`403 ORIGIN_NOT_ALLOWED`.
+
 ## Running each app
 
 | Command | App | URL |
@@ -74,7 +81,7 @@ port 4000 through Windows Firewall.
 | `bun run lint:fix` | Apply safe fixes and formatting |
 | `bun run typecheck` | Strict TypeScript across all workspaces |
 | `bun run test` | All unit and API Vitest suites (no database needed) |
-| `bun run test:integration` | Database integration tests: starts a throwaway PostgreSQL 17 (embedded-postgres, no Docker), applies the real migrations as `veyra_owner`, tests RLS as `veyra_app`. PostgreSQL binaries come from `bun install` (no extra download) |
+| `bun run test:integration` | Database and API integration tests: starts a throwaway PostgreSQL 17 (embedded-postgres, no Docker), applies the real migrations as `veyra_owner`, tests RLS as `veyra_app`. PostgreSQL binaries come from `bun install` (no extra download) |
 | `bun run build` | Build every package and web/backend app |
 
 All of these must pass before a change is considered done. CI runs the same commands.

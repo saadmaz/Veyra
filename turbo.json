@@ -19,7 +19,8 @@
     "test:integration": {
       "dependsOn": ["^build", "generate"],
       "outputs": [],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["REDIS_URL"]
     },
     "dev": {
       "cache": false,

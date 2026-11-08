@@ -3,7 +3,7 @@
 | Level       | Tooling | Scope | Where |
 | ----------- | ------- | ----- | ----- |
 | Unit        | Vitest | Domain rules, value objects, pure services | `packages/*/test`, `apps/*/test` |
-| Integration | Vitest + real PostgreSQL 17 (embedded-postgres, started per run) | Migrations, roles, RLS policies, constraints, repositories | `packages/db/test/integration/*.int.test.ts` (`bun run test:integration`); API repositories and queues from Part 4 |
+| Integration | Vitest + real PostgreSQL 17 (embedded-postgres, started per run); real Redis in CI | Migrations, drift, roles, RLS, constraints, time zones; full API flows over HTTP against the real database | `packages/db/test/integration`, `apps/api/test/integration` (`bun run test:integration`) |
 | API / e2e   | Vitest + Supertest against the real Nest pipeline | HTTP contract, error envelope, guards | `apps/api/test/*.e2e.test.ts` |
 | Contract    | Recorded provider fixtures + schema checks | Payment, SMS, email adapters | per adapter (from Phase 6) |
 | Web UI e2e  | Playwright | Critical user journeys in the browser | `apps/console-web/e2e` (from Phase 3) |
@@ -21,11 +21,17 @@
   on Windows, macOS and the Linux CI runner, without Docker.
 - Integration test files run sequentially against one database; each test creates its own
   uniquely identified fixtures.
+- The test database server runs in a deliberately non-UTC time zone (`Pacific/Chatham`) on every
+  machine, so time-zone bugs fail locally and in UTC CI runners alike.
+- Shared setup: `startTestDatabase()` from `@veyra/db/testing` (test-only export).
+- The Redis rate-limiter suite needs `REDIS_URL`. CI sets it (Redis service container) and runs
+  it; on a machine without Redis it is reported as **skipped**, never as passed.
+- A drift test fails if `schema.prisma` and the migrations describe different databases.
 - Tests do not hit real external providers. Adapters are tested against fixtures, and one
   opt-in smoke suite runs against provider sandboxes.
 - A failing test is fixed or the change is reverted. Tests are never skipped to get green.
 
-## Current coverage (Phase 1: 65 tests across 12 workspaces, all passing on 2026-11-08)
+## Phase 1 coverage (65 unit tests across 12 workspaces, all passing on 2026-11-08)
 
 - `packages/domain`: Money arithmetic, parsing, allocation, precision, currency safety; tenant
   context and job envelope validation.
@@ -42,7 +48,12 @@
 - `packages/design-tokens`: light/dark token parity, valid colours, CSS variable output.
 - `packages/emails`: invitation email content, HTML escaping, HTTPS-only links.
 
-## Phase 2 database integration tests (`packages/db`, 24 tests)
+## Phase 2 integration tests
+
+### `packages/db` (28 tests)
+
+- Migrations: the migrated database matches `schema.prisma` exactly (drift check).
+- Time zones: the server runs non-UTC; Prisma reads and writes the correct instants.
 
 - Roles: `veyra_app` is not a superuser, cannot bypass RLS and cannot read the migrations table.
 - No context: nothing is visible, including to the schema owner (FORCE RLS).
@@ -55,6 +66,28 @@
   deletes rejected for the app role, the owner and a superuser.
 - Constraints: normalised emails; organisation-scoped memberships must match their organisation.
 - The generated Prisma client with `withTenantTransaction` gets the same isolation.
+
+### `apps/api` authentication (19 tests, plus 5 Redis tests in CI)
+
+- Deny by default: protected routes return 401 without, or with garbage, credentials; health stays public.
+- Web sign-up: httpOnly SameSite=Lax cookie, no token in body, `no-store`; only argon2id and
+  SHA-256 hashes stored; case-insensitive duplicate email -> 409; concurrent duplicate sign-ups
+  create exactly one account; validation errors never echo the password.
+- Sign-in: same 401 for wrong password and unknown email; 429 + Retry-After after 5 failures even
+  with the right password; disabled users lose sign-in and existing sessions.
+- Mobile: bearer token in body, no cookie; tokens rejected on the other transport.
+- Sign-out revokes server-side (old cookie replay fails); idle and absolute expiry enforced.
+- CSRF: cross-origin state changes and forged sign-ins return 403.
+- Audit: sign-up, failed sign-in (with reason), sign-in and sign-out recorded, without secrets.
+- Redis limiter: counting, fixed window, expiry, reset, atomicity under 50 concurrent hits.
+
+### `apps/api` identity unit tests (41 tests)
+
+Token format and hashing; session lifetimes, sliding idle expiry capped by the absolute expiry;
+input normalisation and password policy (Unicode length, NFKC, bounds); argon2id parameters,
+verification, malformed hashes, rehash detection; service rules with fakes (rate limits per IP
+and per email, fail-closed limiter, timing equalisation, disabled accounts, transport binding,
+expiry, rehash on sign-in, idempotent sign-out).
 
 ## Critical scenarios to add as features land
 

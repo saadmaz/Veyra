@@ -23,7 +23,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | ----- | ---------------------------------------- | ------ |
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
-| 2     | Identity and multi-tenancy               | In progress: Part 3 (data foundation) done; Part 4 (authentication) next |
+| 2     | Identity and multi-tenancy               | In progress: Parts 3-4 done; Part 5 (tenancy and authorisation) next |
 | 3     | Organisation and property management     | |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
@@ -73,8 +73,8 @@ Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, 
 | ---- | ----- | ------ |
 | 1-2 | Authentication decision: built-in auth behind an identity port ([ADR 0005](../adr/0005-built-in-authentication.md)) | ✅ Decided |
 | 3 | Data foundation: User, PasswordCredential, Session, Organisation, Membership, Invitation, AuditLog, OutboxEvent; migration with CHECK constraints, RLS (ENABLE + FORCE), append-only audit trigger, least-privilege `veyra_app` role; tenant/user transaction helpers; embedded-PostgreSQL integration harness (24 tests) in CI | ✅ Done |
-| 4 | Authentication: sign-up, sign-in, sign-out, sessions (hashed opaque token, idle + absolute expiry, revocation), argon2id, cookie (web) / bearer (mobile), Redis rate limiting, audit events, auth guard | Next |
-| 5 | Tenancy and authorisation: create organisation, memberships, invitations (SECURITY DEFINER token lookup), role/permission registry in code, permission guard with boot-time "every route declares a permission" check, cross-tenant and expired-membership API tests | |
+| 4 | Authentication: sign-up, sign-in, sign-out, sessions (hashed opaque token, idle + absolute expiry, revocation, transport binding), argon2id, cookie (web) / bearer (mobile), Redis rate limiting, Origin check, audit events, global deny-by-default guard ([AUTHENTICATION](../security/AUTHENTICATION.md)) | ✅ Done |
+| 5 | Tenancy and authorisation: create organisation, memberships, invitations (SECURITY DEFINER token lookup), role/permission registry in code, permission guard with boot-time "every route declares a permission" check, cross-tenant and expired-membership API tests | Next |
 | 6 | Console UI: sign-in, sign-up, organisation switcher | |
 
 Also in Phase 2: structured JSON logging with request ids.
@@ -92,11 +92,14 @@ readiness, user training and release communication, and known limitations docume
 - Mobile app not yet launched on a device or emulator.
 - `bunfig.toml` uses the hoisted linker for React Native; revisit if Bun's isolated linker gains Metro support.
 - Structured logging (pino + OpenTelemetry) not yet added; Nest's default logger is in use.
-- Rate limiting not yet enabled (Phase 2, Part 4).
+- General per-user API rate limiting not yet enabled (authentication limits are).
 - Built-in auth lacks MFA, email verification, password reset and breached-password checks
   (ADR 0005); required before privileged customer users go live.
 - CI still starts a PostgreSQL service container that no test uses (integration tests use
-  embedded-postgres); keep or remove when the API integration tests land in Part 4.
+  embedded-postgres). The Redis service container is now used by the rate-limiter tests.
+- Authentication gaps listed in [AUTHENTICATION section 8](../security/AUTHENTICATION.md):
+  sign-up email enumeration, no sign-out-everywhere, rate-limited attempts not audited.
+- No expired-session cleanup job yet (rows stay until a worker job prunes them).
 - Production database role provisioning (veyra_owner / veyra_app from a secrets manager) not yet
   scripted.
 - `dev` scripts for api/worker build once and run; no watch mode yet.

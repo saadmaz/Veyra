@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { DomainError } from '@veyra/domain';
 import type { Request, Response } from 'express';
+import { ApiError } from './api-error';
 import type { ErrorEnvelope } from './error-envelope';
 import { ValidationFailedException } from './validation-failed.exception';
 
@@ -41,6 +42,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
     const { status, body } = this.toEnvelope(exception);
     if (requestId) body.error.requestId = requestId;
+    if (exception instanceof ApiError && exception.options.retryAfterSeconds !== undefined) {
+      response.setHeader('Retry-After', String(exception.options.retryAfterSeconds));
+    }
 
     if (status >= 500) {
       this.logger.error(
@@ -63,6 +67,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
             details: exception.details,
           },
         },
+      };
+    }
+
+    if (exception instanceof ApiError) {
+      return {
+        status: exception.status,
+        body: { error: { code: exception.code, message: exception.message } },
       };
     }
 

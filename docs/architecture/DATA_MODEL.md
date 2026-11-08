@@ -13,7 +13,7 @@
 | Tenant key     | `organisation_id uuid NOT NULL` on every tenant-owned table. |
 | Foreign keys   | Always declared. Within a tenant, composite `(organisation_id, <parent>_id)` references a parent's `UNIQUE (organisation_id, id)`. |
 | Naming         | Tables and columns `snake_case` (Prisma `@@map` / `@map`); models `PascalCase`. |
-| Timestamps     | `timestamptz`, stored in UTC. `created_at`, `updated_at` on every table. |
+| Timestamps     | `timestamptz`, stored in UTC. `created_at`, `updated_at` on every table. Application connections pin `TimeZone=UTC` (`createDbClient`): the Prisma pg adapter mis-reads `timestamptz` under any other session zone. |
 | Time zones     | Each property has an IANA `time_zone` (e.g. `Asia/Karachi`). Local business dates (due dates, booking slots) are computed in that zone. |
 | Money          | `amount_minor bigint` + `currency char(3)` (ISO 4217). Never floats. In code: `Money` from `packages/domain` using `bigint`. |
 | Soft delete    | Only where the business needs restore (e.g. archived property). Financial and audit rows are never deleted by the application. |
@@ -30,7 +30,7 @@ tables: [MULTI_TENANCY section 3](MULTI_TENANCY.md).
 | ----- | ---------- | --- | ----- |
 | `users` | id, email, display_name, status (`ACTIVE`/`DISABLED`), email_verified_at | No (global) | One account per person across all organisations. Email stored lower-case and trimmed (CHECK). |
 | `password_credentials` | user_id (PK), password_hash | No (global) | Built-in auth ([ADR 0005](../adr/0005-built-in-authentication.md)). argon2id PHC string; never logged or returned. |
-| `sessions` | id, user_id, token_hash (unique), last_seen_at, idle_expires_at, absolute_expires_at, revoked_at, ip_address, user_agent | No (global) | Opaque client token; only its SHA-256 hash is stored. CHECK `idle_expires_at <= absolute_expires_at`. |
+| `sessions` | id, user_id, token_hash (unique), client (`WEB`/`MOBILE`), last_seen_at, idle_expires_at, absolute_expires_at, revoked_at, ip_address, user_agent | No (global) | Opaque client token; only its SHA-256 hash is stored. `client` binds the token to its transport (migration `20261108140000_session_client`). CHECK `idle_expires_at <= absolute_expires_at`. |
 | `organisations` | id, name, slug (unique), country_code, default_currency, default_time_zone, status | Yes | The tenant. Slug, ISO 3166-1 country and ISO 4217 currency format enforced by CHECK. |
 | `memberships` | id, organisation_id, user_id, role, scope_type, scope_id, status, valid_from, valid_until, granted_by_id, revoked_at, revoked_by_id | Yes | `role` is a string key from the code-defined registry (no role tables). Unique `(organisation_id, user_id, role, scope_type, scope_id)`. CHECKs: validity window order, organisation scope points at its own organisation, `REVOKED` iff `revoked_at` set. |
 | `invitations` | id, organisation_id, email, role, scope_type, scope_id, token_hash (unique), expires_at, accepted_at, accepted_by_id, revoked_at, invited_by_id | Yes | Single-use token stored hashed. |
