@@ -1,4 +1,9 @@
-import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
+import {
+  type DynamicModule,
+  type MiddlewareConsumer,
+  Module,
+  type NestModule,
+} from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { ConfigModule } from './platform/config/config.module';
 import type { ApiEnv } from './platform/config/env';

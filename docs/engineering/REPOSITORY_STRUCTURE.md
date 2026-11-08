@@ -42,8 +42,6 @@ app. Overviews with ports and URLs: [apps/README.md](../../apps/README.md),
 │   ├── design-tokens/            Colour/spacing/type tokens; CSS variables for web, objects for mobile
 │   ├── emails/                   Transactional email templates (HTML + text)
 │   └── web-config/               Shared Next.js security headers
-├── scripts/
-│   └── install-dependencies.ps1  One-time dependency bootstrap
 ├── docs/
 ├── .github/workflows/ci.yml
 ├── docker-compose.yml            Local PostgreSQL + Redis

@@ -22,7 +22,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | Phase | Deliverable                              | Status |
 | ----- | ---------------------------------------- | ------ |
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
-| 1     | Monorepo and engineering foundation      | Code written; **not yet installed, built or tested** (see below) |
+| 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
 | 2     | Identity and multi-tenancy               | Next |
 | 3     | Organisation and property management     | |
 | 4     | Resident and unit management             | |
@@ -51,21 +51,21 @@ Stages are the product view; phases are the engineering increments that deliver 
 
 | # | Criterion | Status |
 | - | --------- | ------ |
-| 1 | Bun workspaces + Turborepo with `lint`, `typecheck`, `test`, `build` | Written, not run |
-| 2 | Strict shared TypeScript config | Written, not run |
-| 3 | `packages/domain`: bigint `Money`, `TenantContext`, `JobEnvelope`, `DomainError`, with tests | Written, not run |
-| 4 | `packages/db`: tenant transaction helper with tests; Prisma schema and client factory | Helper and tests written; **Prisma schema and `createDbClient` not yet written** |
-| 5 | API: env validation, `/api/v1`, helmet, CORS allow-list, request ids, error envelope, Zod pipe, health, OpenAPI, e2e tests | Written, not run |
-| 6 | Worker: BullMQ process, tenant-enforcing job router, health endpoint, tests | Written, not run |
-| 7 | Web apps (`console-web`, `marketing-web`, `admin-web`) with shared design tokens and security headers | Written, not run |
-| 8 | Mobile app (`resident-mobile`, React Native + Expo) shell with API status check | Written, not run |
-| 9 | Shared packages: `api-contracts`, `design-tokens`, `emails`, `web-config`, with tests | Written, not run |
-| 10 | Docker Compose for PostgreSQL + Redis | Written, not run |
-| 11 | CI workflow with isolated Postgres/Redis | Written; will fail until `bun.lock` is generated and committed |
+Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, Vitest 5.1).
 
-**Blocker:** dependencies could not be installed because the development checkout is on an
-exFAT drive, which cannot hold the symlinks Bun workspaces need. Move the repository to an NTFS
-drive, run `bun run deps:bootstrap`, finish `packages/db`, and complete criteria 1-11.
+| # | Criterion | Status |
+| - | --------- | ------ |
+| 1 | Bun workspaces + Turborepo with `lint`, `typecheck`, `test`, `build` | ✅ All pass across 12 workspaces |
+| 2 | Strict shared TypeScript config | ✅ Typecheck clean |
+| 3 | `packages/domain`: bigint `Money`, `TenantContext`, `JobEnvelope`, `DomainError` | ✅ 18 tests. Fixed: currency decimals now use ISO 4217 (PKR = 2), not `Intl` display rules |
+| 4 | `packages/db`: Prisma 7 schema/config, `createDbClient`, tenant transaction helper | ✅ 5 tests; `prisma generate` and `validate` pass |
+| 5 | API: env validation, `/api/v1`, helmet, CORS, request ids, error envelope, Zod pipe, health, OpenAPI | ✅ 18 tests; built API boots, live = 200, ready = 503 without a database (correct) |
+| 6 | Worker: BullMQ process, tenant-enforcing job router, health endpoint | ✅ 6 tests |
+| 7 | Web apps (`console-web`, `marketing-web`, `admin-web`) | ✅ 4 tests; all three `next build` successfully |
+| 8 | Mobile app (`resident-mobile`, Expo SDK 58 / React Native 0.88) | ✅ 3 tests; typecheck clean. Not yet run on a device |
+| 9 | Shared packages: `api-contracts`, `design-tokens`, `emails`, `web-config` | ✅ 11 tests |
+| 10 | Docker Compose for PostgreSQL + Redis | ⏳ Not run (Docker not installed on the dev machine) |
+| 11 | CI workflow with isolated Postgres/Redis | ⏳ First run happens on the PR that adds `bun.lock` |
 
 ## Phase 2 plan (Identity and multi-tenancy)
 
@@ -85,14 +85,14 @@ readiness, user training and release communication, and known limitations docume
 
 ## Technical debt
 
-- Phase 1 not yet verified (see blocker above).
-- `packages/db`: Prisma schema, `createDbClient` and `src/index.ts` still to be written once the Prisma version is installed.
+- Docker Compose and the API's real database/Redis readiness path not yet exercised locally.
+- Mobile app not yet launched on a device or emulator.
+- `bunfig.toml` uses the hoisted linker for React Native; revisit if Bun's isolated linker gains Metro support.
 - Structured logging (pino + OpenTelemetry) not yet added; Nest's default logger is in use.
 - Rate limiting not yet enabled (Phase 2).
 - `dev` scripts for api/worker build once and run; no watch mode yet.
 - Module-boundary lint check to be added when the second business module exists.
 - Worker `main.ts` (Redis wiring, health server) has no automated test; covered by the Phase 2 integration harness.
-- `package.json` files carry no dependency versions until `scripts/install-dependencies.ps1` runs once.
 - Worker does not yet send emails; `@veyra/emails` is ready for the Phase 2 invitation flow.
 - No Content-Security-Policy yet on the web apps (added per app once script/style sources are known).
 - Dependency and secret scanning not yet in CI.

@@ -10,9 +10,25 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 - Security reports now go to a private email address (GitHub private vulnerability reporting
   is not available for private repositories).
 
+- Biome no longer formats Markdown (it padded docs tables to unreadable widths); config
+  migrated to Biome 2.6.
+- Removed the one-time dependency bootstrap script: versions now live in `package.json` files
+  and `bun.lock`.
+
 ### Added
 
 - `.gitattributes` normalising text files to LF line endings.
+- All dependencies installed and locked (`bun.lock`): NestJS 12, Next.js, React 19.3, Expo SDK
+  58 / React Native 0.88, Prisma 7.10.1, TypeScript 7, Vitest 5, Biome 2.6.
+- `packages/db`: Prisma 7 schema and config, `createDbClient()` (node-postgres driver adapter),
+  package entry point, tests.
+- Phase 1 verified locally: lint, typecheck, 65 tests and build pass in all 12 workspaces; the
+  built API boots and serves health and OpenAPI endpoints.
+
+### Fixed
+
+- `Money` used `Intl` display conventions for currency decimals, which reject valid amounts in
+  currencies such as PKR (Intl: 0 decimals, ISO 4217: 2). It now uses the ISO 4217 table.
 
 ## [0.1.0] - 2026-11-08
 

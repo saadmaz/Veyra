@@ -2,7 +2,10 @@
   "name": "veyra",
   "private": true,
   "packageManager": "bun@1.4.4",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --filter=@veyra/api --filter=@veyra/worker --filter=@veyra/console-web",
@@ -12,7 +15,6 @@
     "dev:marketing": "turbo run dev --filter=@veyra/marketing-web",
     "dev:admin": "turbo run dev --filter=@veyra/admin-web",
     "dev:mobile": "bun run --cwd apps/resident-mobile dev",
-    "deps:bootstrap": "powershell -ExecutionPolicy Bypass -File scripts/install-dependencies.ps1",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "turbo run typecheck",
@@ -23,6 +25,10 @@
     "services:down": "docker compose down"
   },
   "devDependencies": {
-    "turbo": "^2.11.10"
+    "@biomejs/biome": "^2.6.6",
+    "@types/node": "^26.6.6",
+    "turbo": "^2.11.10",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }

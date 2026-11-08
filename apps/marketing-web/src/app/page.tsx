@@ -29,8 +29,8 @@ export default function HomePage() {
         <p className="eyebrow">VEYRA</p>
         <h1>Intelligent Living. Unified Operations.</h1>
         <p className="lede">
-          The operating platform for condominiums, residential communities and property
-          management organisations.
+          The operating platform for condominiums, residential communities and property management
+          organisations.
         </p>
         {contactEmail ? (
           <a className="button" href={`mailto:${contactEmail}`}>
