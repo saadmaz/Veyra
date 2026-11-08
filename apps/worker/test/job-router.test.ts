@@ -1,8 +1,8 @@
 import { DomainError, type JobEnvelope } from '@veyra/domain';
 import { describe, expect, it, vi } from 'vitest';
+import { loadWorkerEnv } from '../src/env';
 import { JobRouter } from '../src/job-router';
 import { createJobRouter } from '../src/jobs';
-import { loadWorkerEnv } from '../src/env';
 
 const ORG = '0192f0a4-7c1e-7b2a-9c4d-1a2b3c4d5e6f';
 

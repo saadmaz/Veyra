@@ -1,0 +1,17 @@
+// VEYRA database schema: the executable source of truth for the data model.
+// Intent and invariants: docs/architecture/DATA_MODEL.md and docs/architecture/MULTI_TENANCY.md.
+// The connection URL lives in prisma.config.ts (Prisma 7), not here.
+//
+// Phase 1 defines no business models. Phase 2 adds identity and tenancy tables together with
+// composite tenant foreign keys and row-level security policies (raw SQL in the migration).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

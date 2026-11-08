@@ -9,6 +9,15 @@ describe('Money', () => {
     expect(Money.parse('-0.05', 'EUR').amountMinor).toBe(-5n);
   });
 
+  it('uses ISO 4217 minor units, not Intl display conventions', () => {
+    // Intl displays these with 0 decimals; ISO 4217 (and accounting) uses 2.
+    expect(Money.minorUnitExponent('PKR')).toBe(2);
+    expect(Money.minorUnitExponent('HUF')).toBe(2);
+    expect(Money.parse('1250.50', 'PKR').amountMinor).toBe(125050n);
+    expect(Money.minorUnitExponent('JPY')).toBe(0);
+    expect(Money.minorUnitExponent('OMR')).toBe(3);
+  });
+
   it('rejects more decimal places than the currency supports instead of rounding', () => {
     expect(() => Money.parse('10.005', 'USD')).toThrow(DomainError);
     expect(() => Money.parse('10.5', 'JPY')).toThrow(DomainError);

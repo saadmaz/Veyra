@@ -2,7 +2,10 @@ import type { ReadinessResponse } from '@veyra/api-contracts';
 
 export type ApiStatus = 'online' | 'degraded' | 'offline';
 
-type FetchLike = (input: string, init?: { signal?: AbortSignal }) => Promise<{
+type FetchLike = (
+  input: string,
+  init?: { signal?: AbortSignal },
+) => Promise<{
   ok: boolean;
   status: number;
   json(): Promise<unknown>;

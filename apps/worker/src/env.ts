@@ -12,9 +12,7 @@ export const workerEnvSchema = z.object({
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 
-export function loadWorkerEnv(
-  source: Record<string, string | undefined> = process.env,
-): WorkerEnv {
+export function loadWorkerEnv(source: Record<string, string | undefined> = process.env): WorkerEnv {
   const result = workerEnvSchema.safeParse(source);
   if (!result.success) {
     const problems = result.error.issues

@@ -2,6 +2,44 @@ import { DomainError } from './errors';
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
+/**
+ * ISO 4217 minor-unit exponents that differ from the default of 2.
+ * Deliberately NOT taken from Intl.NumberFormat: Intl reflects CLDR *display* conventions
+ * (e.g. it shows PKR, HUF and TWD with 0 decimals), while accounting must use the ISO 4217
+ * minor unit (PKR has 2: paisa). Keep in sync with the ISO 4217 list when it changes.
+ */
+const ISO_4217_EXPONENTS: Readonly<Record<string, number>> = {
+  // 0 decimals
+  BIF: 0,
+  CLP: 0,
+  DJF: 0,
+  GNF: 0,
+  ISK: 0,
+  JPY: 0,
+  KMF: 0,
+  KRW: 0,
+  PYG: 0,
+  RWF: 0,
+  UGX: 0,
+  UYI: 0,
+  VND: 0,
+  VUV: 0,
+  XAF: 0,
+  XOF: 0,
+  XPF: 0,
+  // 3 decimals
+  BHD: 3,
+  IQD: 3,
+  JOD: 3,
+  KWD: 3,
+  LYD: 3,
+  OMR: 3,
+  TND: 3,
+  // 4 decimals
+  CLF: 4,
+  UYW: 4,
+};
+
 /** Serialised form used in APIs: amount as a string so JSON never loses precision. */
 export interface MoneyJson {
   amountMinor: string;
@@ -55,13 +93,10 @@ export class Money {
     return Money.ofMinor(BigInt(json.amountMinor), json.currency);
   }
 
-  /** Number of minor-unit digits for an ISO 4217 code (USD 2, JPY 0, KWD 3). */
+  /** ISO 4217 minor-unit digits for a currency code (USD 2, PKR 2, JPY 0, KWD 3). */
   static minorUnitExponent(currency: string): number {
     const code = Money.assertCurrency(currency);
-    return (
-      new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions()
-        .maximumFractionDigits ?? 2
-    );
+    return ISO_4217_EXPONENTS[code] ?? 2;
   }
 
   add(other: Money): Money {

@@ -79,11 +79,11 @@ repo (status page, help centre, identity, analytics): [Platform surfaces](docs/p
 
 ## Getting started
 
-Prerequisites: Bun 1.4+, Node.js 24+, Docker. The repository must be on an NTFS (or other
-link-capable) filesystem: Bun workspaces need symlinks, which exFAT/FAT drives do not support.
+Prerequisites: Bun 1.4+, Node.js 24+, Docker, and on Windows the Microsoft Visual C++
+Redistributable. The repository must be on an NTFS (or other link-capable) filesystem: Bun
+workspaces need symlinks, which exFAT/FAT drives do not support.
 
 ```powershell
-bun run deps:bootstrap   # first time only, until package.json files carry versions
 bun install
 Copy-Item .env.example .env
 bun run services:up      # PostgreSQL + Redis

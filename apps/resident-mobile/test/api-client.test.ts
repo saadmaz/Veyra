@@ -25,9 +25,9 @@ describe('checkApiStatus', () => {
     await expect(checkApiStatus('https://api.test', { fetchImpl: failing })).resolves.toBe(
       'offline',
     );
-    await expect(
-      checkApiStatus('https://api.test', { fetchImpl: respond(404, {}) }),
-    ).resolves.toBe('offline');
+    await expect(checkApiStatus('https://api.test', { fetchImpl: respond(404, {}) })).resolves.toBe(
+      'offline',
+    );
     await expect(
       checkApiStatus('https://api.test', { fetchImpl: respond(200, { status: 'weird' }) }),
     ).resolves.toBe('offline');

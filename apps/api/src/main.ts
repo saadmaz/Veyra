@@ -8,9 +8,10 @@ import { loadApiEnv } from './platform/config/env';
 async function main(): Promise<void> {
   const env = loadApiEnv();
   const app = await NestFactory.create(AppModule.forRoot(env), {
-    logger: env.LOG_LEVEL === 'debug' || env.LOG_LEVEL === 'trace'
-      ? ['error', 'warn', 'log', 'debug', 'verbose']
-      : ['error', 'warn', 'log'],
+    logger:
+      env.LOG_LEVEL === 'debug' || env.LOG_LEVEL === 'trace'
+        ? ['error', 'warn', 'log', 'debug', 'verbose']
+        : ['error', 'warn', 'log'],
   });
   configureApp(app, env);
   await app.listen(env.API_PORT);

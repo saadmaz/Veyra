@@ -9,16 +9,18 @@
 | Docker | Desktop / Engine with Compose | Local PostgreSQL and Redis |
 | Expo Go | latest, on your phone | Run the resident app on a real device |
 | Android Studio / Xcode | optional | Emulator (Windows/macOS) / iOS simulator (macOS only) |
+| Visual C++ Redistributable (x64) | latest | **Windows only.** Required by native tools (Biome, Turborepo, Next.js SWC, Vitest). Without it they exit silently with code 53 / `0xC0000135`. Install: `winget install --id Microsoft.VCRedist.2015+.x64 -e` |
 
 The checkout must be on an NTFS (or other link-capable) filesystem. Bun workspaces link
 packages with symlinks, which exFAT and FAT32 drives do not support: `bun install` fails with
 `EISDIR` there.
 
+On slow or unstable connections Bun can stall while resolving. Limit parallel downloads:
+`bun install --network-concurrency 8`.
+
 ## First run
 
 ```powershell
-bun run deps:bootstrap       # ONCE: adds all dependencies at current versions, writes bun.lock
-                             #       (commit the updated package.json files and bun.lock afterwards)
 bun install
 Copy-Item .env.example .env
 bun run services:up          # PostgreSQL 17 + Redis 7 via docker compose
