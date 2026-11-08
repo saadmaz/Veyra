@@ -72,16 +72,27 @@ are serialised. Country and currency change only while the property is `ONBOARDI
 Not yet modelled: parking inventory (Phase 3 later part or Phase 9), unit categories beyond
 `type`, property branding and operational policies.
 
-## 4. Residents (Phase 4)
+## 4. Residents (Phase 4, data foundation implemented)
 
-| Entity          | Key fields | Notes |
-| --------------- | ---------- | ----- |
-| Person          | id, organisation_id, user_id (nullable), names, contact | A resident may exist before they have a login. |
-| Ownership       | id, organisation_id, unit_id, person_id, share, effective_from, effective_to | Multiple co-owners. Shares per unit must sum to 100% for any instant (enforced in domain + tested). |
-| Tenancy         | id, organisation_id, unit_id, person_id, start_date, end_date, status | Drives derived tenant access. |
-| HouseholdMember | id, organisation_id, unit_id, person_id, relationship, delegated_permissions, valid_from, valid_to | |
-| Vehicle         | id, organisation_id, unit_id, person_id, plate, make, model | Unique plate per property. |
-| EmergencyContact| id, organisation_id, person_id, name, phone, relationship | |
+Migration `20261109150000_residents`. All tables are tenant-owned with RLS and composite tenant
+foreign keys. Periods are calendar dates in the property's local calendar with **inclusive**
+ends (`daterange(from, to, '[]')`, NULL = open-ended). Rows are never deleted (except emergency
+contacts): a mistaken entry is **voided** (`voided_at` + required `void_reason`) and every rule
+ignores voided rows. Personal data is limited to name, email, phone and preferred language;
+identity documents and national ID numbers are out of scope until a separate privacy step.
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `persons` | id, organisation_id, user_id?, full_name, email?, phone?, preferred_language?, status | A resident profile, separate from a login. Email lower-case and unique per organisation; phone E.164; BCP 47 language tag; at most one profile per user per organisation. |
+| `ownerships` | unit, person, share_numerator / share_denominator, effective_from, effective_to?, voided_at | Shares are exact fractions (no rounding: three owners of 1/3 sum to exactly 1). For every date on which a unit has owners, shares sum to exactly 1, checked by a **deferred** constraint trigger at commit, so a transfer can end one ownership and start another in one transaction. The same person cannot hold overlapping ownerships of one unit (exclusion constraint). |
+| `tenancies` | unit, start_date, end_date?, voided_at | One tenancy per unit at a time (exclusion constraint). |
+| `tenancy_occupants` | tenancy, person, is_primary | Several tenants per lease; at most one primary (the API requires exactly one). |
+| `household_members` | unit, person, relationship, valid_from, valid_to?, voided_at | No overlapping periods for the same person and unit. Delegated permissions: Phase 4 Part 2. |
+| `emergency_contacts` | person, name, phone, relationship? | Not history: may be deleted. |
+| `vehicles` | property, unit?, person?, plate, make?, model?, colour?, status | Plate upper-case `A-Z0-9-`; unique per property among active vehicles; linked to a unit or a person. |
+
+Uses the `btree_gist` extension (trusted; created by the schema owner) for the exclusion
+constraints.
 
 History is kept by effective dating (`effective_from/to`) rather than overwriting, so "who
 owned unit 12B on 2027-03-01" is always answerable.

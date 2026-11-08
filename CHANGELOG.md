@@ -21,6 +21,11 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 4 resident data foundation** (migration `20261109150000_residents`): persons
+  (resident profiles), ownerships with exact fractional shares that must sum to one at every
+  date (deferred check), tenancies with occupants, household members, emergency contacts and
+  vehicles; inclusive date periods, overlap exclusion constraints (`btree_gist`), voiding instead
+  of deleting, row-level security.
 - **Phase 3 console**: properties on the organisation page, add-property form, property page
   (overview, activate and archive with confirmation, buildings, units, common areas, invite a
   property manager), building page (floors and units); controls shown per permission.

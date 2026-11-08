@@ -82,6 +82,8 @@ no policy is denied.
 | `invitations` | Current tenant, **or** the single row whose `token_hash` the caller presents (`app.invitation_token_hash`) | Current tenant only | No grant |
 | `audit_logs` | Current tenant only | Current tenant, or platform events (`organisation_id IS NULL`) | Rejected by trigger |
 | `properties`, `buildings`, `floors`, `units`, `common_areas` | Current tenant only | Current tenant only | No grant (archive instead) |
+| `persons`, `ownerships`, `tenancies`, `tenancy_occupants`, `household_members`, `vehicles` | Current tenant only | Current tenant only | No grant (void or archive instead) |
+| `emergency_contacts` | Current tenant only | Current tenant only | Current tenant only |
 
 **User context.** Before an organisation is chosen ("list my organisations"),
 `withUserTransaction` sets only `app.user_id`. The user then sees their own memberships and the
