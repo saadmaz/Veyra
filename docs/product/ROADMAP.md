@@ -59,7 +59,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 6 | Worker: BullMQ process, tenant-enforcing job router, health endpoint, tests | Written, not run |
 | 7 | Web: Next.js app with design tokens and security headers | Written, not run |
 | 8 | Docker Compose for PostgreSQL + Redis | Written, not run |
-| 9 | CI workflow with isolated Postgres/Redis | Written; will fail until `bun.lock` is regenerated |
+| 9 | CI workflow with isolated Postgres/Redis | Written; will fail until `bun install` generates and commits `bun.lock` |
 
 **Blocker:** dependencies could not be installed because the development checkout is on an
 exFAT drive, which cannot hold the symlinks Bun workspaces need. Move the repository to an NTFS
