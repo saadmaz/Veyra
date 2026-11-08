@@ -5,6 +5,15 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ## [Unreleased]
 
+### Changed
+
+- Security reports now go to a private email address (GitHub private vulnerability reporting
+  is not available for private repositories).
+
+### Added
+
+- `.gitattributes` normalising text files to LF line endings.
+
 ## [0.1.0] - 2026-11-08
 
 First pre-release: product documentation and the monorepo foundation.

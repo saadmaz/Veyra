@@ -7,8 +7,8 @@ taken seriously.
 
 **Do not open a public issue for security problems.**
 
-Report privately through GitHub: **Security → Report a vulnerability** on this repository
-(private vulnerability reporting). Include:
+Report privately by email to **saadmazaa@gmail.com** with the subject line
+`[VEYRA SECURITY] <short summary>`. Include:
 
 - What is affected (app/package, endpoint, version or commit)
 - Steps to reproduce or a proof of concept
