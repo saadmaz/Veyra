@@ -7,13 +7,15 @@
     "dev": "tsc -p tsconfig.build.json && node --env-file-if-exists=../../.env dist/main.js",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.mts"
   },
   "dependencies": {
     "@nestjs/common": "^12.4.0",
     "@nestjs/core": "^12.4.0",
     "@nestjs/platform-express": "^12.4.0",
     "@nestjs/swagger": "^12.1.1",
+    "@node-rs/argon2": "^2.2.2",
     "@veyra/api-contracts": "workspace:*",
     "@veyra/db": "workspace:*",
     "@veyra/domain": "workspace:*",
@@ -28,7 +30,9 @@
     "@nestjs/testing": "^12.4.0",
     "@swc/core": "^1.16.22",
     "@types/express": "^5.0.6",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "pg": "^8.23.1",
     "supertest": "^7.3.2",
     "unplugin-swc": "^2.0.0"
   }

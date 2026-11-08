@@ -15,6 +15,12 @@ export const apiEnvSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   API_CORS_ORIGINS: csv,
+  /**
+   * Number of reverse proxies in front of the API (e.g. 1 behind Cloudflare or a load balancer).
+   * Decides which X-Forwarded-For entry is the client IP, which rate limiting relies on. Leave 0
+   * when clients connect directly, otherwise any client could spoof its IP.
+   */
+  API_TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
   DATABASE_URL: z
     .string()
     .url()

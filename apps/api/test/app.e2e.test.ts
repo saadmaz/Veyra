@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
+import { Public } from '../src/platform/auth/public.decorator';
 import { type ApiEnv, loadApiEnv } from '../src/platform/config/env';
 import { HEALTH_CHECKS, type HealthCheck } from '../src/platform/health/health.service';
 import { DB_CLIENT, REDIS_CLIENT } from '../src/platform/infrastructure/infrastructure.module';
@@ -15,6 +16,7 @@ import { ZodValidationPipe } from '../src/platform/validation/zod-validation.pip
 const probeSchema = z.object({ name: z.string().min(1), units: z.number().int().positive() });
 
 /** Test-only routes that exercise the global error and validation pipeline. */
+@Public()
 @Controller('probe')
 class ProbeController {
   @Post('validate')
@@ -30,6 +32,15 @@ class ProbeController {
   @Get('crash')
   crash(): never {
     throw new Error('connection to db-internal-host:5432 refused: password=hunter2');
+  }
+}
+
+/** No @Public(): must be rejected without a session (the guard is global, deny by default). */
+@Controller('protected-probe')
+class ProtectedProbeController {
+  @Get()
+  read() {
+    return { secret: true };
   }
 }
 
@@ -62,7 +73,7 @@ describe('API platform (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule.forRoot(env)],
-      controllers: [ProbeController],
+      controllers: [ProbeController, ProtectedProbeController],
     })
       .overrideProvider(DB_CLIENT)
       .useValue({ $disconnect: async () => undefined })
@@ -175,6 +186,21 @@ describe('API platform (e2e)', () => {
       .get('/api/v1/health/live')
       .set('Origin', 'https://evil.example');
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('denies routes that are not marked public when no session is presented', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/protected-probe').expect(401);
+    expect(res.body.error).toMatchObject({ code: 'UNAUTHENTICATED' });
+    expect(res.body.error.requestId).toBe(res.headers['x-request-id']);
+  });
+
+  it('rejects state-changing requests from origins outside the allow-list', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/probe/validate')
+      .set('Origin', 'https://evil.example')
+      .send({ name: 'Tower A', units: 40 })
+      .expect(403);
+    expect(res.body.error.code).toBe('ORIGIN_NOT_ALLOWED');
   });
 
   it('publishes an OpenAPI document outside production', async () => {

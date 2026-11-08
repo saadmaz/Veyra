@@ -1,4 +1,11 @@
-export { createDbClient, type DbClient } from './client';
+export {
+  createDbClient,
+  type DbClient,
+  type DbTransaction,
+  isUniqueViolation,
+  type SessionRow,
+  type UserRow,
+} from './client';
 export * from './generated/prisma/enums';
 export {
   type SqlExecutor,
