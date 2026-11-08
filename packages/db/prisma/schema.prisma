@@ -115,6 +115,7 @@ model Organisation {
 
   memberships Membership[]
   invitations Invitation[]
+  properties  Property[]
 
   @@map("organisations")
 }
@@ -133,7 +134,7 @@ enum MembershipStatus {
 }
 
 /// Grants a role (defined in code, docs/security/ACCESS_CONTROL.md) to a user at a scope for a
-/// validity period. Scope ids for PROPERTY/BUILDING/UNIT get composite tenant FKs in Phase 3.
+/// validity period. PROPERTY/BUILDING/UNIT scope ids are checked by a trigger (same organisation).
 model Membership {
   id             String           @id @default(uuid(7)) @db.Uuid
   organisationId String           @map("organisation_id") @db.Uuid
@@ -219,4 +220,190 @@ model OutboxEvent {
 
   @@index([publishedAt, availableAt])
   @@map("outbox_events")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Property structure (Phase 3). Every table is tenant-owned (organisation_id + RLS). Children
+// reference parents through composite keys that include organisation_id (and property_id), so
+// a row can never point at another tenant's or another property's parent. Rows are archived,
+// never deleted: the application role has no DELETE privilege on these tables.
+// ---------------------------------------------------------------------------------------------
+
+enum PropertyType {
+  CONDOMINIUM
+  APARTMENT_COMPLEX
+  GATED_COMMUNITY
+  MIXED_USE
+  OTHER
+}
+
+enum PropertyStatus {
+  /// Being set up: structure and settings can change freely.
+  ONBOARDING
+  ACTIVE
+  /// Read-only history. Archiving does not delete anything.
+  ARCHIVED
+}
+
+/// Lifecycle of buildings, floors, units and common areas.
+enum StructureStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum UnitType {
+  APARTMENT
+  PENTHOUSE
+  STUDIO
+  DUPLEX
+  VILLA
+  TOWNHOUSE
+  SHOP
+  OFFICE
+  STORAGE
+  OTHER
+}
+
+enum CommonAreaType {
+  LOBBY
+  POOL
+  GYM
+  CLUBHOUSE
+  FUNCTION_ROOM
+  SPORTS_FACILITY
+  PLAYGROUND
+  GARDEN
+  PARKING
+  OTHER
+}
+
+model Property {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  organisationId String         @map("organisation_id") @db.Uuid
+  name           String
+  /// Short code unique within the organisation, e.g. "HVR". Upper-case letters, digits, hyphens.
+  code           String
+  type           PropertyType
+  status         PropertyStatus @default(ONBOARDING)
+  addressLine1   String         @map("address_line1")
+  addressLine2   String?        @map("address_line2")
+  city           String
+  region         String?
+  postalCode     String?        @map("postal_code")
+  /// ISO 3166-1 alpha-2.
+  countryCode    String         @map("country_code") @db.Char(2)
+  /// IANA time zone used for the property's local dates (due dates, bookings).
+  timeZone       String         @map("time_zone")
+  /// ISO 4217. Fixed once financial records exist (enforced by the finance module).
+  currency       String         @db.Char(3)
+  archivedAt     DateTime?      @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  buildings    Building[]
+  floors       Floor[]
+  units        Unit[]
+  commonAreas  CommonArea[]
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, code])
+  @@map("properties")
+}
+
+model Building {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organisationId String          @map("organisation_id") @db.Uuid
+  propertyId     String          @map("property_id") @db.Uuid
+  name           String
+  /// Short code unique within the property, e.g. "A" or "TOWER-1".
+  code           String
+  status         StructureStatus @default(ACTIVE)
+  archivedAt     DateTime?       @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property     @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  floors      Floor[]
+  units       Unit[]
+  commonAreas CommonArea[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, code])
+  @@index([organisationId, propertyId])
+  @@map("buildings")
+}
+
+model Floor {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organisationId String          @map("organisation_id") @db.Uuid
+  propertyId     String          @map("property_id") @db.Uuid
+  buildingId     String          @map("building_id") @db.Uuid
+  /// Storey number: 0 ground, negative basements.
+  level          Int
+  /// Display name, e.g. "Ground", "Mezzanine", "B2".
+  name           String
+  status         StructureStatus @default(ACTIVE)
+  archivedAt     DateTime?       @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  building Building @relation(fields: [organisationId, propertyId, buildingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  units    Unit[]
+
+  @@unique([organisationId, propertyId, buildingId, id])
+  @@unique([buildingId, level])
+  @@map("floors")
+}
+
+/// A unit may sit in a building (apartment) or directly in the property (villa). A floor
+/// requires a building. Unit numbers are unique per building, or per property without one.
+model Unit {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organisationId String          @map("organisation_id") @db.Uuid
+  propertyId     String          @map("property_id") @db.Uuid
+  buildingId     String?         @map("building_id") @db.Uuid
+  floorId        String?         @map("floor_id") @db.Uuid
+  /// Label shown to people, e.g. "12B" or "Villa 7".
+  number         String
+  type           UnitType
+  /// Internal floor area in square metres.
+  areaSqm        Decimal?        @map("area_sqm") @db.Decimal(10, 2)
+  /// Entitlement used to apportion shared charges (finance, Phase 6). Positive.
+  shareRatio     Decimal?        @map("share_ratio") @db.Decimal(12, 6)
+  status         StructureStatus @default(ACTIVE)
+  archivedAt     DateTime?       @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property  @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  building Building? @relation(fields: [organisationId, propertyId, buildingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  floor    Floor?    @relation(fields: [organisationId, propertyId, buildingId, floorId], references: [organisationId, propertyId, buildingId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId])
+  @@index([buildingId])
+  @@map("units")
+}
+
+model CommonArea {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organisationId String          @map("organisation_id") @db.Uuid
+  propertyId     String          @map("property_id") @db.Uuid
+  /// Optional: a gym inside tower A, or null for a property-wide pool.
+  buildingId     String?         @map("building_id") @db.Uuid
+  name           String
+  type           CommonAreaType
+  status         StructureStatus @default(ACTIVE)
+  archivedAt     DateTime?       @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property  @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  building Building? @relation(fields: [organisationId, propertyId, buildingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([propertyId, name])
+  @@index([organisationId, propertyId])
+  @@map("common_areas")
 }

@@ -21,6 +21,10 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 3 data foundation**: properties, buildings, floors, units and common areas with
+  composite tenant foreign keys, row-level security, archive-only lifecycle, case-insensitive
+  unit numbering (including building-less villas), and a trigger that keeps membership and
+  invitation scopes inside their organisation (migration `20261109090000_property_structure`).
 - **Phase 2 console** (`apps/console-web`): sign-in, sign-up, organisations list with switcher,
   create organisation, organisation overview with members and invitations (one-time link with
   copy), invitation acceptance; loading, empty, error, permission and success states; skip link,

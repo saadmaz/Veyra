@@ -121,6 +121,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   scans on each screen. The API is a contract-following fake (`e2e/fake-api.ts`): these tests
   prove the console, not the API.
 
+## Phase 3 tests
+
+### Part 1: property structure (`packages/db` integration, 26)
+
+- No tenant context sees nothing in any structure table; a tenant sees only its own rows even
+  when codes collide with another tenant's; cross-tenant writes and deletes rejected.
+- Composite foreign keys: building to another tenant's property, floor to another property's
+  building, unit to another property's building or another building's floor, floor without a
+  building: all rejected. Properties cannot move between tenants.
+- Unit numbers unique per building (case-insensitive) and per property for building-less units;
+  code formats; archive consistency; positive areas; floor level range.
+- Membership and invitation scopes must name a property, building or unit of the same
+  organisation.
+- Prisma reads the nested structure inside tenant context and nothing outside it.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
