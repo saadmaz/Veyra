@@ -2,12 +2,13 @@
 
 ## Prerequisites
 
-| Tool    | Version | Notes |
-| ------- | ------- | ----- |
-| Bun     | 1.4.x   | Package manager and script runner (`npm i -g bun` or bun.sh) |
-| Node.js | 24 LTS or newer | Runtime for API and worker |
-| Docker  | Desktop / Engine with Compose | Local PostgreSQL and Redis |
-| Flutter | stable  | Only for `apps/mobile` (not created yet) |
+| Tool | Version | Notes |
+| ---- | ------- | ----- |
+| Bun | 1.4.x | Package manager and script runner (`npm i -g bun` or bun.sh) |
+| Node.js | 24 LTS or newer | Runtime for API, worker and Expo tooling |
+| Docker | Desktop / Engine with Compose | Local PostgreSQL and Redis |
+| Expo Go | latest, on your phone | Run the resident app on a real device |
+| Android Studio / Xcode | optional | Emulator (Windows/macOS) / iOS simulator (macOS only) |
 
 The checkout must be on an NTFS (or other link-capable) filesystem. Bun workspaces link
 packages with symlinks, which exFAT and FAT32 drives do not support: `bun install` fails with
@@ -16,30 +17,39 @@ packages with symlinks, which exFAT and FAT32 drives do not support: `bun instal
 ## First run
 
 ```powershell
+bun run deps:bootstrap       # ONCE: adds all dependencies at current versions, writes bun.lock
+                             #       (commit the updated package.json files and bun.lock afterwards)
 bun install
 Copy-Item .env.example .env
 bun run services:up          # PostgreSQL 17 + Redis 7 via docker compose
 bun run db:generate          # Prisma client
 bun run db:migrate           # apply migrations (from Phase 2, when models exist)
-bun run dev                  # web :3000, api :4000, worker health :4001
+bun run dev                  # api :4000, worker :4001, console :3000
 ```
 
-Useful URLs:
+## Running each app
 
-- Web: http://localhost:3000
-- API liveness: http://localhost:4000/api/v1/health/live
-- API readiness: http://localhost:4000/api/v1/health/ready (503 until Postgres and Redis are up)
-- OpenAPI UI: http://localhost:4000/api/docs
-- Worker readiness: http://localhost:4001/health/ready
+| Command | App | URL |
+| ------- | --- | --- |
+| `bun run dev:api` | VEYRA API | http://localhost:4000/api/v1/health/live, docs at /api/docs |
+| `bun run dev:worker` | VEYRA Worker | http://localhost:4001/health/ready |
+| `bun run dev:console` | VEYRA Console | http://localhost:3000 |
+| `bun run dev:marketing` | Public website | http://localhost:3001 |
+| `bun run dev:admin` | Platform Admin | http://localhost:3002 |
+| `bun run dev:mobile` | VEYRA Resident | Expo dev server; scan the QR code with Expo Go |
+
+For the mobile app, set `EXPO_PUBLIC_API_BASE_URL` to your PC's LAN IP (e.g.
+`http://192.168.1.10:4000/api/v1`), because a phone cannot reach `localhost` on your PC. Allow
+port 4000 through Windows Firewall.
 
 ## Everyday commands
 
-| Command              | What it does |
-| -------------------- | ------------ |
-| `bun run lint`       | Biome lint + format check |
-| `bun run lint:fix`   | Apply safe fixes and formatting |
-| `bun run typecheck`  | Strict TypeScript across all packages |
-| `bun run test`       | All Vitest suites |
-| `bun run build`      | Build every package and app |
+| Command | What it does |
+| ------- | ------------ |
+| `bun run lint` | Biome lint + format check |
+| `bun run lint:fix` | Apply safe fixes and formatting |
+| `bun run typecheck` | Strict TypeScript across all workspaces |
+| `bun run test` | All Vitest suites |
+| `bun run build` | Build every package and web/backend app |
 
 All of these must pass before a change is considered done. CI runs the same commands.

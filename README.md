@@ -25,7 +25,7 @@ one secure, multi-tenant platform.
 ## Product surfaces
 
 - **VEYRA Console:** web app for organisation admins, property managers, finance, committee and operations.
-- **VEYRA Resident:** Flutter mobile app for owners, tenants and household members.
+- **VEYRA Resident:** React Native (Expo) mobile app for owners, tenants and household members.
 - **VEYRA Operations:** responsive staff/security experience (PWA first) for visitors, incidents,
   inspections and work orders.
 - **Platform APIs:** versioned REST APIs and integration interfaces.
@@ -37,7 +37,7 @@ one secure, multi-tenant platform.
 | Monorepo | Bun workspaces + Turborepo |
 | Language | TypeScript (strict) |
 | Web | Next.js + React |
-| Mobile | Flutter |
+| Mobile | React Native + Expo |
 | Backend | NestJS modular monolith (API + worker processes) |
 | Database | PostgreSQL + Prisma (reviewed SQL migrations) |
 | Cache / jobs | Redis + BullMQ |
@@ -45,7 +45,7 @@ one secure, multi-tenant platform.
 | Authentication | OIDC-compatible identity provider |
 | Files | S3-compatible object storage |
 | Lint / format | Biome |
-| Tests | Vitest, Supertest, Playwright, Flutter test |
+| Tests | Vitest, Supertest, Playwright, jest-expo, Maestro |
 | Observability | OpenTelemetry + Sentry-compatible error tracking |
 | Delivery | Docker + GitHub Actions |
 
@@ -55,15 +55,27 @@ Rationale: [ADR 0001](docs/adr/0001-modular-monolith.md), [ADR 0002](docs/adr/00
 ## Repository
 
 ```
-apps/api        NestJS HTTP API (/api/v1)
-apps/worker     BullMQ background worker
-apps/web        Next.js web app (becomes VEYRA Console)
-packages/domain Shared kernel: Money, TenantContext, JobEnvelope, DomainError
-packages/db     Prisma schema, client factory, tenant transaction helper
-docs/           Product, architecture, security, engineering, operations, ADRs
+apps/
+  api/              VEYRA API: NestJS REST API (/api/v1)          :4000
+  worker/           VEYRA Worker: background jobs (BullMQ)         :4001
+  console-web/      VEYRA Console + Operations PWA (Next.js)       :3000
+  resident-mobile/  VEYRA Resident: iOS/Android (React Native)     Expo
+  marketing-web/    Public website veyra.com (Next.js)             :3001
+  admin-web/        Internal platform admin (Next.js)              :3002
+packages/
+  domain/           Shared kernel: Money, TenantContext, JobEnvelope, DomainError
+  db/               Prisma schema, database client, tenant transaction helper
+  api-contracts/    API wire types shared by API, web and mobile
+  design-tokens/    Colours, spacing, type for web and mobile
+  emails/           Transactional email templates
+  web-config/       Shared Next.js config (security headers)
+docs/               Product, architecture, security, engineering, ADRs
+scripts/            Repo scripts (dependency bootstrap)
 ```
 
-Current and target layouts: [Repository structure](docs/engineering/REPOSITORY_STRUCTURE.md).
+Details: [apps/README.md](apps/README.md), [packages/README.md](packages/README.md),
+[Repository structure](docs/engineering/REPOSITORY_STRUCTURE.md). Hosted services outside this
+repo (status page, help centre, identity, analytics): [Platform surfaces](docs/product/PLATFORM_SURFACES.md).
 
 ## Getting started
 
@@ -71,10 +83,12 @@ Prerequisites: Bun 1.4+, Node.js 24+, Docker. The repository must be on an NTFS 
 link-capable) filesystem: Bun workspaces need symlinks, which exFAT/FAT drives do not support.
 
 ```powershell
+bun run deps:bootstrap   # first time only, until package.json files carry versions
 bun install
 Copy-Item .env.example .env
 bun run services:up      # PostgreSQL + Redis
-bun run dev
+bun run dev              # api + worker + console
+bun run dev:mobile       # resident app (Expo)
 bun run lint
 bun run typecheck
 bun run test

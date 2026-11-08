@@ -1,7 +1,8 @@
 {
-  "name": "@veyra/web",
+  "name": "@veyra/console-web",
   "version": "0.0.0",
   "private": true,
+  "description": "VEYRA Console: management web app for organisations and properties, including the Operations PWA for frontline staff.",
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",

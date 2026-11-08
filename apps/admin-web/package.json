@@ -1,0 +1,13 @@
+{
+  "name": "@veyra/admin-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "VEYRA Platform Admin: internal tool for VEYRA staff (customer provisioning, plans, audited support access). Never customer-facing.",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

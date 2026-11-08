@@ -1,0 +1,12 @@
+{
+  "name": "@veyra/api-contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Request/response types shared by the API and its clients (web, mobile). No business logic.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

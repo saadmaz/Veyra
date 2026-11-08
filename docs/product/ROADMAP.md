@@ -57,13 +57,15 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 4 | `packages/db`: tenant transaction helper with tests; Prisma schema and client factory | Helper and tests written; **Prisma schema and `createDbClient` not yet written** |
 | 5 | API: env validation, `/api/v1`, helmet, CORS allow-list, request ids, error envelope, Zod pipe, health, OpenAPI, e2e tests | Written, not run |
 | 6 | Worker: BullMQ process, tenant-enforcing job router, health endpoint, tests | Written, not run |
-| 7 | Web: Next.js app with design tokens and security headers | Written, not run |
-| 8 | Docker Compose for PostgreSQL + Redis | Written, not run |
-| 9 | CI workflow with isolated Postgres/Redis | Written; will fail until `bun install` generates and commits `bun.lock` |
+| 7 | Web apps (`console-web`, `marketing-web`, `admin-web`) with shared design tokens and security headers | Written, not run |
+| 8 | Mobile app (`resident-mobile`, React Native + Expo) shell with API status check | Written, not run |
+| 9 | Shared packages: `api-contracts`, `design-tokens`, `emails`, `web-config`, with tests | Written, not run |
+| 10 | Docker Compose for PostgreSQL + Redis | Written, not run |
+| 11 | CI workflow with isolated Postgres/Redis | Written; will fail until `bun.lock` is generated and committed |
 
 **Blocker:** dependencies could not be installed because the development checkout is on an
 exFAT drive, which cannot hold the symlinks Bun workspaces need. Move the repository to an NTFS
-drive, then run `bun install`, add the remaining dependencies, and complete criteria 1-9.
+drive, run `bun run deps:bootstrap`, finish `packages/db`, and complete criteria 1-11.
 
 ## Phase 2 plan (Identity and multi-tenancy)
 
@@ -90,5 +92,7 @@ readiness, user training and release communication, and known limitations docume
 - `dev` scripts for api/worker build once and run; no watch mode yet.
 - Module-boundary lint check to be added when the second business module exists.
 - Worker `main.ts` (Redis wiring, health server) has no automated test; covered by the Phase 2 integration harness.
-- `apps/mobile` not created (Flutter SDK not installed).
+- `package.json` files carry no dependency versions until `scripts/install-dependencies.ps1` runs once.
+- Worker does not yet send emails; `@veyra/emails` is ready for the Phase 2 invitation flow.
+- No Content-Security-Policy yet on the web apps (added per app once script/style sources are known).
 - Dependency and secret scanning not yet in CI.

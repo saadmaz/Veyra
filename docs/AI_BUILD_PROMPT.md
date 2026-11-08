@@ -43,7 +43,7 @@ Use these defaults only if the repository does not already establish alternative
 
 - Monorepo: Bun workspaces + Turborepo
 - Web: Next.js, React, TypeScript
-- Mobile: Flutter
+- Mobile: React Native + Expo (see ADR 0004)
 - Backend: NestJS, TypeScript
 - Database: PostgreSQL
 - ORM: Prisma, with reviewed SQL migrations
@@ -52,7 +52,7 @@ Use these defaults only if the repository does not already establish alternative
 - Authentication: OIDC-compatible identity provider
 - Files: S3-compatible object storage
 - Realtime: WebSockets or SSE when justified
-- Testing: Vitest/Jest, Playwright, Flutter test
+- Testing: Vitest, Playwright, jest-expo + React Native Testing Library, Maestro for device E2E
 - Observability: OpenTelemetry and error tracking
 - Delivery: Docker and GitHub Actions
 

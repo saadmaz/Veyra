@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "VEYRA",
+    "slug": "veyra-resident",
+    "scheme": "veyra",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.veyra.resident",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.veyra.resident"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

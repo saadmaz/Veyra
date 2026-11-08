@@ -18,7 +18,7 @@ formatting, and a test runner shared across packages.
 | Lint + format | Biome | One fast tool instead of ESLint + Prettier + plugins; fewer dependencies. Revisit if a needed rule is missing (e.g. module-boundary rules may need dependency-cruiser). |
 | Tests | Vitest everywhere (`unplugin-swc` for NestJS decorator metadata), Playwright for E2E | One runner and assertion API across packages. |
 | Validation of config | Zod | Fail fast at boot on invalid environment. |
-| Mobile | Flutter (`apps/mobile`) | Created once the Flutter SDK is available in the dev environment; not scaffolded in Phase 1. |
+| Mobile | React Native + Expo (`apps/resident-mobile`) | Superseded the original Flutter choice; see [ADR 0004](0004-react-native-mobile.md). |
 
 ## Consequences
 

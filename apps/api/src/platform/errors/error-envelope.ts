@@ -1,14 +1,2 @@
-export interface ErrorDetail {
-  path: string;
-  message: string;
-}
-
-/** Standard error body for every non-2xx response (docs/architecture/API_DESIGN.md). */
-export interface ErrorEnvelope {
-  error: {
-    code: string;
-    message: string;
-    details?: ErrorDetail[];
-    requestId?: string;
-  };
-}
+// The wire format is owned by @veyra/api-contracts so web and mobile clients share it.
+export type { ErrorDetail, ErrorEnvelope } from '@veyra/api-contracts';

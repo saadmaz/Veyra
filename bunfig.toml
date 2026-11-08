@@ -1,0 +1,4 @@
+[install]
+# Hoisted node_modules: React Native's Metro bundler and some native tooling expect a flat
+# layout, which Bun's isolated linker does not provide.
+linker = "hoisted"

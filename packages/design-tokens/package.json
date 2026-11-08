@@ -1,0 +1,13 @@
+{
+  "name": "@veyra/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "VEYRA design tokens: one source of colour, type and spacing for web and mobile.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

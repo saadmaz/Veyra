@@ -1,0 +1,13 @@
+{
+  "name": "@veyra/web-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared configuration for VEYRA's Next.js apps (security headers).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

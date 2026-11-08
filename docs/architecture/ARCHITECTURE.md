@@ -9,11 +9,12 @@ one backend codebase, split into business modules with hard boundaries, running 
 process types that scale independently.
 
 ```
-                 +---------------------------+
-  Browser ------>| apps/web (Next.js)        |--+
-                 +---------------------------+  |  HTTPS /api/v1 (REST + OpenAPI)
-  Flutter app ----------------------------------+
-  Integrations / webhooks ----------------------+
+                 +------------------------------+
+  Browser ------>| apps/console-web (Next.js)   |--+
+                 | apps/admin-web   (Next.js)   |  |  HTTPS /api/v1 (REST + OpenAPI)
+                 +------------------------------+  |
+  apps/resident-mobile (React Native) -------------+
+  Integrations / webhooks -------------------------+
                                                 v
                  +-------------------------------------------+
                  | apps/api  (NestJS, stateless, N replicas) |
@@ -34,9 +35,11 @@ CDN and WAF, e.g. Cloudflare):
 
 | Surface | App | Users |
 | ------- | --- | ----- |
-| VEYRA Console | `apps/web` (Next.js) | organisation admins, property managers, finance, committee, operations |
-| VEYRA Operations | responsive PWA (inside the web app first, split out only if needed) | security guards, technicians, frontline staff |
-| VEYRA Resident | `apps/mobile` (Flutter) | owners, tenants, household members |
+| VEYRA Console | `apps/console-web` (Next.js) | organisation admins, property managers, finance, committee |
+| VEYRA Operations | responsive PWA inside `apps/console-web` (split out only if needed) | security guards, technicians, frontline staff |
+| VEYRA Resident | `apps/resident-mobile` (React Native + Expo) | owners, tenants, household members |
+| VEYRA Platform Admin | `apps/admin-web` (Next.js) | VEYRA staff only |
+| Public website | `apps/marketing-web` (Next.js, static, no API access needed) | prospects, the public |
 | Platform APIs | `apps/api` | integrations, partners |
 
 - **apps/api** serves synchronous requests. Stateless; any replica can serve any request.

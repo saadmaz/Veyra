@@ -1,73 +1,66 @@
 # Repository Structure
 
-Bun workspaces + Turborepo for TypeScript apps and packages. Flutter lives in the same
-repository as a first-class app but is not a Bun workspace package.
+Bun workspaces + Turborepo. Every app and package is a workspace, including the React Native
+app. Overviews with ports and URLs: [apps/README.md](../../apps/README.md),
+[packages/README.md](../../packages/README.md).
 
-## Current layout (Phase 1)
+## Naming convention
+
+- **User-facing apps:** `<product>-<platform>`: `console-web`, `resident-mobile`,
+  `marketing-web`, `admin-web`. The name says who it is for and where it runs.
+- **Backend processes:** plain role names: `api`, `worker`.
+- **Packages:** what they contain: `domain`, `db`, `api-contracts`, `design-tokens`, `emails`,
+  `web-config`. npm scope `@veyra/*`, matching the folder name.
+- Folders and files in kebab-case; React components and classes in PascalCase.
+
+## Layout
 
 ```
 .
-├── AGENTS.md                 Engineering brief for AI agents
+├── AGENTS.md                     Engineering brief for AI agents
 ├── apps/
-│   ├── api/                  NestJS HTTP API (/api/v1)
+│   ├── api/                      VEYRA API: NestJS REST API (/api/v1)
 │   │   ├── src/
-│   │   │   ├── main.ts       Process entry: load env, create app, listen
-│   │   │   ├── bootstrap.ts  Global HTTP config (helmet, CORS, prefix, versioning, OpenAPI)
+│   │   │   ├── main.ts           Process entry: load env, create app, listen
+│   │   │   ├── bootstrap.ts      Global HTTP config (helmet, CORS, prefix, versioning, OpenAPI)
 │   │   │   ├── app.module.ts
-│   │   │   └── platform/     Cross-cutting: config, errors, validation, request-id, health, infrastructure
-│   │   └── test/             Vitest unit + e2e (supertest)
-│   ├── worker/               BullMQ worker process + health endpoint
-│   └── web/                  Next.js (App Router): becomes VEYRA Console
+│   │   │   ├── platform/         config, errors, validation, request-id, health, infrastructure
+│   │   │   └── modules/          business modules (from Phase 2)
+│   │   └── test/
+│   ├── worker/                   VEYRA Worker: BullMQ jobs + health endpoint
+│   ├── console-web/              VEYRA Console + Operations PWA (Next.js)
+│   ├── resident-mobile/          VEYRA Resident (React Native + Expo Router)
+│   │   ├── app/                  screens/routes
+│   │   ├── src/lib/              API client, config, non-UI logic
+│   │   └── test/
+│   ├── marketing-web/            Public website (Next.js)
+│   └── admin-web/                Internal platform admin (Next.js)
 ├── packages/
-│   ├── domain/               Framework-free shared kernel: Money, TenantContext, JobEnvelope, DomainError
-│   └── db/                   Prisma schema, client factory, tenant transaction helper
+│   ├── domain/                   Money, TenantContext, JobEnvelope, DomainError
+│   ├── db/                       Prisma schema and migrations, client, tenant transaction helper
+│   ├── api-contracts/            API wire types (error envelope, pagination, money, health)
+│   ├── design-tokens/            Colour/spacing/type tokens; CSS variables for web, objects for mobile
+│   ├── emails/                   Transactional email templates (HTML + text)
+│   └── web-config/               Shared Next.js security headers
+├── scripts/
+│   └── install-dependencies.ps1  One-time dependency bootstrap
 ├── docs/
 ├── .github/workflows/ci.yml
-├── docker-compose.yml        Local PostgreSQL + Redis
+├── docker-compose.yml            Local PostgreSQL + Redis
+├── bunfig.toml                   Bun settings (hoisted linker for React Native)
 ├── biome.json · turbo.json · tsconfig.base.json · package.json
 ```
 
-## Target layout
+## Possible later additions
 
-Grow towards this as features need it. Do not create folders ahead of real code.
+Add only when there is real code for them:
 
-```
-apps/
-├── api/                      NestJS API
-│   └── src/
-│       ├── platform/         config, auth, tenancy context, authz, errors, health, logging
-│       └── modules/          organisations, properties, residents, access-control, visitors,
-│                             finance, maintenance, facilities, workforce, assets, vendors,
-│                             communications, notifications, documents, incidents, governance,
-│                             reporting, integrations, audit
-├── worker/                   BullMQ worker (same module code, no public HTTP)
-├── web/                      VEYRA Console (Next.js); may be renamed apps/console
-├── operations/               VEYRA Operations PWA, only if it outgrows the console app
-└── mobile/                   VEYRA Resident (Flutter): lib/{app,core,features,shared}, test/, pubspec.yaml
-packages/
-├── domain/                   stable shared primitives only (blueprint name: domain-shared)
-├── db/                       Prisma schema and migrations
-├── api-contracts/            OpenAPI-derived schemas and client types; no business logic
-├── design-tokens/            semantic tokens shared across web and mobile
-├── observability/            logging/tracing setup and interfaces
-└── test-kit/                 fixtures and helpers; never secrets or personal data
-infrastructure/
-├── docker/                   production Dockerfiles
-├── environments/
-├── monitoring/
-└── terraform/                when hosting is selected
-scripts/
-```
-
-Deviations from the original blueprint, and why:
-
-- `apps/web` instead of `apps/console`: same app; renaming is cheap later and not worth churn now.
-- `apps/worker` exists as its own app because the API and worker are separate processes (ADR 0001).
-- `packages/db` holds Prisma, since the schema is shared by API and worker.
-- `docker-compose.yml` is at the root for local development; production Docker assets go in
-  `infrastructure/docker/` when deployment is set up.
-- Shared TypeScript config is `tsconfig.base.json`; Biome replaces ESLint (ADR 0003), so no
-  `config-eslint` package.
+- `apps/operations-web`: only if the Operations PWA outgrows `console-web`.
+- `apps/developer-docs`: public API docs site, generated from OpenAPI.
+- `packages/ui`: shared React components, once two web apps need the same components.
+- `packages/observability`: logging/tracing setup shared by api and worker.
+- `packages/test-kit`: shared fixtures and helpers.
+- `infrastructure/`: production Dockerfiles, environment config, Terraform once hosting is chosen.
 
 ## Backend module layout
 
@@ -80,26 +73,29 @@ modules/visitors/
 └── visitors.module.ts
 ```
 
-Do not create every folder for trivial modules. Keep the separation where it improves clarity
-and testability.
+Do not create every folder for trivial modules.
 
-## Frontend feature layout
+## Frontend feature layout (web and mobile)
 
 ```
 src/features/visitors/
 ├── api/  components/  hooks/  schemas/  types/
 ```
 
-Shared UI components stay separate from domain features. No global `utils` dumping ground.
+Shared UI stays separate from feature code. No global `utils` dumping ground.
 
-## Package dependency rules
+## Dependency rules
 
-| Package           | May depend on |
-| ----------------- | ------------- |
+| Workspace | May depend on |
+| --------- | ------------- |
 | `packages/domain` | nothing internal; no frameworks |
-| `packages/db`     | `domain` |
-| `apps/api`        | `domain`, `db` |
-| `apps/worker`     | `domain`, `db` |
-| `apps/web`        | `domain` (types/value objects only); talks to the API over HTTP, never to the database |
+| `packages/db` | `domain` |
+| `packages/api-contracts`, `design-tokens`, `emails`, `web-config` | nothing internal |
+| `apps/api` | `domain`, `db`, `api-contracts` |
+| `apps/worker` | `domain`, `db`, `emails` |
+| `apps/console-web`, `apps/admin-web` | `domain` (value objects only), `api-contracts`, `design-tokens`, `web-config` |
+| `apps/marketing-web` | `design-tokens`, `web-config` |
+| `apps/resident-mobile` | `api-contracts`, `design-tokens` |
 
-Business logic lives in API modules (or `domain`), never duplicated in web or mobile.
+Client apps talk to the API over HTTP and never to the database. Business logic is never
+duplicated in web or mobile.

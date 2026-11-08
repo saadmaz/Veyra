@@ -44,7 +44,7 @@ Audit existing repository decisions before introducing or replacing technologies
 | ------------------ | ----------------------------------- |
 | Web frontend       | Next.js + React                     |
 | Language           | TypeScript                          |
-| Mobile application | Flutter                             |
+| Mobile application | React Native + Expo (ADR 0004)      |
 | Backend            | NestJS                              |
 | Database           | PostgreSQL                          |
 | ORM                | Prisma                              |

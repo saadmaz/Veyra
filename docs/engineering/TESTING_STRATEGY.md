@@ -6,7 +6,9 @@
 | Integration | Vitest + real PostgreSQL/Redis (CI service containers) | Repositories, migrations, RLS policies, queues | `apps/api/test/integration` (from Phase 2) |
 | API / e2e   | Vitest + Supertest against the real Nest pipeline | HTTP contract, error envelope, guards | `apps/api/test/*.e2e.test.ts` |
 | Contract    | Recorded provider fixtures + schema checks | Payment, SMS, email adapters | per adapter (from Phase 6) |
-| UI e2e      | Playwright | Critical user journeys in the browser | `apps/web/e2e` (from Phase 3) |
+| Web UI e2e  | Playwright | Critical user journeys in the browser | `apps/console-web/e2e` (from Phase 3) |
+| Mobile components | jest-expo + React Native Testing Library | Screens and components | `apps/resident-mobile` (when real screens exist) |
+| Mobile device e2e | Maestro | Critical resident journeys on emulator/device | `apps/resident-mobile/e2e` (from Phase 4) |
 
 ## Rules
 
@@ -28,7 +30,12 @@
   error envelope for 404 / validation / domain / unknown errors with no internal leakage;
   security headers; CORS allow-list; OpenAPI document.
 - `apps/worker`: job routing with mandatory tenant context and platform-job declarations.
-- `apps/web`: security header configuration.
+- `apps/console-web`, `apps/admin-web`, `apps/marketing-web`: shared security headers applied;
+  admin is non-indexable, marketing stays indexable.
+- `apps/resident-mobile`: API status client (online / degraded / offline handling).
+- `packages/web-config`: baseline security headers and no-index headers.
+- `packages/design-tokens`: light/dark token parity, valid colours, CSS variable output.
+- `packages/emails`: invitation email content, HTML escaping, HTTPS-only links.
 
 ## Critical scenarios to add as features land
 

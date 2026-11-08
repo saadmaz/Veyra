@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { DomainError } from '@veyra/domain';
 import type { Request, Response } from 'express';
-import type { ErrorDetail, ErrorEnvelope } from './error-envelope';
+import type { ErrorEnvelope } from './error-envelope';
 import { ValidationFailedException } from './validation-failed.exception';
 
 const STATUS_CODES: Record<number, string> = {
@@ -97,5 +97,3 @@ export class ApiExceptionFilter implements ExceptionFilter {
     return exception.message;
   }
 }
-
-export type { ErrorDetail };
