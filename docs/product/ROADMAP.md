@@ -23,8 +23,8 @@ Stages are the product view; phases are the engineering increments that deliver 
 | ----- | ---------------------------------------- | ------ |
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
-| 2     | Identity and multi-tenancy               | Done (Parts 1-6); exit review before Phase 3 |
-| 3     | Organisation and property management     | |
+| 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
+| 3     | Organisation and property management     | Next |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
@@ -65,7 +65,7 @@ Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, 
 | 8 | Mobile app (`resident-mobile`, Expo SDK 58 / React Native 0.88) | ✅ 3 tests; typecheck clean. Not yet run on a device |
 | 9 | Shared packages: `api-contracts`, `design-tokens`, `emails`, `web-config` | ✅ 11 tests |
 | 10 | Docker Compose for PostgreSQL + Redis | ⏳ Not run (Docker not installed on the dev machine) |
-| 11 | CI workflow with isolated Postgres/Redis | ⏳ First run happens on the PR that adds `bun.lock` |
+| 11 | CI workflow with isolated Postgres/Redis | ✅ Green on every PR since #4; required to merge |
 
 ## Phase 2 plan (Identity and multi-tenancy)
 
