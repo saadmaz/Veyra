@@ -1,3 +1,4 @@
+export { isCountryCode } from './countries';
 export { DomainError } from './errors';
 export { Money, type MoneyJson } from './money';
 export {

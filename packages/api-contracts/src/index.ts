@@ -86,3 +86,103 @@ export interface CurrentSessionResponse {
   user: AuthUserDto;
   session: { client: AuthClient };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Organisations, memberships and invitations (Phase 2, Part 5)
+// ---------------------------------------------------------------------------------------------
+
+export type OrganisationStatus =
+  | 'PENDING_ONBOARDING'
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'OFFBOARDING'
+  | 'ARCHIVED';
+
+export interface CreateOrganisationRequest {
+  name: string;
+  /** Lower-case letters, digits and single hyphens, 3-63 characters. Unique. */
+  slug: string;
+  /** ISO 3166-1 alpha-2, e.g. "PK". Fixed after creation. */
+  countryCode: string;
+  /** ISO 4217, e.g. "PKR". Fixed after creation. */
+  defaultCurrency: string;
+  /** IANA time zone, e.g. "Asia/Karachi". */
+  defaultTimeZone: string;
+}
+
+export interface UpdateOrganisationRequest {
+  name?: string;
+  defaultTimeZone?: string;
+}
+
+export interface OrganisationDto {
+  id: string;
+  name: string;
+  slug: string;
+  countryCode: string;
+  defaultCurrency: string;
+  defaultTimeZone: string;
+  status: OrganisationStatus;
+  createdAt: string;
+}
+
+/** GET /organisations/:id: the organisation plus what the caller may do in it (for UI only). */
+export interface OrganisationDetailResponse extends OrganisationDto {
+  permissions: string[];
+}
+
+/** An item of GET /organisations (the caller's organisations). */
+export interface MyOrganisationDto {
+  organisation: OrganisationDto;
+  roles: string[];
+}
+
+export type MembershipStatus = 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
+
+export interface MembershipDto {
+  id: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  role: string;
+  scopeType: 'ORGANISATION' | 'PROPERTY' | 'BUILDING' | 'UNIT';
+  scopeId: string;
+  status: MembershipStatus;
+  validFrom: string;
+  validUntil: string | null;
+}
+
+export interface ChangeMembershipStatusRequest {
+  status: MembershipStatus;
+}
+
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+
+export interface CreateInvitationRequest {
+  email: string;
+  role: string;
+}
+
+export interface InvitationDto {
+  id: string;
+  email: string;
+  role: string;
+  status: InvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** `token` is shown once. The invitee opens the link and calls POST /invitations/accept. */
+export interface CreateInvitationResponse {
+  invitation: InvitationDto;
+  token: string;
+}
+
+export interface AcceptInvitationRequest {
+  token: string;
+}
+
+export interface AcceptInvitationResponse {
+  organisation: OrganisationDto;
+  role: string;
+}

@@ -21,6 +21,16 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 2 tenancy and authorisation**: organisations (create, list mine, view, update),
+  memberships (list, suspend, reactivate, revoke, last-admin guard), invitations (create with a
+  one-time token, list, revoke, accept by matching email). Access-control module with a
+  permission registry and system roles in code, a global permission guard (404 for
+  non-members, 403 for missing permissions), anti-escalation, read-only suspended
+  organisations and a startup check that every route declares `@Public()`, `@Authenticated()`
+  or `@RequirePermission()`. See docs/security/ACCESS_CONTROL.md.
+- Migration `20261108160000_invitation_token_lookup`: token-hash RLS lookup for invitations,
+  one pending invitation per email and role, invitation outcome constraints.
+- `isCountryCode` (ISO 3166-1 alpha-2) in `@veyra/domain`.
 - **Phase 2 authentication** (`apps/api` identity module, ADR 0005): sign-up, sign-in, sign-out
   and current-session endpoints; argon2id passwords; opaque session tokens stored as SHA-256
   hashes, bound to web (httpOnly cookie) or mobile (bearer); idle and absolute expiry; Redis

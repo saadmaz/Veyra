@@ -30,9 +30,9 @@ session send `Cache-Control: no-store`.
 ## 2. Deny by default
 
 `AuthGuard` is registered globally. Every route requires a valid session unless it is marked
-`@Public()` (from `src/platform/auth/public.decorator.ts`). Today only health checks, sign-up and
+`@Public()` (from `src/platform/auth/route-access.ts`). Today only health checks, sign-up and
 sign-in are public. Handlers read the caller with `@CurrentPrincipal()`, which carries identity
-only; authorisation (memberships, roles, scopes) arrives in Part 5.
+only; authorisation is described in [ACCESS_CONTROL](ACCESS_CONTROL.md).
 
 ## 3. Passwords
 

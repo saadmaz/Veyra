@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
-import { Public } from '../src/platform/auth/public.decorator';
+import { Authenticated, Public } from '../src/platform/auth/route-access';
 import { type ApiEnv, loadApiEnv } from '../src/platform/config/env';
 import { HEALTH_CHECKS, type HealthCheck } from '../src/platform/health/health.service';
 import { DB_CLIENT, REDIS_CLIENT } from '../src/platform/infrastructure/infrastructure.module';
@@ -36,6 +36,7 @@ class ProbeController {
 }
 
 /** No @Public(): must be rejected without a session (the guard is global, deny by default). */
+@Authenticated()
 @Controller('protected-probe')
 class ProtectedProbeController {
   @Get()

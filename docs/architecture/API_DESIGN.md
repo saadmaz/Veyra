@@ -30,9 +30,9 @@ Every error uses one envelope:
 | ---- | ------------- |
 | 400  | `VALIDATION_FAILED`, `BAD_REQUEST` |
 | 401  | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` |
-| 403  | `FORBIDDEN`, `ORIGIN_NOT_ALLOWED` |
-| 404  | `NOT_FOUND` (also returned for resources in another tenant, to avoid leaking existence) |
-| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED` |
+| 403  | `FORBIDDEN`, `ORIGIN_NOT_ALLOWED`, `ROLE_NOT_ASSIGNABLE`, `INVITATION_EMAIL_MISMATCH` |
+| 404  | `NOT_FOUND` (also returned for resources in another tenant, to avoid leaking existence), `INVITATION_NOT_FOUND` |
+| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED` |
 | 422  | domain rule violations, e.g. `BOOKING_SLOT_TAKEN` |
 | 429  | `RATE_LIMITED` (with `Retry-After`) |
 | 500  | `INTERNAL_ERROR` (no internals in the message) |
@@ -42,6 +42,21 @@ Every error uses one envelope:
 
 Every route requires a session unless marked `@Public()`. Web clients use an httpOnly cookie,
 mobile clients `Authorization: Bearer`. Details: [AUTHENTICATION](../security/AUTHENTICATION.md).
+
+## Organisations (Phase 2)
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| POST | `/organisations` | Authenticated (caller becomes organisation admin; 5 per user per day) |
+| GET | `/organisations` | Authenticated (caller's organisations and roles) |
+| GET | `/organisations/{organisationId}` | `organisation.profile.read` (includes the caller's `permissions`, for UI only) |
+| PATCH | `/organisations/{organisationId}` | `organisation.settings.manage` (name, default time zone; country and currency are fixed) |
+| GET | `/organisations/{organisationId}/memberships` | `organisation.member.read` |
+| PATCH | `/organisations/{organisationId}/memberships/{membershipId}` | `organisation.member.manage` (`status`: ACTIVE, SUSPENDED, REVOKED) |
+| POST | `/organisations/{organisationId}/invitations` | `organisation.member.invite` (returns the one-time `token`) |
+| GET | `/organisations/{organisationId}/invitations` | `organisation.member.invite` |
+| POST | `/organisations/{organisationId}/invitations/{invitationId}/revoke` | `organisation.member.invite` |
+| POST | `/invitations/accept` | Authenticated (`{ token }`; the account email must match; 10 attempts per 15 min) |
 
 ## Pagination
 

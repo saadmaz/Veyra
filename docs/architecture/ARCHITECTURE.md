@@ -69,8 +69,8 @@ Rules:
 1. Dependencies point inward: presentation -> application -> domain. Infrastructure
    implements application ports.
 2. A module never imports another module's `domain/` or `infrastructure/`. It calls another
-   module only through that module's exported **application interface**, or reacts to its
-   **domain events**.
+   module only through that module's exported **application interface** (its `index.ts`, e.g.
+   `modules/access-control/index.ts`), or reacts to its **domain events**.
 3. No circular module dependencies. A dependency check is added to CI once a second
    business module exists.
 4. Cross-cutting **platform** concerns live in `apps/api/src/platform`: configuration,
@@ -120,7 +120,8 @@ contracts are kept separate from ORM/database models.
    built-in today, an OIDC provider later).
 3. Tenant context is resolved from the route (`/organisations/:organisationId/...`), never
    from a client header alone, and the user's membership in it is verified.
-4. Authorisation guard evaluates the required permission against the resolved scope.
+4. Authorisation guard evaluates the required permission against the resolved scope. Both
+   guards are global and deny by default; startup fails if a route declares no access level.
 5. Validation pipe validates the request DTO.
 6. The use case runs inside a transaction when it mutates state. The audit record and
    outbox events are written in the same transaction.

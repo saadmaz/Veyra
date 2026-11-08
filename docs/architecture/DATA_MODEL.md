@@ -33,14 +33,14 @@ tables: [MULTI_TENANCY section 3](MULTI_TENANCY.md).
 | `sessions` | id, user_id, token_hash (unique), client (`WEB`/`MOBILE`), last_seen_at, idle_expires_at, absolute_expires_at, revoked_at, ip_address, user_agent | No (global) | Opaque client token; only its SHA-256 hash is stored. `client` binds the token to its transport (migration `20261108140000_session_client`). CHECK `idle_expires_at <= absolute_expires_at`. |
 | `organisations` | id, name, slug (unique), country_code, default_currency, default_time_zone, status | Yes | The tenant. Slug, ISO 3166-1 country and ISO 4217 currency format enforced by CHECK. |
 | `memberships` | id, organisation_id, user_id, role, scope_type, scope_id, status, valid_from, valid_until, granted_by_id, revoked_at, revoked_by_id | Yes | `role` is a string key from the code-defined registry (no role tables). Unique `(organisation_id, user_id, role, scope_type, scope_id)`. CHECKs: validity window order, organisation scope points at its own organisation, `REVOKED` iff `revoked_at` set. |
-| `invitations` | id, organisation_id, email, role, scope_type, scope_id, token_hash (unique), expires_at, accepted_at, accepted_by_id, revoked_at, invited_by_id | Yes | Single-use token stored hashed. |
+| `invitations` | id, organisation_id, email, role, scope_type, scope_id, token_hash (unique), expires_at, accepted_at, accepted_by_id, revoked_at, invited_by_id | Yes | Single-use token stored hashed. At most one pending invitation per (organisation, email, role) (partial unique index); never both accepted and revoked (CHECK); `accepted_at` set iff `accepted_by_id` set. 7-day lifetime. |
 | `audit_logs` | id, organisation_id (null = platform event), actor_user_id, action, resource_type, resource_id, metadata, request_id, ip_address, created_at | Yes | Append-only (trigger). No foreign keys: audit records outlive what they describe. |
 | `outbox_events` | id, organisation_id, type, payload, available_at, published_at, attempts, last_error | No (internal) | Transactional outbox, relayed to BullMQ by the worker. |
 
 Changes from the Phase 0 plan:
 
 - **No `Role` / `RolePermission` tables.** Roles and their permissions are a versioned registry
-  in code (Part 5); memberships store the role key. Tenant-defined custom roles can add tables
+  in code (`apps/api/src/modules/access-control/domain`); memberships store the role key. Tenant-defined custom roles can add tables
   later without changing memberships.
 - **No `ExternalIdentity` yet.** Authentication is built in for now (ADR 0005). The table is
   added when an OIDC provider is adopted.

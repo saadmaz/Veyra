@@ -62,3 +62,24 @@ export async function withUserTransaction<TTx extends SqlExecutor, R>(
     return work(tx);
   });
 }
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/**
+ * Runs `work` in a transaction that may see exactly one invitation: the one whose token hash is
+ * given (RLS policy invitations_select). Used to accept an invitation before the invitee has any
+ * tenant context. The caller must pass the SHA-256 of a token the invitee presented.
+ */
+export async function withInvitationTokenTransaction<TTx extends SqlExecutor, R>(
+  client: TransactionRunner<TTx>,
+  tokenHash: string,
+  work: (tx: TTx) => Promise<R>,
+): Promise<R> {
+  if (!SHA256_HEX.test(tokenHash)) {
+    throw new DomainError('INVALID_TOKEN_HASH', 'Invitation lookup requires a SHA-256 token hash');
+  }
+  return client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.invitation_token_hash', ${tokenHash}, true)`;
+    return work(tx);
+  });
+}
