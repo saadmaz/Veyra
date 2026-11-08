@@ -21,7 +21,9 @@ Protect against:
 
 ## 2. Identity and access
 
-- Use a maintained OIDC identity provider or managed identity service.
+- Authentication is built in for the prototype and pilot (argon2id passwords, hashed opaque
+  session tokens, idle and absolute expiry) behind a port that an OIDC identity provider can
+  replace ([ADR 0005](../adr/0005-built-in-authentication.md)).
 - Require MFA for platform operators and privileged customer administrators.
 - Support secure invitation, verification, recovery, session expiry, and revocation.
 - Apply least privilege and default-deny authorisation.

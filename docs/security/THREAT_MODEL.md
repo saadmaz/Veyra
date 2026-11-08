@@ -21,7 +21,7 @@ integrations, and compromised dependencies.
 | - | ------ | ------------------- | ----- |
 | T1 | Cross-organisation or cross-property data exposure | Route-derived tenant context + membership check; tenant-scoped repositories; composite tenant FKs; PostgreSQL RLS; per-route cross-tenant tests | [MULTI_TENANCY](../architecture/MULTI_TENANCY.md) |
 | T2 | Privilege escalation, role misuse | Default deny; permission per route with boot-time check; cannot grant permissions you lack; scope inheritance downward only | [ACCESS_CONTROL](ACCESS_CONTROL.md) |
-| T3 | Account takeover | Managed OIDC provider; MFA for privileged roles; session expiry and revocation; rate-limited auth and invitation endpoints | Phase 2 |
+| T3 | Account takeover | Built-in auth with argon2id and hashed session tokens (ADR 0005), replaceable by an OIDC provider; MFA for privileged roles; session expiry and revocation; rate-limited auth and invitation endpoints | Phase 2 |
 | T4 | Visitor pass reuse or forgery | Random, time-limited, revocable passes scoped to property/visit; server-side validation; pass is not proof of identity | Phase 5 |
 | T5 | Payment replay, forged callbacks, duplicate processing | Signature verification; idempotency on provider event ID; never trust browser redirects; independent reconciliation | Phase 6 |
 | T6 | Unauthorised access to identity documents and incident records | Separate permissions, access logging on reads, signed short-lived URLs after authorisation | Phases 4, 10, 11 |

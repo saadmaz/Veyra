@@ -6,7 +6,7 @@
 | ---- | ------- | ----- |
 | Bun | 1.4.x | Package manager and script runner (`npm i -g bun` or bun.sh) |
 | Node.js | 24 LTS or newer | Runtime for API, worker and Expo tooling |
-| Docker | Desktop / Engine with Compose | Local PostgreSQL and Redis |
+| Docker | Desktop / Engine with Compose | Local PostgreSQL and Redis for `bun run dev`. **Not needed for tests**: integration tests start their own PostgreSQL |
 | Expo Go | latest, on your phone | Run the resident app on a real device |
 | Android Studio / Xcode | optional | Emulator (Windows/macOS) / iOS simulator (macOS only) |
 | Visual C++ Redistributable (x64) | latest | **Windows only.** Required by native tools (Biome, Turborepo, Next.js SWC, Vitest). Without it they exit silently with code 53 / `0xC0000135`. Install: `winget install --id Microsoft.VCRedist.2015+.x64 -e` |
@@ -25,9 +25,31 @@ bun install
 Copy-Item .env.example .env
 bun run services:up          # PostgreSQL 17 + Redis 7 via docker compose
 bun run db:generate          # Prisma client
-bun run db:migrate           # apply migrations (from Phase 2, when models exist)
+bun run --cwd packages/db migrate:deploy   # apply migrations as veyra_owner
 bun run dev                  # api :4000, worker :4001, console :3000
 ```
+
+Prisma reads `.env` only from the package it runs in, so set `MIGRATION_DATABASE_URL` in the
+shell (or in `packages/db/.env`, which is git-ignored) before migrating:
+`$env:MIGRATION_DATABASE_URL = "postgresql://veyra_owner:veyra_owner_dev@localhost:5432/veyra"`.
+Use `bun run db:migrate` (`prisma migrate dev`) only when authoring a new migration.
+
+## Database roles
+
+On first start with an empty volume, `docker compose` runs
+`packages/db/sql/bootstrap-roles.sql` as the `postgres` superuser. It creates:
+
+| Role | Password (dev only) | Used for |
+| ---- | ------------------- | -------- |
+| `veyra_owner` | `veyra_owner_dev` | Migrations (`MIGRATION_DATABASE_URL`). Owns the schema. |
+| `veyra_app` | `veyra_app_dev` | API and worker (`DATABASE_URL`). Subject to row-level security. |
+| `postgres` | `postgres` | Administration only. Never put it in `DATABASE_URL`: superusers bypass RLS. |
+
+The init script runs only when the data volume is empty. If you started PostgreSQL before this
+change (old `veyra`/`veyra` user), recreate the volume, which **deletes local data**:
+`docker compose down -v; docker compose up -d`.
+
+Details: [MULTI_TENANCY section 3](../architecture/MULTI_TENANCY.md).
 
 ## Running each app
 
@@ -51,7 +73,8 @@ port 4000 through Windows Firewall.
 | `bun run lint` | Biome lint + format check |
 | `bun run lint:fix` | Apply safe fixes and formatting |
 | `bun run typecheck` | Strict TypeScript across all workspaces |
-| `bun run test` | All Vitest suites |
+| `bun run test` | All unit and API Vitest suites (no database needed) |
+| `bun run test:integration` | Database integration tests: starts a throwaway PostgreSQL 17 (embedded-postgres, no Docker), applies the real migrations as `veyra_owner`, tests RLS as `veyra_app`. PostgreSQL binaries come from `bun install` (no extra download) |
 | `bun run build` | Build every package and web/backend app |
 
 All of these must pass before a change is considered done. CI runs the same commands.

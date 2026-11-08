@@ -2,16 +2,21 @@
 services:
   postgres:
     image: postgres:17-alpine
+    # The superuser "postgres" is for administration only. On first start (empty volume) the
+    # bootstrap script creates the roles veyra_owner (migrations) and veyra_app (API/worker,
+    # subject to row-level security) and the database "veyra". The application never connects
+    # as postgres: superusers bypass row-level security.
     environment:
-      POSTGRES_USER: veyra
-      POSTGRES_PASSWORD: veyra
-      POSTGRES_DB: veyra
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./packages/db/sql/bootstrap-roles.sql:/docker-entrypoint-initdb.d/10-bootstrap-roles.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U veyra -d veyra"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d veyra"]
       interval: 5s
       timeout: 3s
       retries: 10

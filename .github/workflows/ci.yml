@@ -59,4 +59,7 @@ jobs:
       - run: bun run --cwd packages/db validate
       - run: bun run typecheck
       - run: bun run test
+      # Starts its own throwaway PostgreSQL 17 (embedded-postgres), creates the veyra_owner /
+      # veyra_app roles and applies the real migrations. Does not use the service container.
+      - run: bun run test:integration
       - run: bun run build

@@ -11,7 +11,8 @@
     "migrate:deploy": "prisma migrate deploy",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
@@ -19,6 +20,9 @@
     "@veyra/domain": "workspace:*"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "embedded-postgres": "17.11.0-beta.19",
+    "pg": "^8.23.1",
     "prisma": "7.10.1"
   }
 }

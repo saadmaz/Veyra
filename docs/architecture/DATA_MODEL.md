@@ -1,6 +1,7 @@
 # Data Model
 
-> Status: Phase 0 baseline. Entities for Phases 2-4 and the ledger approach for Phase 6.
+> Status: Phase 2. Section 2 describes implemented tables; later sections are the plan for
+> Phases 3-6.
 > The Prisma schema in `packages/db/prisma/schema.prisma` is the executable source of truth;
 > this document explains intent and invariants.
 
@@ -20,19 +21,33 @@
 | Concurrency    | `version int` for optimistic locking on contended aggregates (bookings, invoices). |
 | Audit          | `audit_log` append-only: actor, organisation, action, resource type/id, before/after diff, request id, IP, timestamp. |
 
-## 2. Identity and tenancy (Phase 2)
+## 2. Identity and tenancy (Phase 2, implemented)
 
-| Entity             | Key fields | Notes |
-| ------------------ | ---------- | ----- |
-| User               | id, email, display_name, locale, status | Global, not tenant-owned. |
-| ExternalIdentity   | user_id, issuer, subject | Unique `(issuer, subject)`. Links OIDC accounts to a user. |
-| Organisation       | id, name, slug, country, default_currency, status | The tenant. |
-| Role               | id, organisation_id (null = system role), key, name | |
-| RolePermission     | role_id, permission | Permission strings defined in code. |
-| Membership         | id, organisation_id, user_id, role_id, scope_type, scope_id, valid_from, valid_until, status | See [ACCESS_CONTROL](../security/ACCESS_CONTROL.md). |
-| Invitation         | id, organisation_id, email, role_id, scope, token_hash, expires_at, accepted_at | Token stored hashed. |
-| AuditLog           | see conventions | Append-only. |
-| OutboxEvent        | id, organisation_id, type, payload, created_at, published_at | Transactional outbox. |
+Migration `20261108120000_identity_and_tenancy`. Row-level security and grants for these
+tables: [MULTI_TENANCY section 3](MULTI_TENANCY.md).
+
+| Table | Key fields | RLS | Notes |
+| ----- | ---------- | --- | ----- |
+| `users` | id, email, display_name, status (`ACTIVE`/`DISABLED`), email_verified_at | No (global) | One account per person across all organisations. Email stored lower-case and trimmed (CHECK). |
+| `password_credentials` | user_id (PK), password_hash | No (global) | Built-in auth ([ADR 0005](../adr/0005-built-in-authentication.md)). argon2id PHC string; never logged or returned. |
+| `sessions` | id, user_id, token_hash (unique), last_seen_at, idle_expires_at, absolute_expires_at, revoked_at, ip_address, user_agent | No (global) | Opaque client token; only its SHA-256 hash is stored. CHECK `idle_expires_at <= absolute_expires_at`. |
+| `organisations` | id, name, slug (unique), country_code, default_currency, default_time_zone, status | Yes | The tenant. Slug, ISO 3166-1 country and ISO 4217 currency format enforced by CHECK. |
+| `memberships` | id, organisation_id, user_id, role, scope_type, scope_id, status, valid_from, valid_until, granted_by_id, revoked_at, revoked_by_id | Yes | `role` is a string key from the code-defined registry (no role tables). Unique `(organisation_id, user_id, role, scope_type, scope_id)`. CHECKs: validity window order, organisation scope points at its own organisation, `REVOKED` iff `revoked_at` set. |
+| `invitations` | id, organisation_id, email, role, scope_type, scope_id, token_hash (unique), expires_at, accepted_at, accepted_by_id, revoked_at, invited_by_id | Yes | Single-use token stored hashed. |
+| `audit_logs` | id, organisation_id (null = platform event), actor_user_id, action, resource_type, resource_id, metadata, request_id, ip_address, created_at | Yes | Append-only (trigger). No foreign keys: audit records outlive what they describe. |
+| `outbox_events` | id, organisation_id, type, payload, available_at, published_at, attempts, last_error | No (internal) | Transactional outbox, relayed to BullMQ by the worker. |
+
+Changes from the Phase 0 plan:
+
+- **No `Role` / `RolePermission` tables.** Roles and their permissions are a versioned registry
+  in code (Part 5); memberships store the role key. Tenant-defined custom roles can add tables
+  later without changing memberships.
+- **No `ExternalIdentity` yet.** Authentication is built in for now (ADR 0005). The table is
+  added when an OIDC provider is adopted.
+- **`PasswordCredential` and `Session`** added for built-in authentication.
+- `users.locale` deferred until localisation work needs it.
+- Memberships with `PROPERTY`/`BUILDING`/`UNIT` scope get composite tenant foreign keys in
+  Phase 3, when those tables exist.
 
 ## 3. Property structure (Phase 3)
 

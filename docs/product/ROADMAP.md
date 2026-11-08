@@ -23,7 +23,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | ----- | ---------------------------------------- | ------ |
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
-| 2     | Identity and multi-tenancy               | Next |
+| 2     | Identity and multi-tenancy               | In progress: Part 3 (data foundation) done; Part 4 (authentication) next |
 | 3     | Organisation and property management     | |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
@@ -69,12 +69,15 @@ Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, 
 
 ## Phase 2 plan (Identity and multi-tenancy)
 
-1. Choose the OIDC provider (candidates: Keycloak or Zitadel self-hosted; Auth0, WorkOS, Clerk managed). Needs decision.
-2. Prisma models: User, ExternalIdentity, Organisation, Role, RolePermission, Membership, Invitation, AuditLog, OutboxEvent.
-3. First migration with composite tenant FKs and RLS policies (raw SQL); application DB role without BYPASSRLS.
-4. Auth guard (JWKS), tenant context from route, permission guard, boot-time "every route declares a permission" check.
-5. Integration test harness against real PostgreSQL; cross-tenant and expired-membership tests.
-6. Rate limiting (Redis-backed) and structured JSON logging with request ids.
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1-2 | Authentication decision: built-in auth behind an identity port ([ADR 0005](../adr/0005-built-in-authentication.md)) | ✅ Decided |
+| 3 | Data foundation: User, PasswordCredential, Session, Organisation, Membership, Invitation, AuditLog, OutboxEvent; migration with CHECK constraints, RLS (ENABLE + FORCE), append-only audit trigger, least-privilege `veyra_app` role; tenant/user transaction helpers; embedded-PostgreSQL integration harness (24 tests) in CI | ✅ Done |
+| 4 | Authentication: sign-up, sign-in, sign-out, sessions (hashed opaque token, idle + absolute expiry, revocation), argon2id, cookie (web) / bearer (mobile), Redis rate limiting, audit events, auth guard | Next |
+| 5 | Tenancy and authorisation: create organisation, memberships, invitations (SECURITY DEFINER token lookup), role/permission registry in code, permission guard with boot-time "every route declares a permission" check, cross-tenant and expired-membership API tests | |
+| 6 | Console UI: sign-in, sign-up, organisation switcher | |
+
+Also in Phase 2: structured JSON logging with request ids.
 
 ## Release gates
 
@@ -89,7 +92,13 @@ readiness, user training and release communication, and known limitations docume
 - Mobile app not yet launched on a device or emulator.
 - `bunfig.toml` uses the hoisted linker for React Native; revisit if Bun's isolated linker gains Metro support.
 - Structured logging (pino + OpenTelemetry) not yet added; Nest's default logger is in use.
-- Rate limiting not yet enabled (Phase 2).
+- Rate limiting not yet enabled (Phase 2, Part 4).
+- Built-in auth lacks MFA, email verification, password reset and breached-password checks
+  (ADR 0005); required before privileged customer users go live.
+- CI still starts a PostgreSQL service container that no test uses (integration tests use
+  embedded-postgres); keep or remove when the API integration tests land in Part 4.
+- Production database role provisioning (veyra_owner / veyra_app from a secrets manager) not yet
+  scripted.
 - `dev` scripts for api/worker build once and run; no watch mode yet.
 - Module-boundary lint check to be added when the second business module exists.
 - Worker `main.ts` (Redis wiring, health server) has no automated test; covered by the Phase 2 integration harness.

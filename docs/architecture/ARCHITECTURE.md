@@ -115,7 +115,9 @@ contracts are kept separate from ORM/database models.
 ## 4. Request lifecycle (API)
 
 1. Request ID assigned or propagated (`x-request-id`).
-2. Authentication guard validates the OIDC access token and resolves the internal user.
+2. Authentication guard validates the session token (cookie or bearer) through the identity
+   port and resolves the internal user ([ADR 0005](../adr/0005-built-in-authentication.md):
+   built-in today, an OIDC provider later).
 3. Tenant context is resolved from the route (`/organisations/:organisationId/...`), never
    from a client header alone, and the user's membership in it is verified.
 4. Authorisation guard evaluates the required permission against the resolved scope.

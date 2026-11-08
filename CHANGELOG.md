@@ -7,6 +7,10 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Changed
 
+- Local PostgreSQL (docker compose) now runs as superuser `postgres` and bootstraps the
+  VEYRA roles. `.env.example` uses `veyra_app` for `DATABASE_URL` and adds
+  `MIGRATION_DATABASE_URL` (`veyra_owner`). Existing local volumes must be recreated.
+- Vitest configs in `apps/api` and `packages/db` renamed to `.mts`.
 - Security reports now go to a private email address (GitHub private vulnerability reporting
   is not available for private repositories).
 
@@ -17,6 +21,16 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 2 data foundation** (`packages/db`): Prisma models for users, password credentials,
+  sessions, organisations, memberships, invitations, audit logs and outbox events; first
+  migration with CHECK constraints, row-level security (ENABLE + FORCE) on tenant tables,
+  request-context functions, an append-only audit-log trigger and least-privilege grants.
+- Database roles `veyra_owner` (migrations) and `veyra_app` (application, no RLS bypass),
+  created locally by `packages/db/sql/bootstrap-roles.sql`.
+- `withTenantTransaction(..., { userId })` and `withUserTransaction` helpers.
+- `bun run test:integration`: 24 integration tests against a real, throwaway PostgreSQL 17
+  (embedded-postgres, no Docker), also run in CI.
+- ADR 0005: built-in authentication behind a replaceable identity port.
 - `.gitattributes` normalising text files to LF line endings.
 - All dependencies installed and locked (`bun.lock`): NestJS 12, Next.js, React 19.3, Expo SDK
   58 / React Native 0.88, Prisma 7.10.1, TypeScript 7, Vitest 5, Biome 2.6.

@@ -45,7 +45,8 @@ Ending the tenancy ends the access without manual clean-up.
 6. Conditional permissions ("approve expenses up to 5,000", "2 of N committee approvals")
    are evaluated by the owning module's policy after the base grant passes.
 7. Privileged roles (platform admin, organisation admin, finance officer) require MFA
-   (`amr` claim from the identity provider) for mutating operations.
+   for mutating operations (from session metadata while authentication is built in, ADR 0005;
+   from the `amr` claim once an external identity provider is used).
 
 Effective permissions may be cached per `(userId, organisationId)` in Redis for a short TTL.
 Every membership change publishes an invalidation event so revocation takes effect within
