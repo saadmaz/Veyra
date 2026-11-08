@@ -76,7 +76,7 @@ change `property.structure.manage`. Lists show active rows; `?status=ARCHIVED` s
 
 | Resource | Endpoints |
 | -------- | --------- |
-| Buildings | `GET/POST buildings`, `PATCH buildings/{id}`, `POST buildings/{id}/archive` (no active units; archives its floors and common areas) |
+| Buildings | `GET/POST buildings`, `GET/PATCH buildings/{id}`, `POST buildings/{id}/archive` (no active units; archives its floors and common areas) |
 | Floors | `GET/POST buildings/{buildingId}/floors`, `PATCH …/floors/{id}`, `POST …/floors/{id}/archive` (no active units) |
 | Units | `GET units?buildingId=&floorId=`, `POST units`, `PATCH units/{id}`, `POST units/{id}/archive` |
 | Common areas | `GET/POST common-areas`, `PATCH common-areas/{id}`, `POST common-areas/{id}/archive` |

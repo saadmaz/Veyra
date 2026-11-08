@@ -28,6 +28,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   VALIDATION_FAILED: 'Some fields need attention.',
   ROLE_SCOPE_MISMATCH: 'This role has to be given for a specific property.',
   PROPERTY_CODE_TAKEN: 'Another property already uses this code. Choose another.',
+  BUILDING_CODE_TAKEN: 'Another building in this property already uses this code.',
+  FLOOR_LEVEL_TAKEN: 'This building already has a floor at this level.',
+  UNIT_NUMBER_TAKEN: 'This unit number is already used here.',
+  COMMON_AREA_NAME_TAKEN: 'Another common area in this property already has this name.',
+  STRUCTURE_IN_USE: 'This still has active units. Archive them first.',
+  ARCHIVED: 'This is archived and can no longer be changed.',
+  PROPERTY_FINANCIALS_LOCKED:
+    'Country and currency can only change while the property is being set up.',
+  INVALID_STATE_TRANSITION: 'This change is not possible in the current state.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';
@@ -57,3 +66,41 @@ export const ROLE_LABELS: Record<string, string> = {
 export const ORGANISATION_ROLES = ['FINANCE_OFFICER', 'ORGANISATION_ADMIN'] as const;
 
 export const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
+
+/** Turns an enum value such as FUNCTION_ROOM into readable text: "Function room". */
+export function enumLabel(value: string): string {
+  const text = value.toLowerCase().replaceAll('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export const PROPERTY_TYPES = [
+  'CONDOMINIUM',
+  'APARTMENT_COMPLEX',
+  'GATED_COMMUNITY',
+  'MIXED_USE',
+  'OTHER',
+] as const;
+export const UNIT_TYPES = [
+  'APARTMENT',
+  'PENTHOUSE',
+  'STUDIO',
+  'DUPLEX',
+  'VILLA',
+  'TOWNHOUSE',
+  'SHOP',
+  'OFFICE',
+  'STORAGE',
+  'OTHER',
+] as const;
+export const COMMON_AREA_TYPES = [
+  'LOBBY',
+  'POOL',
+  'GYM',
+  'CLUBHOUSE',
+  'FUNCTION_ROOM',
+  'SPORTS_FACILITY',
+  'PLAYGROUND',
+  'GARDEN',
+  'PARKING',
+  'OTHER',
+] as const;

@@ -68,7 +68,9 @@ function SignUpForm() {
   return (
     <>
       <h1 className="auth__title">Create your account</h1>
-      <form className="form" onSubmit={onSubmit} noValidate>
+      {/* method="post": if the form is submitted before scripts load, the browser must not put
+          the email and password into the URL (a GET submission would). */}
+      <form className="form" method="post" onSubmit={onSubmit} noValidate>
         {error ? <Alert>{errorMessage(error)}</Alert> : null}
         <TextField
           label="Full name"

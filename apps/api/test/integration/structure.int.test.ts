@@ -219,6 +219,11 @@ describe('buildings and floors', () => {
       .post(`${base()}/buildings/${qBuilding}/floors`)
       .send({ level: 1, name: 'One' })
       .expect(404);
+
+    // A single building is readable through its own property only.
+    const one = await as(finance).get(`${base()}/buildings/${b}`).expect(200);
+    expect(one.body).toMatchObject({ id: b, code: 'FL', status: 'ACTIVE' });
+    await as(admin).get(`${base()}/buildings/${qBuilding}`).expect(404);
   });
 });
 

@@ -142,6 +142,10 @@ a {
   place-items: center;
 }
 
+.crumbs {
+  font-size: var(--text-sm);
+}
+
 .page__header {
   display: flex;
   flex-wrap: wrap;

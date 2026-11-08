@@ -167,6 +167,17 @@ expiry, rehash on sign-in, idempotent sign-out).
 - `apps/api` unit (20): decimal strings (bounds, scale, no JSON numbers), floor requires
   building, code normalisation, at-least-one-field updates, default list status.
 
+### Part 4: property console
+
+- `apps/console-web` e2e (5 journeys, each at desktop and phone size): admin adds a property,
+  a building, a floor and a unit (area shown as an exact decimal), sees the archive refused
+  while units are active, activates the property; admin invites a property manager for one
+  property; archiving a property after confirmation removes every change control; a property
+  manager sees only their property, no lifecycle or invitation controls, and "not found" for
+  another property; a finance officer reads the structure with no change controls. axe WCAG 2.2
+  AA checks on the new pages; no horizontal scroll on phones.
+- The fake API (`e2e/fake-api.ts`) mirrors the API's per-scope permissions and archive rules.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
