@@ -29,3 +29,6 @@ apps/resident-mobile/android/
 *.p12
 *.key
 *.mobileprovision
+# Playwright output
+playwright-report/
+test-results/

@@ -25,6 +25,12 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "outputs": ["playwright-report/**", "test-results/**"],
+      "cache": false,
+      "passThroughEnv": ["CI"]
     }
   }
 }

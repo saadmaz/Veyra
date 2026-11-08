@@ -37,7 +37,7 @@ or provided by a hosted service. Rule: build what differentiates VEYRA, use serv
 | PostgreSQL | Managed with point-in-time restore (Neon, Supabase, RDS, Railway) |
 | Redis | Managed (Upstash, Railway) |
 | Object storage | Cloudflare R2 or S3 |
-| Identity provider | Clerk, WorkOS, Auth0, or self-hosted Zitadel/Keycloak. Never build auth in-house |
+| Identity provider | Built-in for the prototype and pilot ([ADR 0005](../adr/0005-built-in-authentication.md)); Clerk, WorkOS, Auth0 or Zitadel/Keycloak when enterprise SSO is needed |
 | DNS, CDN, TLS, WAF | Cloudflare |
 | Web hosting | Vercel or Cloudflare Pages |
 | Error tracking | Sentry |

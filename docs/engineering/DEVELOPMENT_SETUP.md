@@ -83,5 +83,6 @@ port 4000 through Windows Firewall.
 | `bun run test` | All unit and API Vitest suites (no database needed) |
 | `bun run test:integration` | Database and API integration tests: starts a throwaway PostgreSQL 17 (embedded-postgres, no Docker), applies the real migrations as `veyra_owner`, tests RLS as `veyra_app`. PostgreSQL binaries come from `bun install` (no extra download) |
 | `bun run build` | Build every package and web/backend app |
+| `bun run test:e2e` | Console browser tests (Playwright). First time: `bunx playwright install chromium` |
 
 All of these must pass before a change is considered done. CI runs the same commands.
