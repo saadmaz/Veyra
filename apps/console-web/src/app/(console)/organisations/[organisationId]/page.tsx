@@ -6,12 +6,15 @@ import type {
   MembershipDto,
   OrganisationDetailResponse,
   Paginated,
+  PropertyDto,
 } from '@veyra/api-contracts';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
+  ButtonLink,
   Card,
   EmptyState,
   ErrorState,
@@ -86,9 +89,55 @@ export default function OrganisationPage() {
         </dl>
       </Card>
 
+      <Properties organisationId={org.id} canCreate={can('organisation.property.create')} />
       {can('organisation.member.read') ? <Members organisationId={org.id} /> : null}
       {can('organisation.member.invite') ? <Invitations organisationId={org.id} /> : null}
     </>
+  );
+}
+
+/** Every member sees the properties their grants reach; the API filters the list. */
+function Properties({ organisationId, canCreate }: { organisationId: string; canCreate: boolean }) {
+  const properties = useApiQuery<Paginated<PropertyDto>>(
+    `/organisations/${organisationId}/properties?limit=200`,
+  );
+  const addLink = canCreate ? (
+    <ButtonLink href={`/organisations/${organisationId}/properties/new`}>Add property</ButtonLink>
+  ) : undefined;
+  return (
+    <Card title="Properties" actions={addLink}>
+      {properties.status === 'loading' ? <LoadingState label="Loading properties" /> : null}
+      {properties.status === 'error' ? (
+        <ErrorState error={properties.error} onRetry={properties.reload} />
+      ) : null}
+      {properties.status === 'success' && properties.data.data.length === 0 ? (
+        <p className="muted">
+          {canCreate
+            ? 'No properties yet. Add the first one.'
+            : 'You have no properties assigned yet.'}
+        </p>
+      ) : null}
+      {properties.status === 'success' && properties.data.data.length > 0 ? (
+        <ul className="list" aria-label="Properties">
+          {properties.data.data.map((property) => (
+            <li key={property.id} className="list__item">
+              <div>
+                <Link
+                  href={`/organisations/${organisationId}/properties/${property.id}`}
+                  className="list__link"
+                >
+                  {property.name}
+                </Link>
+                <p className="list__meta">
+                  {property.code} · {property.city}
+                </p>
+              </div>
+              {property.status !== 'ACTIVE' ? <StatusBadge status={property.status} /> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Card>
   );
 }
 

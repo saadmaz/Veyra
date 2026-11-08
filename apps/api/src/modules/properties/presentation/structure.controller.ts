@@ -141,6 +141,16 @@ export class StructureController {
     return toBuilding(await this.structure.createBuilding(access, body, requestMeta(req)));
   }
 
+  @Get('buildings/:buildingId')
+  @RequirePermission(READ)
+  async getBuilding(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('buildingId', uuid) buildingId: string,
+    @Req() req: Request,
+  ): Promise<BuildingDto> {
+    return toBuilding(await this.structure.getBuilding(access, buildingId, requestMeta(req)));
+  }
+
   @Patch('buildings/:buildingId')
   @RequirePermission(MANAGE)
   async updateBuilding(

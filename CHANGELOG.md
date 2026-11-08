@@ -21,6 +21,15 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 3 console**: properties on the organisation page, add-property form, property page
+  (overview, activate and archive with confirmation, buildings, units, common areas, invite a
+  property manager), building page (floors and units); controls shown per permission.
+  `GET …/buildings/{id}` API endpoint.
+
+### Security
+
+- Sign-in and sign-up forms use `method="post"`, so a submission before scripts load can never
+  put credentials into the URL.
 - **Phase 3 structure API**: property settings, activation and archiving (cascading to the
   whole structure); buildings, floors, units and common areas with create, update, archive and
   list endpoints; archive rules (no active units), parent checks, unique-rule conflicts mapped to

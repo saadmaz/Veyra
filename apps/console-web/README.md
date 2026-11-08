@@ -9,7 +9,7 @@ installable PWA. It moves to its own app only if it outgrows this one.
 bun run --cwd apps/console-web dev   # http://localhost:3000 (needs the API on :4000)
 ```
 
-## Screens (Phase 2)
+## Screens
 
 | Route | Purpose |
 | ----- | ------- |
@@ -18,6 +18,13 @@ bun run --cwd apps/console-web dev   # http://localhost:3000 (needs the API on :
 | `/organisations/new` | Create an organisation (the creator becomes its admin) |
 | `/organisations/[id]` | Overview; members and invitations when the user may see them |
 | `/invitations/accept#token=…` | Accept an invitation; the token is in the URL fragment, never sent to a server |
+| `/organisations/[id]/properties/new` | Add a property (organisation admins) |
+| `/organisations/[id]/properties/[pid]` | Property overview, activate/archive (admins), buildings, units, common areas, invite a property manager |
+| `/organisations/[id]/properties/[pid]/buildings/[bid]` | A building's floors and units |
+
+The organisation page lists the properties the user may see (the API filters them). Controls
+appear only when the API reports the matching permission (`permissions` on organisation and
+property responses); the API enforces every action regardless. Archiving asks for confirmation.
 
 The header has a skip link, an organisation switcher (native `<select>`) and sign-out.
 

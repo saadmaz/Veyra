@@ -181,6 +181,15 @@ export class StructureService {
     });
   }
 
+  /** One building of the property, active or archived. */
+  getBuilding(access: OrganisationAccess, buildingId: string, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => {
+      const building = await uow.lockBuilding(buildingId, 'share');
+      if (!building) throw notFound('Building');
+      return building;
+    });
+  }
+
   // ------------------------------------------------------------------------------ floors
 
   listFloors(
