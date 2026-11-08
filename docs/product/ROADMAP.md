@@ -24,7 +24,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
-| 3     | Organisation and property management     | Next |
+| 3     | Organisation and property management     | In progress: Part 1 (data foundation) done |
 | 4     | Resident and unit management             | |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
@@ -78,6 +78,19 @@ Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, 
 | 6 | Console UI: sign-in, sign-up, organisations list and switcher, create organisation, organisation overview with members and invitations, invitation acceptance; Playwright journeys with axe WCAG 2.2 AA checks ([ADR 0006](../adr/0006-console-calls-api-from-browser.md)) | ✅ Done |
 
 Also in Phase 2: structured JSON logging with request ids.
+
+## Phase 3 plan (Organisation and property management)
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Data foundation: properties, buildings, floors, units, common areas; composite tenant foreign keys; RLS; archive-only; unit-number rules; membership/invitation scope trigger; database tests | ✅ Done |
+| 2 | Property-scoped roles (property manager) with downward-only scope inheritance; cross-property isolation tests | Next |
+| 3 | API: create, list, update and archive properties, buildings, floors, units and common areas | |
+| 4 | Console: property list and detail, building and unit structure, invite a property manager | |
+
+Deferred from Phase 2 and tracked in [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md): MFA, email
+verification, password reset, structured logging, secret scanning, console CSP, production roles
+and backups, full-stack smoke test (all before a pilot stores real data).
 
 ## Release gates
 

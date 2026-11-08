@@ -46,18 +46,25 @@ Changes from the Phase 0 plan:
   added when an OIDC provider is adopted.
 - **`PasswordCredential` and `Session`** added for built-in authentication.
 - `users.locale` deferred until localisation work needs it.
-- Memberships with `PROPERTY`/`BUILDING`/`UNIT` scope get composite tenant foreign keys in
-  Phase 3, when those tables exist.
+- Memberships and invitations with `PROPERTY`/`BUILDING`/`UNIT` scope are validated by a trigger
+  (Phase 3; `scope_id` is polymorphic, so a foreign key cannot express it).
 
-## 3. Property structure (Phase 3)
+## 3. Property structure (Phase 3, implemented)
 
-| Entity     | Key fields | Notes |
-| ---------- | ---------- | ----- |
-| Property   | id, organisation_id, name, type, address, country, time_zone, currency, status | |
-| Building   | id, organisation_id, property_id, name, code | |
-| Floor      | id, organisation_id, building_id, level (int), name | |
-| Unit       | id, organisation_id, property_id, building_id, floor_id, number, unit_type, area, share_ratio, status | Unique `(property_id, building_id, number)`. `property_id` denormalised for scope checks. |
-| CommonArea | id, organisation_id, property_id, name, type | |
+Migration `20261109090000_property_structure`. All tables are tenant-owned with RLS, composite
+tenant foreign keys (`ON DELETE/UPDATE RESTRICT`) and no DELETE privilege: rows are archived
+(`status = ARCHIVED` and `archived_at`, kept consistent by CHECK).
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `properties` | id, organisation_id, name, code, type, status (`ONBOARDING`/`ACTIVE`/`ARCHIVED`), address_line1/2, city, region, postal_code, country_code, time_zone, currency | `code` unique per organisation, upper-case `A-Z0-9-`, 2-20 chars. Own IANA time zone and ISO 4217 currency (default from the organisation at creation). |
+| `buildings` | id, organisation_id, property_id, name, code, status | `code` unique per property. FK `(organisation_id, property_id)` to the property. |
+| `floors` | id, organisation_id, property_id, building_id, level, name, status | `level` -20..300 (0 = ground), unique per building. FK `(organisation_id, property_id, building_id)` to the building. |
+| `units` | id, organisation_id, property_id, building_id?, floor_id?, number, type, area_sqm?, share_ratio?, status | Building optional (villas); floor requires a building. Number unique per building, or per property without one, case-insensitive (`NULLS NOT DISTINCT`). Area and share ratio positive (DECIMAL, never float). |
+| `common_areas` | id, organisation_id, property_id, building_id?, name, type, status | Name unique per property. Optional building (a gym inside tower A). |
+
+Not yet modelled: parking inventory (Phase 3 later part or Phase 9), unit categories beyond
+`type`, property branding and operational policies.
 
 ## 4. Residents (Phase 4)
 

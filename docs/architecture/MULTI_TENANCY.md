@@ -81,6 +81,7 @@ no policy is denied.
 | `memberships` | Current tenant's rows, **or** the current user's own rows | Current tenant only (`WITH CHECK` stops moving a row to another tenant) | No grant |
 | `invitations` | Current tenant, **or** the single row whose `token_hash` the caller presents (`app.invitation_token_hash`) | Current tenant only | No grant |
 | `audit_logs` | Current tenant only | Current tenant, or platform events (`organisation_id IS NULL`) | Rejected by trigger |
+| `properties`, `buildings`, `floors`, `units`, `common_areas` | Current tenant only | Current tenant only | No grant (archive instead) |
 
 **User context.** Before an organisation is chosen ("list my organisations"),
 `withUserTransaction` sets only `app.user_id`. The user then sees their own memberships and the
@@ -102,10 +103,14 @@ are invisible to tenants.
   neither attribute; production connection strings must be reviewed for the same.
 - RLS is defence in depth. Repositories still filter by `organisation_id`, and the permission
   guard still authorises every request ([ACCESS_CONTROL](../security/ACCESS_CONTROL.md)).
-- Composite tenant foreign keys arrive in Phase 3 with the first tenant-owned child tables
-  (properties, buildings, units). Today the only cross-table scope check is
-  `memberships_org_scope_matches` (an organisation-scoped membership must point at its own
-  organisation).
+- **Composite tenant foreign keys** (Phase 3): every child of the property structure references
+  its parent by `(organisation_id, property_id[, building_id], id)`, so a building, floor, unit or
+  common area can never point at another tenant's or another property's parent. `ON UPDATE
+  RESTRICT`: tenant and parent keys never change. A unit's floor requires a building (CHECK),
+  because `MATCH SIMPLE` would otherwise skip the floor key when `building_id` is NULL.
+- **Membership and invitation scopes**: `scope_id` is polymorphic, so a trigger
+  (`app_assert_scope_in_organisation`) checks that a PROPERTY, BUILDING or UNIT scope names a row
+  of the same organisation. Organisation scopes keep their CHECK constraint.
 - **Invitation acceptance** happens before the invitee has tenant context. Instead of the
   planned `SECURITY DEFINER` function (it would run as `veyra_owner`, which FORCE RLS also
   restricts), the SELECT policy admits the one invitation whose token hash the caller sets in
