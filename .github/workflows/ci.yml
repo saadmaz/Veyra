@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Isolated, throwaway services for this run only. Never point CI at shared databases.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: veyra
+          POSTGRES_PASSWORD: veyra
+          POSTGRES_DB: veyra_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U veyra -d veyra_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://veyra:veyra@localhost:5432/veyra_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      NEXT_TELEMETRY_DISABLED: "1"
+      TURBO_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run db:generate
+      - run: bun run --cwd packages/db validate
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build

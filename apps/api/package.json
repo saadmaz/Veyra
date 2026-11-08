@@ -1,0 +1,12 @@
+{
+  "name": "@veyra/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json && node --env-file-if-exists=../../.env dist/main.js",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}
