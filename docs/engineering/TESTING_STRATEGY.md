@@ -178,6 +178,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   AA checks on the new pages; no horizontal scroll on phones.
 - The fake API (`e2e/fake-api.ts`) mirrors the API's per-scope permissions and archive rules.
 
+## Phase 4 tests
+
+### Part 1: resident data (`packages/db` integration, 22)
+
+- No tenant context sees nothing in any resident table; tenants see only their own people;
+  ownerships cannot point at another tenant's unit or person.
+- Shares: sole owner and exact thirds accepted; sums other than one rejected at commit; a
+  transfer in one transaction accepted; an overlapping transfer rejected; same person cannot
+  overlap on a unit; invalid fractions rejected; voided rows ignored and need a reason; no
+  deletes.
+- Tenancies: one per unit at a time with inclusive end dates (sharing a last day overlaps);
+  voided tenancies free the period; at most one primary tenant; end before start rejected.
+- Household periods cannot overlap; people validated (unique email per organisation, E.164,
+  language tag); emergency contacts deletable; active plates unique per property.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
