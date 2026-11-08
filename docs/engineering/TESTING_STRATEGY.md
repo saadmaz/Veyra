@@ -6,7 +6,7 @@
 | Integration | Vitest + real PostgreSQL 17 (embedded-postgres, started per run); real Redis in CI | Migrations, drift, roles, RLS, constraints, time zones; full API flows over HTTP against the real database | `packages/db/test/integration`, `apps/api/test/integration` (`bun run test:integration`) |
 | API / e2e   | Vitest + Supertest against the real Nest pipeline | HTTP contract, error envelope, guards | `apps/api/test/*.e2e.test.ts` |
 | Contract    | Recorded provider fixtures + schema checks | Payment, SMS, email adapters | per adapter (from Phase 6) |
-| Web UI e2e  | Playwright | Critical user journeys in the browser | `apps/console-web/e2e` (from Phase 3) |
+| Web UI e2e  | Playwright (Chromium, desktop and phone viewports) + axe-core | Critical user journeys, WCAG 2.2 AA automated checks, no horizontal scroll on phones | `apps/console-web/e2e` (`bun run test:e2e`, after `bun run build`) |
 | Mobile components | jest-expo + React Native Testing Library | Screens and components | `apps/resident-mobile` (when real screens exist) |
 | Mobile device e2e | Maestro | Critical resident journeys on emulator/device | `apps/resident-mobile/e2e` (from Phase 4) |
 
@@ -107,6 +107,19 @@ expiry, rehash on sign-in, idempotent sign-out).
 - `packages/db` integration (6): invitation token-hash RLS lookup exposes exactly one row and
   grants no writes; malformed hashes rejected; one pending invitation per email and role;
   accepted/revoked exclusive.
+
+### Part 6: console
+
+- `apps/console-web` unit (21): API client (credentials, error envelope, network errors, 204,
+  refuses off-host paths), error messages never echo 5xx text, open-redirect protection for
+  `?next=`, invitation tokens only in the URL fragment, slug suggestion.
+- `apps/console-web` e2e (Playwright, each journey at desktop and phone size): sign-in redirect
+  and return; wrong-password alert; off-site `next` ignored; sign-up with password feedback,
+  empty state, create organisation; invite, open link signed-out, sign in, accept, finance
+  officer sees no member management; email mismatch; malformed link makes no API call; not-found
+  organisation; unreachable API with retry; sign-out protects pages; skip link. axe WCAG 2.2 AA
+  scans on each screen. The API is a contract-following fake (`e2e/fake-api.ts`): these tests
+  prove the console, not the API.
 
 ## Critical scenarios to add as features land
 

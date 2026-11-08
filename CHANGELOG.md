@@ -21,6 +21,12 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 2 console** (`apps/console-web`): sign-in, sign-up, organisations list with switcher,
+  create organisation, organisation overview with members and invitations (one-time link with
+  copy), invitation acceptance; loading, empty, error, permission and success states; skip link,
+  labelled fields with linked errors, live regions, phone layouts. Browser calls the API with its
+  session cookie (ADR 0006).
+- Playwright browser tests with axe WCAG 2.2 AA checks, in CI (`bun run test:e2e`).
 - **Phase 2 tenancy and authorisation**: organisations (create, list mine, view, update),
   memberships (list, suspend, reactivate, revoke, last-admin guard), invitations (create with a
   one-time token, list, revoke, accept by matching email). Access-control module with a
