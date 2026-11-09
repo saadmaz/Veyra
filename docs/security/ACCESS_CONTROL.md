@@ -109,8 +109,9 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   `property.profile.read`, `property.settings.manage`, `property.lifecycle.manage`,
   `property.structure.read` and `property.structure.manage`. Each module adds its permissions
   with its first endpoint.
-- **Two evaluation scopes.** `property.*` permissions are evaluated against the route's
-  `:propertyId`; all other permissions against the organisation.
+- **Three evaluation scopes.** `unit.*` permissions are evaluated against the route's `:unitId`,
+  `property.*` against `:propertyId`, all others against the organisation. Unit permissions
+  today: `unit.profile.read`, `unit.residents.read` (names and roles only, no contact details).
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
@@ -119,8 +120,18 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins) |
   | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read` (finance arrives in Phase 6) |
 
-  Security, maintenance, owner and tenant roles arrive with their phases. A role key in the
-  database that the registry does not know grants nothing.
+  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read` |
+  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read` |
+
+  Organisation admins and property managers also hold `unit.profile.read` and
+  `unit.residents.read`; finance officers only `unit.profile.read` (no resident names until
+  billing needs them). Security, maintenance and vendor roles arrive with their phases. A role
+  key in the database that the registry does not know grants nothing.
+- **Derived roles** are never stored as memberships and can never be assigned or invited
+  (`canAssignRole` refuses them; invitations accept only `ASSIGNABLE_ROLE_KEYS`). They come from
+  `app_resident_grants(user)`: an ACTIVE person profile linked to the user, with a non-voided
+  ownership, tenancy (as occupant) or household record whose inclusive period contains **today
+  in the property's time zone**. Access starts and ends with the records, on the next request.
 - **Member baseline:** every effective member, at any scope, may read the organisation's basic
   profile (`organisation.profile.read`), so a property manager's console can name the
   organisation. Nothing else reaches upward.
@@ -165,6 +176,12 @@ For property-scoped permissions (`property.*`), additionally:
 9. Lists (e.g. properties) are filtered server-side to the properties the caller's grants reach
    (`propertiesWithPermission`), never by a client-supplied filter.
 
+For unit-scoped permissions (`unit.*`): the unit must belong to the route's property; covering
+grants are organisation grants, grants on that property, or a (derived) grant on that unit.
+A resident of U1 gets 404 on U2, on the property itself and on organisation member lists (403).
+Any effective grant, including a derived one, makes the user a member with the baseline
+`organisation.profile.read`.
+
 Because grants are read on every request, suspension, revocation and expiry apply to the very
 next request of an existing session.
 
@@ -189,6 +206,11 @@ next request of an existing session.
   - concurrent acceptances are serialised by a conditional update;
   - one pending invitation per email, role and scope (`INVITATION_PENDING`); an expired one is retired
     automatically.
+- **Resident invitations** (`POST /organisations/:id/persons/:personId/invitations`, needs
+  `organisation.member.invite`): role `RESIDENT`, sent to the profile's email; accepting links
+  the profile to the login (`person.linked`) instead of creating a membership. Refused for
+  profiles without email (422), already linked (409), archived (409), or when the login already
+  has another profile in the organisation (409).
 - Every change writes a tenant audit record in the same transaction: `organisation.created`,
   `organisation.updated`, `membership.granted`, `membership.status_changed`,
   `invitation.created`, `invitation.revoked`, `invitation.accepted`.

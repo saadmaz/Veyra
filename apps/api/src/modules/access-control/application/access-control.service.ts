@@ -13,13 +13,16 @@ import {
   permissionsForAssignment,
   propertiesWithPermission,
 } from '../domain/policy';
+import { roleDefinition } from '../domain/roles';
 
 /** What a request may do at one scope. Resolved per request, never cached. */
 export interface OrganisationAccess {
   userId: string;
   organisationId: string;
-  /** Set on property-scoped routes: the property the permissions apply to. */
+  /** Set on property- and unit-scoped routes: the property the permissions apply to. */
   propertyId?: string;
+  /** Set on unit-scoped routes. */
+  unitId?: string;
   permissions: ReadonlySet<Permission>;
 }
 
@@ -29,14 +32,20 @@ export interface LoadedGrants {
   grants: Grant[];
   /** Present when a property was asked for: its status, or null if it is not in the organisation. */
   property?: { status: PropertyStatus } | null;
+  /** Present when a unit was asked for: whether it belongs to that property. */
+  unitInProperty?: boolean;
 }
 
 export interface GrantRepository {
-  /** Null when the organisation does not exist. */
+  /**
+   * Memberships plus derived resident grants (OWNER / TENANT / HOUSEHOLD_MEMBER, scope UNIT,
+   * valid today in the property's time zone). Null when the organisation does not exist.
+   */
   loadGrants(
     userId: string,
     organisationId: string,
     propertyId?: string,
+    unitId?: string,
   ): Promise<LoadedGrants | null>;
 }
 export const GRANT_REPOSITORY = Symbol('GRANT_REPOSITORY');
@@ -67,7 +76,7 @@ export class AccessControlService {
     permission: Permission,
   ): Promise<OrganisationAccess> {
     if (permissionScope(permission) !== 'organisation') {
-      throw new Error(`${permission} is property-scoped; use authoriseProperty`);
+      throw new Error(`${permission} is not organisation-scoped`);
     }
     const access = await this.resolve(userId, organisationId);
     if (!access) throw new ApiError(404, 'NOT_FOUND', 'Organisation not found');
@@ -88,7 +97,7 @@ export class AccessControlService {
     permission: Permission,
   ): Promise<OrganisationAccess> {
     if (permissionScope(permission) !== 'property') {
-      throw new Error(`${permission} is organisation-scoped; use authorise`);
+      throw new Error(`${permission} is not property-scoped`);
     }
     const notFound = () => new ApiError(404, 'NOT_FOUND', 'Not found');
     const loaded = await this.grants.loadGrants(userId, organisationId, propertyId);
@@ -103,6 +112,41 @@ export class AccessControlService {
     const permissions = permissionsAt(loaded.grants, loaded.organisationStatus, scope, now);
     if (!permissions.has(permission)) throw forbidden();
     return { userId, organisationId, propertyId, permissions };
+  }
+
+  /**
+   * Unit-scoped permission check. Covered by an organisation grant, a grant on the unit's
+   * property, or a (derived) grant on the unit itself. Unit not in that property, or not covered
+   * -> 404 (a resident of U1 cannot tell that U2 exists); covered without the permission -> 403.
+   */
+  async authoriseUnit(
+    userId: string,
+    organisationId: string,
+    propertyId: string,
+    unitId: string,
+    permission: Permission,
+  ): Promise<OrganisationAccess> {
+    if (permissionScope(permission) !== 'unit') throw new Error(`${permission} is not unit-scoped`);
+    const notFound = () => new ApiError(404, 'NOT_FOUND', 'Not found');
+    const loaded = await this.grants.loadGrants(userId, organisationId, propertyId, unitId);
+    if (!loaded?.property || !loaded.unitInProperty) throw notFound();
+    const now = this.clock.now();
+    const scope: AccessScope = {
+      type: 'UNIT',
+      unitId,
+      propertyId,
+      propertyStatus: loaded.property.status,
+    };
+    if (!hasCoveringGrant(loaded.grants, scope, now)) throw notFound();
+    const permissions = permissionsAt(loaded.grants, loaded.organisationStatus, scope, now);
+    if (!permissions.has(permission)) throw forbidden();
+    return { userId, organisationId, propertyId, unitId, permissions };
+  }
+
+  /** Current derived resident grants of the user in the organisation (for "my units"). */
+  async residentGrants(userId: string, organisationId: string): Promise<Grant[]> {
+    const loaded = await this.grants.loadGrants(userId, organisationId);
+    return (loaded?.grants ?? []).filter((grant) => roleDefinition(grant.role)?.derived);
   }
 
   /** The caller's organisation-level access, or null when they are not an effective member. */

@@ -176,9 +176,13 @@ model Invitation {
   acceptedById   String?   @map("accepted_by_id") @db.Uuid
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
   invitedById    String    @map("invited_by_id") @db.Uuid
+  /// Set for a resident invitation: accepting links this person profile to the accepting login
+  /// instead of creating a membership (role RESIDENT, organisation scope).
+  personId       String?   @map("person_id") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  person       Person?      @relation(fields: [organisationId, personId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([organisationId])
   @@map("invitations")
@@ -453,6 +457,7 @@ model Person {
   householdMembers  HouseholdMember[]
   emergencyContacts EmergencyContact[]
   vehicles          Vehicle[]
+  invitations       Invitation[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, userId])

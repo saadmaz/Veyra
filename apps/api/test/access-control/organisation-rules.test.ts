@@ -48,6 +48,9 @@ describe('invitation input', () => {
       createInvitationSchema.parse({ email: ' New.Member@Example.TEST ', role: 'FINANCE_OFFICER' }),
     ).toEqual({ email: 'new.member@example.test', role: 'FINANCE_OFFICER' });
     expect(
+      createInvitationSchema.safeParse({ email: 'a@example.test', role: 'OWNER' }).success,
+    ).toBe(false);
+    expect(
       createInvitationSchema.safeParse({ email: 'a@example.test', role: 'PLATFORM_SUPER_ADMIN' })
         .success,
     ).toBe(false);

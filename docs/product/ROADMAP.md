@@ -25,7 +25,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
-| 4     | Resident and unit management             | In progress: Part 1 (data foundation) done |
+| 4     | Resident and unit management             | In progress: Parts 1-2 done; Part 3 (staff API) next |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
@@ -100,8 +100,8 @@ ownership shares as exact fractions; the resident mobile app comes after Phase 4
 | Part | Scope | Status |
 | ---- | ----- | ------ |
 | 1 | Data foundation: persons, ownerships (exact shares summing to 1, deferred check), tenancies with occupants, household members, emergency contacts, vehicles; effective dating, voiding, exclusion constraints, RLS | ✅ Done |
-| 2 | Derived owner/tenant/household access (unit scope); linking a person to a login through an email-verified invitation | Next |
-| 3 | API: people, ownership record and transfer, tenancies (move-in/out), households, vehicles; unit archive refused while occupied | |
+| 2 | Derived owner/tenant/household access (unit scope, today in the property's time zone); resident invitations linking a profile to a login; my units, unit detail, current residents | ✅ Done |
+| 3 | API: people, ownership record and transfer, tenancies (move-in/out), households, vehicles; unit archive refused while occupied | Next |
 | 4 | Console: unit page with residents, property resident list | |
 
 ## Release gates

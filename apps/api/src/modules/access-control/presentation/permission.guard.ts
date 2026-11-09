@@ -5,7 +5,11 @@ import { ROUTE_ACCESS, type RouteAccess } from '../../../platform/auth/route-acc
 import { ApiError } from '../../../platform/errors/api-error';
 import { AccessControlService } from '../application/access-control.service';
 import { isPermission, permissionScope } from '../domain/permissions';
-import { ORGANISATION_ID_PARAM, PROPERTY_ID_PARAM } from './require-permission.decorator';
+import {
+  ORGANISATION_ID_PARAM,
+  PROPERTY_ID_PARAM,
+  UNIT_ID_PARAM,
+} from './require-permission.decorator';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,10 +57,24 @@ export class PermissionGuard implements CanActivate {
         if (typeof propertyId !== 'string' || !UUID.test(propertyId)) {
           throw new ApiError(404, 'NOT_FOUND', 'Not found');
         }
-        req.access = await this.accessControl.authoriseProperty(
+        if (permissionScope(access.permission) === 'property') {
+          req.access = await this.accessControl.authoriseProperty(
+            userId,
+            organisationId.toLowerCase(),
+            propertyId.toLowerCase(),
+            access.permission,
+          );
+          return true;
+        }
+        const unitId = req.params[UNIT_ID_PARAM];
+        if (typeof unitId !== 'string' || !UUID.test(unitId)) {
+          throw new ApiError(404, 'NOT_FOUND', 'Not found');
+        }
+        req.access = await this.accessControl.authoriseUnit(
           userId,
           organisationId.toLowerCase(),
           propertyId.toLowerCase(),
+          unitId.toLowerCase(),
           access.permission,
         );
         return true;

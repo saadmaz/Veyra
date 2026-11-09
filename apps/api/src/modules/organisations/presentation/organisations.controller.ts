@@ -167,6 +167,27 @@ export class OrganisationsController {
     return { data: page.data.map((i) => toInvitationDto(i, now)), nextCursor: page.nextCursor };
   }
 
+  @Post(':organisationId/persons/:personId/invitations')
+  @RequirePermission('organisation.member.invite')
+  @ApiOperation({
+    summary: 'Invite a resident to link their profile to a login (one-time token, email-bound).',
+  })
+  async createResidentInvitation(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('personId', uuid) personId: string,
+    @Req() req: Request,
+  ): Promise<CreateInvitationResponse> {
+    const issued = await this.invitations.createResidentInvitation(
+      access,
+      personId,
+      requestMeta(req),
+    );
+    return {
+      invitation: toInvitationDto(issued.invitation, this.clock.now()),
+      token: issued.token,
+    };
+  }
+
   @Post(':organisationId/invitations/:invitationId/revoke')
   @HttpCode(204)
   @RequirePermission('organisation.member.invite')
@@ -194,11 +215,11 @@ export class InvitationAcceptanceController {
     @Body(new ZodValidationPipe(acceptInvitationSchema)) body: { token: string },
     @Req() req: Request,
   ): Promise<AcceptInvitationResponse> {
-    const { organisation, membership } = await this.invitations.accept(
+    const { organisation, role } = await this.invitations.accept(
       { userId: principal.userId, email: principal.email },
       body.token,
       requestMeta(req),
     );
-    return { organisation: toOrganisationDto(organisation), role: membership.role };
+    return { organisation: toOrganisationDto(organisation), role };
   }
 }

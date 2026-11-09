@@ -77,12 +77,13 @@ no policy is denied.
 
 | Table | SELECT | INSERT / UPDATE | DELETE |
 | ----- | ------ | --------------- | ------ |
-| `organisations` | Current tenant, **or** organisations where the current user has an `ACTIVE` membership | Current tenant only | No grant |
+| `organisations` | Current tenant, **or** organisations where the current user has an `ACTIVE` membership or an `ACTIVE` linked resident profile | Current tenant only | No grant |
 | `memberships` | Current tenant's rows, **or** the current user's own rows | Current tenant only (`WITH CHECK` stops moving a row to another tenant) | No grant |
 | `invitations` | Current tenant, **or** the single row whose `token_hash` the caller presents (`app.invitation_token_hash`) | Current tenant only | No grant |
 | `audit_logs` | Current tenant only | Current tenant, or platform events (`organisation_id IS NULL`) | Rejected by trigger |
 | `properties`, `buildings`, `floors`, `units`, `common_areas` | Current tenant only | Current tenant only | No grant (archive instead) |
-| `persons`, `ownerships`, `tenancies`, `tenancy_occupants`, `household_members`, `vehicles` | Current tenant only | Current tenant only | No grant (void or archive instead) |
+| `persons` | Current tenant, **or** the user's own profiles (`user_id = app_current_user_id()`) | Current tenant only | No grant |
+| `ownerships`, `tenancies`, `tenancy_occupants`, `household_members`, `vehicles` | Current tenant only | Current tenant only | No grant (void or archive instead) |
 | `emergency_contacts` | Current tenant only | Current tenant only | Current tenant only |
 
 **User context.** Before an organisation is chosen ("list my organisations"),

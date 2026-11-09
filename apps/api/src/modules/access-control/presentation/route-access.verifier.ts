@@ -3,7 +3,11 @@ import { PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { ROUTE_ACCESS, type RouteAccess } from '../../../platform/auth/route-access';
 import { isPermission, permissionScope } from '../domain/permissions';
-import { ORGANISATION_ID_PARAM, PROPERTY_ID_PARAM } from './require-permission.decorator';
+import {
+  ORGANISATION_ID_PARAM,
+  PROPERTY_ID_PARAM,
+  UNIT_ID_PARAM,
+} from './require-permission.decorator';
 
 const toArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String) : value === undefined ? [''] : [String(value)];
@@ -61,12 +65,15 @@ export class RouteAccessVerifier implements OnApplicationBootstrap {
         if (!paths.every((path) => path.includes(`:${ORGANISATION_ID_PARAM}`))) {
           problems.push(`${name}: permission route without :${ORGANISATION_ID_PARAM} in its path`);
         }
+        const scope = isPermission(access.permission) ? permissionScope(access.permission) : null;
         if (
-          isPermission(access.permission) &&
-          permissionScope(access.permission) === 'property' &&
+          (scope === 'property' || scope === 'unit') &&
           !paths.every((path) => path.includes(`:${PROPERTY_ID_PARAM}`))
         ) {
           problems.push(`${name}: property permission without :${PROPERTY_ID_PARAM} in its path`);
+        }
+        if (scope === 'unit' && !paths.every((path) => path.includes(`:${UNIT_ID_PARAM}`))) {
+          problems.push(`${name}: unit permission without :${UNIT_ID_PARAM} in its path`);
         }
       }
     }

@@ -22,7 +22,8 @@ export interface Grant {
 /** Where a permission set is evaluated. */
 export type AccessScope =
   | { type: 'ORGANISATION' }
-  | { type: 'PROPERTY'; propertyId: string; propertyStatus: PropertyStatus };
+  | { type: 'PROPERTY'; propertyId: string; propertyStatus: PropertyStatus }
+  | { type: 'UNIT'; unitId: string; propertyId: string; propertyStatus: PropertyStatus };
 
 /**
  * Every effective member may read the organisation's basic profile (name, country, currency),
@@ -41,16 +42,16 @@ export function isGrantEffective(grant: Grant, now: Date): boolean {
 
 /**
  * Whether a grant covers the scope. Inheritance flows downwards only: an organisation grant
- * covers every property, a property grant covers only its own property, and nothing covers the
- * organisation except an organisation grant.
+ * covers every property and unit, a property grant covers its own property and that property's
+ * units, a unit grant covers only its unit. Nothing covers the organisation except an
+ * organisation grant, and nothing covers a property except an organisation or property grant.
  */
 function covers(grant: Grant, scope: AccessScope): boolean {
   if (grant.scopeType === 'ORGANISATION') return true;
-  return (
-    scope.type === 'PROPERTY' &&
-    grant.scopeType === 'PROPERTY' &&
-    grant.scopeId === scope.propertyId
-  );
+  if (scope.type === 'ORGANISATION') return false;
+  if (grant.scopeType === 'PROPERTY') return grant.scopeId === scope.propertyId;
+  if (grant.scopeType === 'UNIT') return scope.type === 'UNIT' && grant.scopeId === scope.unitId;
+  return false;
 }
 
 /** True when at least one effective grant covers the scope ("is this caller in scope?"). */
@@ -76,7 +77,12 @@ export function permissionsAt(
 ): Set<Permission> {
   const permissions = new Set<Permission>();
   if (organisationStatus === 'ARCHIVED') return permissions;
-  const wanted = scope.type === 'ORGANISATION' ? 'organisation' : 'property';
+  const wanted =
+    scope.type === 'ORGANISATION'
+      ? 'organisation'
+      : scope.type === 'PROPERTY'
+        ? 'property'
+        : 'unit';
 
   for (const grant of grants) {
     if (!isGrantEffective(grant, now) || !covers(grant, scope)) continue;
@@ -91,7 +97,7 @@ export function permissionsAt(
   const readOnly =
     organisationStatus === 'SUSPENDED' ||
     organisationStatus === 'OFFBOARDING' ||
-    (scope.type === 'PROPERTY' && scope.propertyStatus === 'ARCHIVED');
+    (scope.type !== 'ORGANISATION' && scope.propertyStatus === 'ARCHIVED');
   if (readOnly) {
     for (const permission of permissions) {
       if (!isReadOnlyPermission(permission)) permissions.delete(permission);
@@ -149,7 +155,7 @@ export function permissionsForAssignment(
   if (organisationStatus !== 'ACTIVE' && organisationStatus !== 'PENDING_ONBOARDING') {
     return permissions;
   }
-  if (scope.type === 'PROPERTY' && scope.propertyStatus === 'ARCHIVED') return permissions;
+  if (scope.type !== 'ORGANISATION' && scope.propertyStatus === 'ARCHIVED') return permissions;
   for (const grant of grants) {
     if (!isGrantEffective(grant, now) || !covers(grant, scope)) continue;
     for (const permission of roleDefinition(grant.role)?.permissions ?? []) {
@@ -171,6 +177,6 @@ export function canAssignRole(
   lookup: (key: string) => RoleDefinition | undefined = roleDefinition,
 ): boolean {
   const definition = lookup(role);
-  if (!definition?.grantableAt.includes(scopeType)) return false;
+  if (!definition?.grantableAt.includes(scopeType) || definition.derived) return false;
   return definition.permissions.every((permission) => actorPermissions.has(permission));
 }
