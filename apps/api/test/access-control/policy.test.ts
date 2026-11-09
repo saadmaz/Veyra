@@ -278,3 +278,75 @@ describe('anti-escalation', () => {
     );
   });
 });
+
+describe('unit scope and derived resident roles', () => {
+  const U1 = '00000000-0000-7000-8000-0000000000c1';
+  const U2 = '00000000-0000-7000-8000-0000000000c2';
+  const unitIn = (
+    unitId: string,
+    propertyId = P1,
+    status: 'ACTIVE' | 'ARCHIVED' = 'ACTIVE',
+  ): AccessScope => ({
+    type: 'UNIT',
+    unitId,
+    propertyId,
+    propertyStatus: status,
+  });
+  const resident = (role: string, unitId: string) =>
+    grant({ role, scopeType: 'UNIT', scopeId: unitId });
+
+  it('classifies unit.* permissions as unit-scoped', () => {
+    expect(permissionScope('unit.profile.read')).toBe('unit');
+  });
+
+  it('an owner covers their unit only, never a sibling unit, the property or the organisation', () => {
+    const owner = [resident('OWNER', U1)];
+    expect([...permissionsAt(owner, 'ACTIVE', unitIn(U1), now)].sort()).toEqual([
+      'unit.profile.read',
+      'unit.residents.read',
+    ]);
+    expect(hasCoveringGrant(owner, unitIn(U2), now)).toBe(false);
+    expect(hasCoveringGrant(owner, property(P1), now)).toBe(false);
+    expect([...organisationPermissions(owner, 'ACTIVE', now)]).toEqual([
+      'organisation.profile.read',
+    ]);
+  });
+
+  it('a household member sees the unit but not who else lives there', () => {
+    const permissions = permissionsAt(
+      [resident('HOUSEHOLD_MEMBER', U1)],
+      'ACTIVE',
+      unitIn(U1),
+      now,
+    );
+    expect([...permissions]).toEqual(['unit.profile.read']);
+  });
+
+  it('staff cover units through their property or organisation grants', () => {
+    expect(hasCoveringGrant([managerOf(P1)], unitIn(U1, P1), now)).toBe(true);
+    expect(hasCoveringGrant([managerOf(P1)], unitIn(U2, P2), now)).toBe(false);
+    expect(permissionsAt([grant()], 'ACTIVE', unitIn(U2, P2), now).has('unit.residents.read')).toBe(
+      true,
+    );
+    // Finance officers see units but not resident names (data minimisation).
+    const finance = permissionsAt([grant({ role: 'FINANCE_OFFICER' })], 'ACTIVE', unitIn(U1), now);
+    expect([...finance]).toEqual(['unit.profile.read']);
+  });
+
+  it('derived roles can never be assigned, even by an organisation admin', () => {
+    const admin = permissionsForAssignment([grant()], 'ACTIVE', unitIn(U1), now);
+    for (const role of ['OWNER', 'TENANT', 'HOUSEHOLD_MEMBER']) {
+      expect(canAssignRole(admin, role, 'UNIT')).toBe(false);
+    }
+  });
+
+  it('a resident of an archived property keeps read access only', () => {
+    const permissions = permissionsAt(
+      [resident('TENANT', U1)],
+      'ACTIVE',
+      unitIn(U1, P1, 'ARCHIVED'),
+      now,
+    );
+    expect([...permissions].sort()).toEqual(['unit.profile.read', 'unit.residents.read']);
+  });
+});

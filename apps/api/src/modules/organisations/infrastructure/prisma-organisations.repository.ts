@@ -12,6 +12,7 @@ import type { RequestMeta } from '../../../platform/request-meta';
 import {
   InvitationPendingError,
   type InvitationRecord,
+  type LinkPersonResult,
   type MembershipRecord,
   type MembershipWithUser,
   type OrganisationRecord,
@@ -19,6 +20,7 @@ import {
   type OrganisationUnitOfWork,
   type Page,
   type PageRequest,
+  type PersonForLink,
   SlugTakenError,
   type TenantAuditEvent,
 } from '../application/ports';
@@ -58,6 +60,7 @@ const INVITATION_SELECT = {
   acceptedAt: true,
   revokedAt: true,
   invitedById: true,
+  personId: true,
   createdAt: true,
 } as const;
 
@@ -255,7 +258,8 @@ class PrismaOrganisationUnitOfWork implements OrganisationUnitOfWork {
     const rows = await this.tx.$queryRawUnsafe<InvitationRecord[]>(
       `SELECT id, organisation_id AS "organisationId", email, role, scope_type::text AS "scopeType",
               scope_id AS "scopeId", expires_at AS "expiresAt", accepted_at AS "acceptedAt",
-              revoked_at AS "revokedAt", invited_by_id AS "invitedById", created_at AS "createdAt"
+              revoked_at AS "revokedAt", invited_by_id AS "invitedById",
+              person_id AS "personId", created_at AS "createdAt"
          FROM invitations WHERE id = $1::uuid AND organisation_id = $2::uuid FOR UPDATE`,
       invitationId,
       this.organisationId,
@@ -293,6 +297,32 @@ class PrismaOrganisationUnitOfWork implements OrganisationUnitOfWork {
       data: { acceptedAt: at, acceptedById: userId },
     });
     return count === 1;
+  }
+
+  getPerson(personId: string): Promise<PersonForLink | null> {
+    return this.tx.person.findFirst({
+      where: { id: personId, organisationId: this.organisationId },
+      select: { id: true, fullName: true, email: true, userId: true, status: true },
+    });
+  }
+
+  async linkPerson(personId: string, userId: string): Promise<LinkPersonResult> {
+    try {
+      const { count } = await this.tx.person.updateMany({
+        where: {
+          id: personId,
+          organisationId: this.organisationId,
+          userId: null,
+          status: 'ACTIVE',
+        },
+        data: { userId },
+      });
+      return count === 1 ? 'LINKED' : 'PERSON_ALREADY_LINKED';
+    } catch (error) {
+      // persons_organisation_id_user_id_key: this login already has a profile here.
+      if (isUniqueViolation(error)) return 'USER_ALREADY_LINKED';
+      throw error;
+    }
   }
 
   async audit(event: TenantAuditEvent): Promise<void> {
@@ -336,22 +366,41 @@ export class PrismaOrganisationsRepository implements OrganisationsRepository {
     );
   }
 
-  listForUser(
+  async listForUser(
     userId: string,
-  ): Promise<{ organisation: OrganisationRecord; memberships: MembershipRecord[] }[]> {
-    return withUserTransaction(this.db, userId, async (tx) => {
-      // Two queries, joined here: RLS shows only organisations with an ACTIVE membership, so a
-      // nested include would fail for memberships whose organisation is hidden.
+  ): Promise<
+    { organisation: OrganisationRecord; memberships: MembershipRecord[]; residentRoles: string[] }[]
+  > {
+    const visible = await withUserTransaction(this.db, userId, async (tx) => {
+      // Two queries, joined here: RLS shows only organisations with an ACTIVE membership or an
+      // ACTIVE linked resident profile, so a nested include would fail for hidden ones.
       const organisations = await tx.organisation.findMany({ select: ORGANISATION_SELECT });
       const memberships = await tx.membership.findMany({
         where: { userId, organisationId: { in: organisations.map((o) => o.id) } },
         select: MEMBERSHIP_SELECT,
       });
-      return organisations.map((organisation) => ({
-        organisation,
-        memberships: memberships.filter((m) => m.organisationId === organisation.id),
-      }));
+      return { organisations, memberships };
     });
+    // Resident roles depend on records visible only in each tenant's own context.
+    const result = [];
+    for (const organisation of visible.organisations) {
+      const residentRoles = await withTenantTransaction(
+        this.db,
+        { organisationId: organisation.id },
+        async (tx) =>
+          (
+            await tx.$queryRaw<{ role: string }[]>`
+              SELECT DISTINCT "role" FROM app_resident_grants(${userId}::uuid)`
+          ).map((row) => row.role),
+        { userId },
+      );
+      result.push({
+        organisation,
+        memberships: visible.memberships.filter((m) => m.organisationId === organisation.id),
+        residentRoles,
+      });
+    }
+    return result;
   }
 
   findInvitationByTokenHash(tokenHash: string): Promise<InvitationRecord | null> {

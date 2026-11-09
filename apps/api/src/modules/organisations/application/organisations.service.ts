@@ -80,10 +80,14 @@ export class OrganisationsService {
     const now = this.clock.now();
     const rows = await this.repository.listForUser(userId);
     return rows
-      .map(({ organisation, memberships }) => ({
+      .map(({ organisation, memberships, residentRoles }) => ({
         organisation,
+        // Assigned roles (memberships) and roles derived today from residency records.
         roles: [
-          ...new Set(memberships.filter((m) => isGrantEffective(m, now)).map((m) => m.role)),
+          ...new Set([
+            ...memberships.filter((m) => isGrantEffective(m, now)).map((m) => m.role),
+            ...residentRoles,
+          ]),
         ].sort(),
       }))
       .filter((row) => row.roles.length > 0 && row.organisation.status !== 'ARCHIVED')

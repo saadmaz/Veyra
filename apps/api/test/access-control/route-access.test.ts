@@ -63,6 +63,13 @@ class PropertyRouteController {
   get() {}
 }
 
+@Controller(':organisationId/properties/:propertyId/units')
+class MissingUnitParamController {
+  @Get()
+  @RequirePermission('unit.profile.read')
+  list() {}
+}
+
 async function verify(...controllers: (new () => unknown)[]) {
   @Module({ imports: [DiscoveryModule], controllers, providers: [RouteAccessVerifier] })
   class TestModule {}
@@ -96,6 +103,12 @@ describe('route access check at startup', () => {
     await expect(verify(PropertyRouteController)).resolves.toBeUndefined();
     await expect(verify(MissingPropertyParamController)).rejects.toThrow(
       /property permission without :propertyId/,
+    );
+  });
+
+  it('requires :unitId for unit-scoped permissions', async () => {
+    await expect(verify(MissingUnitParamController)).rejects.toThrow(
+      /unit permission without :unitId/,
     );
   });
 

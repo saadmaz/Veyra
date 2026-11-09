@@ -4,7 +4,7 @@ import {
   currencySchema,
   timeZoneSchema,
 } from '../../../platform/validation/common-schemas';
-import { ROLE_KEYS, type RoleKey } from '../../access-control';
+import { ASSIGNABLE_ROLE_KEYS, type RoleKey } from '../../access-control';
 
 export { type ListQuery, listQuerySchema } from '../../../platform/validation/common-schemas';
 
@@ -44,7 +44,7 @@ export const createInvitationSchema = z.object({
     .max(254)
     .pipe(z.email({ message: 'Enter a valid email address' }))
     .transform((email) => email.toLowerCase()),
-  role: z.enum(ROLE_KEYS as [RoleKey, ...RoleKey[]]),
+  role: z.enum(ASSIGNABLE_ROLE_KEYS as [RoleKey, ...RoleKey[]]),
   /** Limits the role to one property. Omitted: the role applies to the whole organisation. */
   propertyId: z
     .uuid()

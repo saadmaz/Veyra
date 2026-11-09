@@ -27,11 +27,15 @@ export const PERMISSIONS = [
   'property.structure.read',
   /** Create, edit and archive buildings, floors, units and common areas. */
   'property.structure.manage',
+  /** View a unit and its own details. Unit-scoped: evaluated against the route's :unitId. */
+  'unit.profile.read',
+  /** See who currently owns, rents and lives in a unit (names and roles, no contact details). */
+  'unit.residents.read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export type PermissionScope = 'organisation' | 'property';
+export type PermissionScope = 'organisation' | 'property' | 'unit';
 
 /**
  * Where a permission is evaluated. `property.*` permissions apply to one property (the route's
@@ -39,6 +43,7 @@ export type PermissionScope = 'organisation' | 'property';
  * Everything else applies to the whole organisation and only organisation-scoped grants count.
  */
 export function permissionScope(permission: Permission): PermissionScope {
+  if (permission.startsWith('unit.')) return 'unit';
   return permission.startsWith('property.') ? 'property' : 'organisation';
 }
 

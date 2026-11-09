@@ -23,13 +23,15 @@ import {
 import {
   InvitationPendingError,
   type InvitationRecord,
-  type MembershipRecord,
   ORGANISATIONS_REPOSITORY,
   type OrganisationRecord,
   type OrganisationsRepository,
   type Page,
   type PageRequest,
 } from './ports';
+
+/** Pseudo-role of invitations that link a resident profile instead of granting a membership. */
+export const RESIDENT_ROLE = 'RESIDENT';
 
 /** Acceptance attempts per user, so tokens cannot be guessed through the API. */
 export const INVITATION_ACCEPT_LIMIT = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
@@ -200,7 +202,7 @@ export class InvitationsService {
     user: { userId: string; email: string },
     token: string,
     meta: RequestMeta,
-  ): Promise<{ organisation: OrganisationRecord; membership: MembershipRecord }> {
+  ): Promise<{ organisation: OrganisationRecord; role: string }> {
     await this.enforceAcceptLimit(user.userId);
     if (!isWellFormedOpaqueToken(token)) throw invitationNotFound();
 
@@ -226,7 +228,11 @@ export class InvitationsService {
         'This invitation was sent to a different email address',
       );
     }
-    if (!roleDefinition(invitation.role)?.grantableAt.includes(invitation.scopeType)) {
+    const isResident = invitation.personId !== null;
+    if (
+      !isResident &&
+      !roleDefinition(invitation.role)?.grantableAt.includes(invitation.scopeType)
+    ) {
       throw new ApiError(409, 'INVITATION_INVALID', 'This invitation can no longer be accepted');
     }
 
@@ -251,6 +257,37 @@ export class InvitationsService {
             'This invitation has already been used',
           );
         }
+
+        if (invitation.personId) {
+          // Resident invitation: link the profile; access then derives from its records.
+          const result = await uow.linkPerson(invitation.personId, user.userId);
+          if (result === 'PERSON_ALREADY_LINKED') {
+            throw new ApiError(
+              409,
+              'PERSON_ALREADY_LINKED',
+              'This resident profile is already linked to an account',
+            );
+          }
+          if (result === 'USER_ALREADY_LINKED') {
+            throw new ApiError(
+              409,
+              'USER_ALREADY_LINKED',
+              'Your account is already linked to another resident profile here',
+            );
+          }
+          await uow.audit({
+            action: 'invitation.accepted',
+            resourceType: 'invitation',
+            resourceId: invitation.id,
+          });
+          await uow.audit({
+            action: 'person.linked',
+            resourceType: 'person',
+            resourceId: invitation.personId,
+          });
+          return { organisation, role: 'RESIDENT' };
+        }
+
         const membership = await uow.grantMembership({
           userId: user.userId,
           role: invitation.role,
@@ -269,9 +306,89 @@ export class InvitationsService {
           resourceId: membership.id,
           metadata: { role: invitation.role, via: 'invitation' },
         });
-        return { organisation, membership };
+        return { organisation, role: membership.role };
       },
     );
+  }
+
+  /**
+   * Invites a resident to link their profile to a login. The invitation goes to the profile's
+   * email; accepting it links the profile (never a membership). Owner, tenant and household
+   * access then follows from the profile's records.
+   */
+  async createResidentInvitation(
+    access: OrganisationAccess,
+    personId: string,
+    meta: RequestMeta,
+  ): Promise<IssuedInvitation> {
+    const now = this.clock.now();
+    const token = generateOpaqueToken();
+    try {
+      return await this.repository.inOrganisation(
+        access.organisationId,
+        access.userId,
+        meta,
+        async (uow) => {
+          const person = await uow.getPerson(personId);
+          if (!person) throw new ApiError(404, 'NOT_FOUND', 'Resident not found');
+          if (person.status !== 'ACTIVE') {
+            throw new ApiError(409, 'ARCHIVED', 'This resident profile is archived');
+          }
+          if (person.userId) {
+            throw new ApiError(
+              409,
+              'PERSON_ALREADY_LINKED',
+              'This resident profile is already linked to an account',
+            );
+          }
+          if (!person.email) {
+            throw new ApiError(
+              422,
+              'PERSON_HAS_NO_EMAIL',
+              'Add an email address to the resident profile before inviting them',
+            );
+          }
+
+          const scope = { scopeType: 'ORGANISATION' as const, scopeId: access.organisationId };
+          const pending = await uow.findPendingInvitation(
+            person.email,
+            RESIDENT_ROLE,
+            scope.scopeType,
+            scope.scopeId,
+          );
+          if (pending) {
+            if (invitationStatus(pending, now) === 'PENDING') throw new InvitationPendingError();
+            await uow.revokeInvitation(pending.id, now);
+          }
+
+          const invitation = await uow.createInvitation({
+            email: person.email,
+            role: RESIDENT_ROLE,
+            ...scope,
+            personId,
+            tokenHash: hashOpaqueToken(token),
+            expiresAt: new Date(now.getTime() + INVITATION_LIFETIME_MS),
+            invitedById: access.userId,
+          });
+          await uow.audit({
+            action: 'invitation.created',
+            resourceType: 'invitation',
+            resourceId: invitation.id,
+            metadata: { role: RESIDENT_ROLE },
+          });
+          return { invitation, token };
+        },
+      );
+    } catch (error) {
+      if (error instanceof InvitationPendingError) {
+        throw new ApiError(
+          409,
+          'INVITATION_PENDING',
+          'An invitation for this resident is already pending',
+        );
+      }
+      throw error;
+    }
   }
 
   private async enforceAcceptLimit(userId: string): Promise<void> {

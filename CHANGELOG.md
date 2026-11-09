@@ -21,6 +21,11 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 4 resident access**: unit-scoped permissions (`unit.*` at `:unitId`); derived
+  OWNER, TENANT and HOUSEHOLD_MEMBER roles computed from records effective today in the
+  property's time zone (`app_resident_grants`), never assignable; resident invitations linking a
+  profile to a login; `my-units`, unit detail and current residents endpoints; resident
+  organisations listed under "my organisations" (migration `20261109180000_resident_access`).
 - **Phase 4 resident data foundation** (migration `20261109150000_residents`): persons
   (resident profiles), ownerships with exact fractional shares that must sum to one at every
   date (deferred check), tenancies with occupants, household members, emergency contacts and

@@ -14,10 +14,18 @@ export {
   type OrganisationStatus,
   type PropertyStatus,
 } from './domain/policy';
-export { ROLE_KEYS, ROLES, type RoleKey, roleDefinition, type ScopeType } from './domain/roles';
+export {
+  ASSIGNABLE_ROLE_KEYS,
+  ROLE_KEYS,
+  ROLES,
+  type RoleKey,
+  roleDefinition,
+  type ScopeType,
+} from './domain/roles';
 export {
   CurrentAccess,
   ORGANISATION_ID_PARAM,
   PROPERTY_ID_PARAM,
   RequirePermission,
+  UNIT_ID_PARAM,
 } from './presentation/require-permission.decorator';

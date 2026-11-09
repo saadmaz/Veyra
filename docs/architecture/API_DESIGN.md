@@ -32,8 +32,8 @@ Every error uses one envelope:
 | 401  | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` |
 | 403  | `FORBIDDEN`, `ORIGIN_NOT_ALLOWED`, `ROLE_NOT_ASSIGNABLE`, `INVITATION_EMAIL_MISMATCH` |
 | 404  | `NOT_FOUND` (also returned for resources in another tenant, to avoid leaking existence), `INVITATION_NOT_FOUND` |
-| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `PROPERTY_CODE_TAKEN`, `BUILDING_CODE_TAKEN`, `FLOOR_LEVEL_TAKEN`, `UNIT_NUMBER_TAKEN`, `COMMON_AREA_NAME_TAKEN`, `STRUCTURE_IN_USE`, `ARCHIVED`, `PROPERTY_FINANCIALS_LOCKED`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED` |
-| 422  | domain rule violations, e.g. `BOOKING_SLOT_TAKEN`, `ROLE_SCOPE_MISMATCH` |
+| 409  | `CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_ALREADY_REGISTERED`, `SLUG_TAKEN`, `PROPERTY_CODE_TAKEN`, `BUILDING_CODE_TAKEN`, `FLOOR_LEVEL_TAKEN`, `UNIT_NUMBER_TAKEN`, `COMMON_AREA_NAME_TAKEN`, `STRUCTURE_IN_USE`, `ARCHIVED`, `PROPERTY_FINANCIALS_LOCKED`, `LAST_ADMIN`, `ALREADY_MEMBER`, `INVITATION_PENDING`, `INVITATION_ALREADY_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED`, `PERSON_ALREADY_LINKED`, `USER_ALREADY_LINKED` |
+| 422  | domain rule violations, e.g. `BOOKING_SLOT_TAKEN`, `ROLE_SCOPE_MISMATCH`, `PERSON_HAS_NO_EMAIL` |
 | 429  | `RATE_LIMITED` (with `Retry-After`) |
 | 500  | `INTERNAL_ERROR` (no internals in the message) |
 | 503  | `SERVICE_UNAVAILABLE` |
@@ -82,6 +82,15 @@ change `property.structure.manage`. Lists show active rows; `?status=ARCHIVED` s
 | Common areas | `GET/POST common-areas`, `PATCH common-areas/{id}`, `POST common-areas/{id}/archive` |
 
 Unit `areaSqm` and `shareRatio` are decimal strings (`"85.50"`), never JSON numbers.
+
+## Residents (Phase 4)
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| POST | `/organisations/{organisationId}/persons/{personId}/invitations` | `organisation.member.invite`; links the profile to a login on acceptance |
+| GET | `/organisations/{organisationId}/my-units` | Any member; the caller's units today with their derived roles |
+| GET | `/organisations/{organisationId}/properties/{propertyId}/units/{unitId}` | `unit.profile.read` (includes `myRoles` and `permissions`) |
+| GET | `…/units/{unitId}/residents` | `unit.residents.read`; current owners, tenants and household, names only |
 
 ## Pagination
 

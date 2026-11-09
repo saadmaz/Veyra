@@ -193,6 +193,21 @@ expiry, rehash on sign-in, idempotent sign-out).
 - Household periods cannot overlap; people validated (unique email per organisation, E.164,
   language tag); emergency contacts deletable; active plates unique per property.
 
+### Part 2: resident access
+
+- `apps/api` integration (13): resident invitations link profiles (email-bound, RESIDENT role);
+  an owner is a member with the baseline permission, sees only their unit and its residents
+  (names only), gets 404 on other units, the property and other organisations, 403 on member
+  lists; a household member sees the unit but not the residents; tenancies count from the first
+  **local** day and stop after the last; future and past records grant nothing; ending, voiding
+  or archiving takes effect on the next request; staff see residents, finance officers do not;
+  invitation edge cases (no email, already linked, wrong account, derived roles not invitable).
+- The property's time zone is chosen so its local date differs from the UTC date at test time
+  (Kiritimati from 10:00 UTC, Pago Pago before), so a UTC-based date rule would fail.
+- `apps/api` unit (+7): unit scope coverage (own unit only; staff through property or
+  organisation), household without residents list, finance without names, derived roles never
+  assignable, archived property read-only, startup check for `:unitId`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

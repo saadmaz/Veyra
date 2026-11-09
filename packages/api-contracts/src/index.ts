@@ -365,3 +365,57 @@ export interface CreateCommonAreaRequest {
   type: CommonAreaType;
   buildingId?: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Residents (Phase 4)
+// ---------------------------------------------------------------------------------------------
+
+/** Roles a person holds on a unit because of their records (never assigned directly). */
+export type ResidentRole = 'OWNER' | 'TENANT' | 'HOUSEHOLD_MEMBER';
+
+/** An item of GET /organisations/:id/my-units. */
+export interface MyUnitDto {
+  unitId: string;
+  unitNumber: string;
+  unitType: string;
+  propertyId: string;
+  propertyName: string;
+  buildingName: string | null;
+  roles: ResidentRole[] | string[];
+}
+
+/** GET …/properties/:propertyId/units/:unitId */
+export interface UnitDetailResponse {
+  unitId: string;
+  unitNumber: string;
+  unitType: string;
+  status: string;
+  /** Decimal string, e.g. "85.50". */
+  areaSqm: string | null;
+  propertyId: string;
+  propertyName: string;
+  buildingName: string | null;
+  floorName: string | null;
+  /** The caller's own resident roles on this unit today; empty for staff. */
+  myRoles: string[];
+  permissions: string[];
+}
+
+/** GET …/units/:unitId/residents: current residents, names and roles only. Dates are YYYY-MM-DD. */
+export interface UnitResidentsResponse {
+  owners: {
+    personId: string;
+    fullName: string;
+    shareNumerator: number;
+    shareDenominator: number;
+    since: string;
+  }[];
+  tenants: {
+    personId: string;
+    fullName: string;
+    isPrimary: boolean;
+    since: string;
+    until: string | null;
+  }[];
+  household: { personId: string; fullName: string; relationship: string; since: string }[];
+}

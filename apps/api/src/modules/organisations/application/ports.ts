@@ -35,8 +35,21 @@ export interface InvitationRecord {
   acceptedAt: Date | null;
   revokedAt: Date | null;
   invitedById: string;
+  /** Set for resident invitations (role RESIDENT): the person profile to link. */
+  personId: string | null;
   createdAt: Date;
 }
+
+/** A resident profile, as needed to invite and link it. */
+export interface PersonForLink {
+  id: string;
+  fullName: string;
+  email: string | null;
+  userId: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export type LinkPersonResult = 'LINKED' | 'PERSON_ALREADY_LINKED' | 'USER_ALREADY_LINKED';
 
 export interface Page<T> {
   data: T[];
@@ -105,6 +118,7 @@ export interface OrganisationUnitOfWork {
     tokenHash: string;
     expiresAt: Date;
     invitedById: string;
+    personId?: string;
   }): Promise<InvitationRecord>;
   /** Locks the invitation row until the transaction ends. */
   lockInvitation(invitationId: string): Promise<InvitationRecord | null>;
@@ -119,6 +133,13 @@ export interface OrganisationUnitOfWork {
     userId: string,
     at: Date,
   ): Promise<boolean>;
+
+  getPerson(personId: string): Promise<PersonForLink | null>;
+  /**
+   * Links an active, unlinked person to the user. Refuses when the person is already linked, or
+   * the user already has another profile in this organisation.
+   */
+  linkPerson(personId: string, userId: string): Promise<LinkPersonResult>;
 
   audit(event: TenantAuditEvent): Promise<void>;
 }
@@ -137,10 +158,15 @@ export interface OrganisationsRepository {
     work: (uow: OrganisationUnitOfWork) => Promise<T>,
   ): Promise<T>;
 
-  /** Organisations where the user holds any membership, with those memberships. */
+  /**
+   * Organisations where the user holds a membership or is a linked resident, with their
+   * memberships and today's derived resident roles.
+   */
   listForUser(
     userId: string,
-  ): Promise<{ organisation: OrganisationRecord; memberships: MembershipRecord[] }[]>;
+  ): Promise<
+    { organisation: OrganisationRecord; memberships: MembershipRecord[]; residentRoles: string[] }[]
+  >;
 
   /** The invitation whose token hash is given, visible without tenant context. */
   findInvitationByTokenHash(tokenHash: string): Promise<InvitationRecord | null>;
