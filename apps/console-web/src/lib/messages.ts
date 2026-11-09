@@ -37,6 +37,19 @@ const ERROR_MESSAGES: Record<string, string> = {
   PROPERTY_FINANCIALS_LOCKED:
     'Country and currency can only change while the property is being set up.',
   INVALID_STATE_TRANSITION: 'This change is not possible in the current state.',
+  PERSON_EMAIL_TAKEN: 'Another resident already uses this email address.',
+  PERSON_HAS_NO_EMAIL: 'Add an email address to this resident before inviting them.',
+  PERSON_ALREADY_LINKED: 'This resident already uses the app.',
+  USER_ALREADY_LINKED: 'Your account is already linked to another resident profile here.',
+  OWNERSHIP_CONFLICT: 'An ownership already starts on or after this date. Choose a later date.',
+  TENANCY_OVERLAP: 'This unit already has a tenancy in that period.',
+  HOUSEHOLD_OVERLAP: 'This person is already in the household for that period.',
+  RESIDENCY_RULE_VIOLATED: 'This change would leave ownership shares that do not add up.',
+  UNIT_OCCUPIED: 'This unit is still owned, rented or lived in. End those records first.',
+  PROPERTY_OCCUPIED: 'Some units are still owned, rented or lived in. End those records first.',
+  PLATE_TAKEN: 'A vehicle with this plate is already registered here.',
+  INVALID_PERIOD: 'The end date cannot be before the start date.',
+  VOIDED: 'This record was voided and can no longer be changed.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';
@@ -56,10 +69,22 @@ export function fieldErrors(error: unknown): Record<string, string> {
   return result;
 }
 
+/**
+ * The message for a form whose rule spans several fields (for example ownership shares that must
+ * add up to one): the API's field message for `path` when there is one, otherwise the usual text.
+ */
+export function ruleMessage(error: unknown, path: string): string {
+  return fieldErrors(error)[path] ?? errorMessage(error);
+}
+
 export const ROLE_LABELS: Record<string, string> = {
   ORGANISATION_ADMIN: 'Organisation admin',
   FINANCE_OFFICER: 'Finance officer',
   PROPERTY_MANAGER: 'Property manager',
+  OWNER: 'Owner',
+  TENANT: 'Tenant',
+  HOUSEHOLD_MEMBER: 'Household member',
+  RESIDENT: 'Resident',
 };
 
 /** Roles that can be given for the whole organisation (property managers are per property). */
@@ -104,3 +129,19 @@ export const COMMON_AREA_TYPES = [
   'PARKING',
   'OTHER',
 ] as const;
+
+export const HOUSEHOLD_RELATIONSHIPS = [
+  'SPOUSE_OR_PARTNER',
+  'CHILD',
+  'PARENT',
+  'OTHER_RELATIVE',
+  'DOMESTIC_STAFF',
+  'OTHER',
+] as const;
+
+/** Today as YYYY-MM-DD in the browser's calendar: a sensible default for date fields. */
+export function todayIso(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}

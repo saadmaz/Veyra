@@ -6,7 +6,9 @@ import type {
   CreateInvitationResponse,
   OrganisationDetailResponse,
   Paginated,
+  PersonDto,
   PropertyDetailResponse,
+  PropertyResidentDto,
   UnitDto,
 } from '@veyra/api-contracts';
 import Link from 'next/link';
@@ -29,6 +31,7 @@ import {
   enumLabel,
   errorMessage,
   fieldErrors,
+  roleLabel,
   UNIT_TYPES,
 } from '@/lib/messages';
 import { invitationLink } from '@/lib/navigation';
@@ -158,6 +161,12 @@ export default function PropertyPage() {
           <Units base={base} canManage={canManage} />
           <CommonAreas base={base} canManage={canManage} />
         </>
+      ) : null}
+      {can('property.resident.read') ? (
+        <Residents
+          base={base}
+          canManage={can('property.resident.manage') && p.status !== 'ARCHIVED'}
+        />
       ) : null}
       {canInvite && p.status !== 'ARCHIVED' ? (
         <InviteManager organisationId={organisationId} propertyId={propertyId} />
@@ -322,7 +331,9 @@ function Units({ base, canManage }: { base: string; canManage: boolean }) {
             <tbody>
               {units.data.data.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.number}</td>
+                  <td>
+                    <Link href={`${base}/units/${u.id}`}>{u.number}</Link>
+                  </td>
                   <td>{enumLabel(u.type)}</td>
                   <td>{buildingName(u.buildingId)}</td>
                   <td>{u.areaSqm ?? '—'}</td>
@@ -480,6 +491,103 @@ function CommonAreas({ base, canManage }: { base: string; canManage: boolean }) 
             Add common area
           </Button>
         </form>
+      ) : null}
+    </Card>
+  );
+}
+
+/** Current residents of the property, and a form to add a resident profile. */
+function Residents({ base, canManage }: { base: string; canManage: boolean }) {
+  const residents = useApiQuery<{ data: PropertyResidentDto[] }>(`${base}/residents`);
+  const create = useAction();
+  const [created, setCreated] = useState<PersonDto | null>(null);
+
+  async function onCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const text = (name: string) => String(form.get(name) ?? '').trim() || undefined;
+    let person: PersonDto | undefined;
+    const ok = await create.run(async () => {
+      person = await api.post<PersonDto>(`${base}/persons`, {
+        fullName: String(form.get('fullName') ?? ''),
+        email: text('email'),
+        phone: text('phone'),
+      });
+    });
+    if (ok && person) {
+      setCreated(person);
+      formElement.reset();
+    }
+  }
+
+  const fields = fieldErrors(create.error);
+  const rows = residents.status === 'success' ? residents.data.data : [];
+  return (
+    <Card title="Residents">
+      {residents.status === 'loading' ? <LoadingState label="Loading residents" /> : null}
+      {residents.status === 'error' ? (
+        <ErrorState error={residents.error} onRetry={residents.reload} />
+      ) : null}
+      {residents.status === 'success' && rows.length === 0 ? (
+        <p className="muted">
+          No current residents. Add a resident, then make them an owner or tenant from a unit.
+        </p>
+      ) : null}
+      {rows.length > 0 ? (
+        <ul className="list" aria-label="Current residents">
+          {rows.map((r) => (
+            <li key={r.person.id} className="list__item">
+              <div>
+                <Link href={`${base}/persons/${r.person.id}`} className="list__link">
+                  {r.person.fullName}
+                </Link>
+                <p className="list__meta">
+                  {r.units
+                    .map((u) => `Unit ${u.unitNumber}: ${u.roles.map(roleLabel).join(', ')}`)
+                    .join(' · ')}
+                </p>
+              </div>
+              {r.person.linked ? <span className="badge badge--success">uses the app</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {canManage ? (
+        <form
+          className="form form--inline"
+          onSubmit={onCreate}
+          noValidate
+          aria-label="Add resident"
+        >
+          {create.error ? <Alert>{errorMessage(create.error)}</Alert> : null}
+          <TextField
+            label="Full name"
+            name="fullName"
+            required
+            maxLength={200}
+            error={fields.fullName}
+          />
+          <TextField label="Email (optional)" name="email" type="email" error={fields.email} />
+          <TextField
+            label="Phone (optional)"
+            name="phone"
+            type="tel"
+            hint="International format, for example +923001234567"
+            error={fields.phone}
+          />
+          <Button type="submit" busy={create.busy}>
+            Add resident
+          </Button>
+        </form>
+      ) : null}
+      {created ? (
+        <Alert tone="success" title={`${created.fullName} was added`}>
+          <p>
+            Open a unit to make them an owner, tenant or household member, or{' '}
+            <Link href={`${base}/persons/${created.id}`}>view their profile</Link>.
+          </p>
+        </Alert>
       ) : null}
     </Card>
   );

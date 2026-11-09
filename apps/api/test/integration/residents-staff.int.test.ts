@@ -198,6 +198,16 @@ describe('resident profiles', () => {
     await as(manager).get(`${orgUrl()}/persons`).expect(403);
   });
 
+  it("offers only the property's own and unattached people in pickers", async () => {
+    const fresh = await person('fresh-pick');
+    const list = await as(manager).get(`${pUrl()}/persons?limit=200`).expect(200);
+    const names = list.body.data.map((p: { fullName: string }) => p.fullName);
+    expect(names).toContain('fresh-pick Resident');
+    expect(names).not.toContain('quinn Resident');
+    const filtered = await as(manager).get(`${pUrl()}/persons?query=FRESH-pick`).expect(200);
+    expect(filtered.body.data.map((p: { id: string }) => p.id)).toEqual([fresh]);
+  });
+
   it('keeps contact details away from finance officers', async () => {
     await as(finance).get(`${pUrl()}/residents`).expect(403);
   });

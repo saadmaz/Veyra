@@ -250,7 +250,9 @@ function BuildingUnits({
             <tbody>
               {units.data.data.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.number}</td>
+                  <td>
+                    <Link href={`${propertyBase}/units/${u.id}`}>{u.number}</Link>
+                  </td>
                   <td>{enumLabel(u.type)}</td>
                   <td>{floorName(u.floorId)}</td>
                   <td>{u.areaSqm ?? '—'}</td>

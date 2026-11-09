@@ -119,6 +119,11 @@ export interface ResidentsUnitOfWork {
   createPerson(input: CreatePersonInput): Promise<PersonRecord>;
   updatePerson(personId: string, patch: UpdatePersonInput): Promise<PersonRecord>;
   listPropertyResidents(today: IsoDate): Promise<PropertyResidentRecord[]>;
+  /**
+   * People property staff may pick in forms: related to the property (any record) or with no
+   * records at all yet. Optional name/email filter; at most 200.
+   */
+  listSelectablePersons(query: string | undefined): Promise<PersonRecord[]>;
   personRecordsInProperty(personId: string): Promise<{
     ownerships: OwnershipRecord[];
     tenancies: TenancyRecord[];

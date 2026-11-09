@@ -98,6 +98,7 @@ Staff side (all under `/organisations/{organisationId}`):
 | ------ | ---- | ------ |
 | GET | `persons?query=`, `persons/{personId}` | `organisation.resident.read` (directory) |
 | POST | `properties/{propertyId}/persons` | `property.resident.manage` |
+| GET | `properties/{propertyId}/persons?query=` | `property.resident.read`; people staff may pick for this property: its residents and profiles not attached anywhere yet (max 200) |
 | GET | `properties/{propertyId}/residents` | `property.resident.read`; current residents with units and roles |
 | GET / PATCH | `properties/{propertyId}/persons/{personId}` | read / manage; person, records in this property, emergency contacts |
 | POST / DELETE | `…/persons/{personId}/emergency-contacts[/{contactId}]` | manage |

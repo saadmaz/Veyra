@@ -224,6 +224,22 @@ expiry, rehash on sign-in, idempotent sign-out).
   calendar dates, day-before across month/year/leap boundaries, inclusive overlap, primary
   tenant rule, phone/email/plate normalisation.
 
+- `apps/api` integration (+1): the people picker offers the property's own residents and
+  unattached profiles, never another property's residents.
+
+### Part 4: resident console
+
+- `apps/console-web` e2e (5 journeys, each at desktop and phone size): staff add residents
+  (phone validation shown on the field), set the owner (shares not adding up show the API's
+  message), move in a tenant (overlap refused), register a vehicle (plate normalised) and
+  cannot archive the occupied unit; staff edit a profile, add an emergency contact and invite
+  the resident, who accepts and sees "Your homes"; a resident sees their unit and who lives
+  there with no staff controls and no access to the property page; a household member sees
+  the unit but never requests the residents list; a finance officer sees no resident data.
+  axe scans on each new screen.
+- The fake API mirrors derived resident roles (owner, tenant, household member from current
+  records), unit-scope permissions, exact share sums, overlap and occupancy rules.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

@@ -21,6 +21,12 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 4 resident console**: unit page (ownership history and set owners from a date,
+  tenancies with move-in/move-out, household members, vehicles; residents see who lives
+  there), resident profile page (edit, records, emergency contacts, invite to the app),
+  residents list and "Add resident" on the property page, unit numbers link to unit pages,
+  "Your homes" on the organisation page; people picker endpoint
+  `GET …/properties/{propertyId}/persons`; console API client gains `delete`.
 - **Phase 4 staff residents API**: resident profiles (property-scoped visibility and an
   organisation directory), set owners from a date (first owner or transfer) with exact share
   validation, voiding, tenancies with move-in/move-out, household members, vehicles, emergency

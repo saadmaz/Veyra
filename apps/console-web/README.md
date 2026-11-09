@@ -21,8 +21,14 @@ bun run --cwd apps/console-web dev   # http://localhost:3000 (needs the API on :
 | `/organisations/[id]/properties/new` | Add a property (organisation admins) |
 | `/organisations/[id]/properties/[pid]` | Property overview, activate/archive (admins), buildings, units, common areas, invite a property manager |
 | `/organisations/[id]/properties/[pid]/buildings/[bid]` | A building's floors and units |
+| `/organisations/[id]/properties/[pid]/units/[uid]` | Staff: owners (history, set owners from a date), tenancies (move in, move out), household, vehicles. Residents of the unit: who lives there (names and roles only) |
+| `/organisations/[id]/properties/[pid]/persons/[personId]` | A resident's details (edit), records in the property, emergency contacts, invite to the app |
 
-The organisation page lists the properties the user may see (the API filters them). Controls
+The organisation page lists the properties the user may see (the API filters them) and, for
+residents, "Your homes" (`GET …/my-units`); people with neither see no empty Properties card.
+The property page lists current residents and adds resident profiles; unit numbers link to
+unit pages. Pickers on the unit page list only people staff may choose
+(`GET …/properties/{pid}/persons`). Controls
 appear only when the API reports the matching permission (`permissions` on organisation and
 property responses); the API enforces every action regardless. Archiving asks for confirmation.
 
