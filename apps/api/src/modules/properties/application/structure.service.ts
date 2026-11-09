@@ -111,6 +111,15 @@ export class StructureService {
     return this.inProperty(access, meta, async (uow) => {
       const property = await this.lockedProperty(uow, 'update');
       if (property.status === 'ARCHIVED') return property;
+      // Locks every unit first, so no resident record can be added while this check runs.
+      const occupied = await uow.lockUnitsAndCountOccupied();
+      if (occupied > 0) {
+        throw new ApiError(
+          409,
+          'PROPERTY_OCCUPIED',
+          `${occupied} unit${occupied === 1 ? ' is' : 's are'} still owned, rented or lived in; end those records first`,
+        );
+      }
       const at = this.clock.now();
       const counts = await uow.archiveAllStructure(at);
       const updated = await uow.setPropertyStatus('ARCHIVED', at);
@@ -310,12 +319,21 @@ export class StructureService {
     });
   }
 
-  /** Phase 4 adds: a unit with an active ownership or tenancy cannot be archived. */
+  /** A unit with a current or future ownership, tenancy or household record cannot be archived. */
   archiveUnit(access: OrganisationAccess, unitId: string, meta: RequestMeta) {
     return this.write(access, meta, async (uow) => {
       const unit = await uow.lockUnit(unitId);
       if (!unit) throw notFound('Unit');
       if (unit.status === 'ARCHIVED') return unit;
+      // Current or future ownership, tenancy or household records block archiving. The unit row
+      // is locked (lockUnit), and resident changes take a share lock on it, so they serialise.
+      if (await uow.isUnitOccupied(unitId)) {
+        throw new ApiError(
+          409,
+          'UNIT_OCCUPIED',
+          'This unit is still owned, rented or lived in; end those records first',
+        );
+      }
       const updated = await uow.archiveUnit(unitId, this.clock.now());
       await uow.audit({ action: 'unit.archived', resourceType: 'unit', resourceId: unitId });
       return updated;

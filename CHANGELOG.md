@@ -21,6 +21,13 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 4 staff residents API**: resident profiles (property-scoped visibility and an
+  organisation directory), set owners from a date (first owner or transfer) with exact share
+  validation, voiding, tenancies with move-in/move-out, household members, vehicles, emergency
+  contacts; archiving units and properties refused while occupied
+  (`app_unit_is_occupied`, migration `20261109210000_unit_occupancy`); permissions
+  `organisation.resident.read`, `property.resident.read`, `property.resident.manage`;
+  `databaseErrorCode` helper so database rule violations surface as 409.
 - **Phase 4 resident access**: unit-scoped permissions (`unit.*` at `:unitId`); derived
   OWNER, TENANT and HOUSEHOLD_MEMBER roles computed from records effective today in the
   property's time zone (`app_resident_grants`), never assignable; resident invitations linking a

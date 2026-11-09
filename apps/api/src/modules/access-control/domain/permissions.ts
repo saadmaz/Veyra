@@ -27,6 +27,12 @@ export const PERMISSIONS = [
   'property.structure.read',
   /** Create, edit and archive buildings, floors, units and common areas. */
   'property.structure.manage',
+  /** Search the organisation's resident directory (all profiles, with contact details). */
+  'organisation.resident.read',
+  /** View residents of a property: profiles with contact details and their unit records. */
+  'property.resident.read',
+  /** Add and edit residents of a property; record ownership, tenancies, household, vehicles. */
+  'property.resident.manage',
   /** View a unit and its own details. Unit-scoped: evaluated against the route's :unitId. */
   'unit.profile.read',
   /** See who currently owns, rents and lives in a unit (names and roles, no contact details). */

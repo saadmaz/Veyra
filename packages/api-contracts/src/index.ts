@@ -419,3 +419,125 @@ export interface UnitResidentsResponse {
   }[];
   household: { personId: string; fullName: string; relationship: string; since: string }[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Residents, staff side (Phase 4 Part 3). Dates are YYYY-MM-DD in the property's calendar, with
+// inclusive end dates; null means open-ended.
+// ---------------------------------------------------------------------------------------------
+
+export interface PersonDto {
+  id: string;
+  fullName: string;
+  email: string | null;
+  /** E.164, e.g. "+923001234567". */
+  phone: string | null;
+  /** BCP 47, e.g. "ur-PK". */
+  preferredLanguage: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+  /** True once the profile is linked to a login (resident invitation accepted). */
+  linked: boolean;
+  createdAt: string;
+}
+
+export interface CreatePersonRequest {
+  fullName: string;
+  email?: string;
+  phone?: string;
+  preferredLanguage?: string;
+}
+
+export interface EmergencyContactDto {
+  id: string;
+  name: string;
+  phone: string;
+  relationship: string | null;
+}
+
+export interface OwnershipDto {
+  id: string;
+  unitId: string;
+  personId: string;
+  fullName: string;
+  shareNumerator: number;
+  shareDenominator: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+/** POST …/units/:unitId/owners: owners from `effectiveFrom`; shares must sum to exactly one. */
+export interface SetOwnersRequest {
+  effectiveFrom: string;
+  owners: { personId: string; shareNumerator: number; shareDenominator: number }[];
+}
+
+export interface TenancyDto {
+  id: string;
+  unitId: string;
+  startDate: string;
+  endDate: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  occupants: { personId: string; fullName: string; isPrimary: boolean }[];
+}
+
+export interface CreateTenancyRequest {
+  startDate: string;
+  endDate?: string;
+  /** Exactly one occupant must be primary. */
+  occupants: { personId: string; isPrimary?: boolean }[];
+}
+
+export type HouseholdRelationship =
+  | 'SPOUSE_OR_PARTNER'
+  | 'CHILD'
+  | 'PARENT'
+  | 'OTHER_RELATIVE'
+  | 'DOMESTIC_STAFF'
+  | 'OTHER';
+
+export interface HouseholdMemberDto {
+  id: string;
+  unitId: string;
+  personId: string;
+  fullName: string;
+  relationship: string;
+  validFrom: string;
+  validTo: string | null;
+  voidedAt: string | null;
+}
+
+export interface AddHouseholdMemberRequest {
+  personId: string;
+  relationship: HouseholdRelationship;
+  validFrom: string;
+  validTo?: string;
+}
+
+export interface VehicleDto {
+  id: string;
+  /** Upper case, no spaces. */
+  plate: string;
+  make: string | null;
+  model: string | null;
+  colour: string | null;
+  unitId: string | null;
+  personId: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+}
+
+/** An item of GET …/properties/:propertyId/residents. */
+export interface PropertyResidentDto {
+  person: PersonDto;
+  units: { unitId: string; unitNumber: string; roles: string[] }[];
+}
+
+/** GET …/properties/:propertyId/persons/:personId: the person and their records in this property. */
+export interface PersonDetailResponse {
+  person: PersonDto;
+  ownerships: OwnershipDto[];
+  tenancies: TenancyDto[];
+  household: HouseholdMemberDto[];
+  emergencyContacts: EmergencyContactDto[];
+}

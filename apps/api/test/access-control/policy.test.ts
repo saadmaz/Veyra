@@ -116,10 +116,9 @@ describe('organisation-level permissions', () => {
   it('keeps only read permissions while suspended or offboarding, nothing when archived', () => {
     for (const status of ['SUSPENDED', 'OFFBOARDING'] as const) {
       const permissions = organisationPermissions([grant()], status, now);
-      expect([...permissions].sort()).toEqual([
-        'organisation.member.read',
-        'organisation.profile.read',
-      ]);
+      expect(permissions.has('organisation.member.read')).toBe(true);
+      expect(permissions.has('organisation.member.invite')).toBe(false);
+      for (const permission of permissions) expect(permission.endsWith('.read')).toBe(true);
     }
     expect(organisationPermissions([grant()], 'ARCHIVED', now).size).toBe(0);
   });
@@ -164,8 +163,9 @@ describe('property-level permissions (downward-only inheritance)', () => {
 
   it('makes an archived property read-only', () => {
     const permissions = permissionsAt([grant()], 'ACTIVE', property(P1, 'ARCHIVED'), now);
-    expect([...permissions].sort()).toEqual(['property.profile.read', 'property.structure.read']);
+    expect(permissions.has('property.structure.read')).toBe(true);
     expect(permissions.has('property.structure.manage')).toBe(false);
+    for (const permission of permissions) expect(permission.endsWith('.read')).toBe(true);
   });
 });
 

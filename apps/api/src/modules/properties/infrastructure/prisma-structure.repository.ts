@@ -353,6 +353,24 @@ class PrismaPropertyUnitOfWork implements PropertyUnitOfWork {
     return toUnitRecord(row);
   }
 
+  async isUnitOccupied(unitId: string): Promise<boolean> {
+    const [row] = await this.tx.$queryRaw<{ occupied: boolean }[]>`
+      SELECT app_unit_is_occupied(${unitId}::uuid) AS occupied`;
+    return row?.occupied === true;
+  }
+
+  async lockUnitsAndCountOccupied(): Promise<number> {
+    await this.tx.$queryRaw`
+      SELECT id FROM units
+       WHERE organisation_id = ${this.organisationId}::uuid AND property_id = ${this.propertyId}::uuid
+       FOR NO KEY UPDATE`;
+    const [row] = await this.tx.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM units
+       WHERE organisation_id = ${this.organisationId}::uuid AND property_id = ${this.propertyId}::uuid
+         AND app_unit_is_occupied(id)`;
+    return row?.n ?? 0;
+  }
+
   // ---------------------------------------------------------------------------- common areas
 
   async listCommonAreas(options: ListOptions): Promise<Page<CommonAreaRecord>> {

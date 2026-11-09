@@ -123,9 +123,14 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read` |
   | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read` |
 
-  Organisation admins and property managers also hold `unit.profile.read` and
-  `unit.residents.read`; finance officers only `unit.profile.read` (no resident names until
-  billing needs them). Security, maintenance and vendor roles arrive with their phases. A role
+  Organisation admins and property managers also hold `unit.profile.read`,
+  `unit.residents.read`, `property.resident.read` and `property.resident.manage` (admins also
+  `organisation.resident.read` for the organisation-wide directory); finance officers only
+  `unit.profile.read` (no resident names or contact details until billing needs them).
+- **Resident visibility for property staff:** a property manager sees a person only if the
+  person has a record (ownership, tenancy, household or vehicle, even past or voided) on one of
+  the property's units, or no records at all yet (just created). People of other properties
+  return 404. Security, maintenance and vendor roles arrive with their phases. A role
   key in the database that the registry does not know grants nothing.
 - **Derived roles** are never stored as memberships and can never be assigned or invited
   (`canAssignRole` refuses them; invitations accept only `ASSIGNABLE_ROLE_KEYS`). They come from
