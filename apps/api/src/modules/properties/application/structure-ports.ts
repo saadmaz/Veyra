@@ -137,6 +137,10 @@ export interface PropertyUnitOfWork {
     },
   ): Promise<UnitRecord>;
   archiveUnit(unitId: string, at: Date): Promise<UnitRecord>;
+  /** app_unit_is_occupied: a current or future ownership, tenancy or household record exists. */
+  isUnitOccupied(unitId: string): Promise<boolean>;
+  /** Locks every unit of the property, then counts the occupied ones. */
+  lockUnitsAndCountOccupied(): Promise<number>;
 
   listCommonAreas(options: ListOptions): Promise<Page<CommonAreaRecord>>;
   lockCommonArea(commonAreaId: string): Promise<CommonAreaRecord | null>;

@@ -2,6 +2,7 @@ export {
   createDbClient,
   type DbClient,
   type DbTransaction,
+  databaseErrorCode,
   isUniqueViolation,
   type SessionRow,
   type UserRow,

@@ -245,6 +245,8 @@ describe('a property manager of P1', () => {
     const own = await as(pam).get(`/api/v1/organisations/${orgA}/properties/${p1.id}`).expect(200);
     expect(own.body.permissions).toEqual([
       'property.profile.read',
+      'property.resident.manage',
+      'property.resident.read',
       'property.settings.manage',
       'property.structure.manage',
       'property.structure.read',

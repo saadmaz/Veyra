@@ -208,6 +208,22 @@ expiry, rehash on sign-in, idempotent sign-out).
   organisation), household without residents list, finance without names, derived roles never
   assignable, archived property read-only, startup check for `:unitId`.
 
+### Part 3: staff residents API
+
+- `apps/api` integration (16): profiles with normalised contact data; duplicate email; people
+  of another property hidden from its manager (404) while admins use the directory; finance
+  officers see no contact details; emergency contacts; first owner then transfer to co-owners
+  (old ownership ends the day before); shares not adding up (400) and history rewrites (409);
+  voiding one co-owner refused by the database's commit-time check and reported as 409,
+  voiding both allowed; move-in, overlap, move-out, end before start, voiding; household
+  overlap, end and void; plates normalised, unique per property, freed on archive; archiving
+  refused for units with current or future records and for properties with occupied units;
+  changes refused on archived units; resident list per property; another property's manager
+  and outsiders get 404.
+- `apps/api` unit (+9): exact share sums (thirds, millionths), set-owners validation, real
+  calendar dates, day-before across month/year/leap boundaries, inclusive overlap, primary
+  tenant rule, phone/email/plate normalisation.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

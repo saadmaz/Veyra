@@ -99,6 +99,11 @@ resident invitation (role `RESIDENT`, organisation scope, CHECK); `app_resident_
 returns the user's derived OWNER / TENANT / HOUSEHOLD_MEMBER grants for today in each
 property's time zone, under the caller's RLS context.
 
+Occupancy (migration `20261109210000_unit_occupancy`): `app_unit_is_occupied(unit)` is true
+while a non-voided ownership, tenancy or household record has not ended before the property's
+local today. Archiving units and properties uses it; resident changes lock the unit row
+(`FOR NO KEY UPDATE`), so they and archiving are serialised per unit.
+
 History is kept by effective dating (`effective_from/to`) rather than overwriting, so "who
 owned unit 12B on 2027-03-01" is always answerable.
 
