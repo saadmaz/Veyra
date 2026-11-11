@@ -110,7 +110,7 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   `property.profile.read`, `property.settings.manage`, `property.lifecycle.manage`,
   `property.structure.read` and `property.structure.manage`, the resident permissions below,
   and for visitors (Phase 5) `property.visitor.check_in` (operate a gate), `property.visitor.read`
-  (visit log and invitations) and `property.visitor.manage` (revoke any invitation), and for finance (Phase 6) `property.finance.read` (chart of accounts, charge types, recurring charges, invoices) and `property.finance.manage` (set-up, charge types, recurring charges, billing runs, issuing and discarding invoices). Each module
+  (visit log and invitations) and `property.visitor.manage` (revoke any invitation), and for finance (Phase 6) `property.finance.read` (chart of accounts, charge types, recurring charges, invoices) and `property.finance.manage` (set-up, charge types, recurring charges, billing runs, issuing and discarding invoices, payments, credit notes, closing periods and requesting approvals), and `property.finance.approve` (deciding someone else's request for a payment reversal, refund, write-off or period reopening; the requester can never decide their own request, enforced by the API and by a database CHECK). Each module
   adds its permissions with its first endpoint.
 - **Three evaluation scopes.** `unit.*` permissions are evaluated against the route's `:unitId`,
   `property.*` against `:propertyId`, all others against the organisation. Unit permissions
@@ -122,7 +122,7 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | ---- | ------------ | ----------------- |
   | `ORGANISATION_ADMIN` | Organisation | Every registered permission |
   | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins), and `property.finance.read` (reads billing; does not run it) |
-  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read`, `unit.profile.read`, `property.finance.read`, `property.finance.manage` (Phase 6). Sees the names of the people an invoice is addressed to through finance views, not the resident directory or contact details |
+  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read`, `unit.profile.read`, `property.finance.read`, `property.finance.manage`, `property.finance.approve` (Phase 6). Sees the names of the people an invoice is addressed to through finance views, not the resident directory or contact details |
   | `SECURITY_SUPERVISOR` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in`, `property.visitor.read`, `property.visitor.manage` |
   | `SECURITY_GUARD` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in` (no resident data, no visit log) |
 

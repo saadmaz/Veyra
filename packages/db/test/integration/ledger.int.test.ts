@@ -413,7 +413,8 @@ describe('accounting periods', () => {
         c.query(`UPDATE accounting_periods SET end_date = '2029-02-28' WHERE id = $1`, [id]),
       ),
     ).rejects.toMatchObject({ code: '23514' });
-    // Closing records when; reopening is a status change (who may reopen is the API's rule).
+    // Closing records when. Reopening needs an approval by a second person (Part 4, tested in
+    // controls.int.test.ts); without one it is refused.
     await expect(
       inTenant(ids.orgA, (c) =>
         c.query(`UPDATE accounting_periods SET status = 'CLOSED' WHERE id = $1`, [id]),
@@ -425,12 +426,14 @@ describe('accounting periods', () => {
         [id, ids.clerk],
       ),
     );
-    await inTenant(ids.orgA, (c) =>
-      c.query(
-        `UPDATE accounting_periods SET status = 'OPEN', closed_at = NULL, closed_by_user_id = NULL WHERE id = $1`,
-        [id],
+    await expect(
+      inTenant(ids.orgA, (c) =>
+        c.query(
+          `UPDATE accounting_periods SET status = 'OPEN', closed_at = NULL, closed_by_user_id = NULL WHERE id = $1`,
+          [id],
+        ),
       ),
-    );
+    ).rejects.toMatchObject({ code: '23514', message: expect.stringMatching(/approval/) });
   });
 });
 
@@ -613,7 +616,7 @@ describe('immutability', () => {
     // Everything that references the ledger is included, so only the triggers can refuse it.
     await expect(
       superuser.query(
-        'TRUNCATE payment_allocations, payment_provider_events, payments, payment_intents, invoice_lines, invoice_recipients, invoices, journal_lines, journal_entries',
+        'TRUNCATE finance_approvals, invoice_credits, payment_refunds, payment_reversals, payment_allocations, payment_provider_events, payments, payment_intents, invoice_lines, invoice_recipients, invoices, journal_lines, journal_entries',
       ),
     ).rejects.toMatchObject({
       code: '42501',

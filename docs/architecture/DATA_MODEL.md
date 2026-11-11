@@ -1,6 +1,6 @@
 # Data Model
 
-> Status: Phase 6. Sections 2-5 and the ledger, billing and payment tables in section 6 are implemented;
+> Status: Phase 6. Sections 2-5 and the ledger, billing, payment and control tables in section 6 are implemented;
 > the rest of section 6 and section 8 are the plan.
 > The Prisma schema in `packages/db/prisma/schema.prisma` is the executable source of truth;
 > this document explains intent and invariants.
@@ -224,6 +224,20 @@ tokens, the `payment_intents` SELECT policy also admits the one intent whose
 `app.payment_reference` (`withPaymentReferenceTransaction`). The API sets it only after the
 callback's signature is verified, then continues in that organisation's tenant transaction.
 
+### Controls (migration `20261112180000_controls`)
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `finance_approvals` | action (`REVERSE_PAYMENT`/`REFUND`/`WRITE_OFF`/`REOPEN_PERIOD`), status (`PENDING`/`APPROVED`/`REJECTED`/`CANCELLED`), payment? / invoice? / period?, amount_minor?, refund_method?, reason, requested_by_user, decided_by_user?, decided_at?, decision_note?, executed_at? | Each action names exactly its own target (CHECK; a missing value fails it). **Maker-checker:** APPROVED and REJECTED are decided by someone other than the requester, CANCELLED only by the requester, APPROVED is carried out at once (`executed_at`). Decided once; the request never changes. |
+| `invoice_credits` | unit, invoice, kind (`CREDIT_NOTE`/`WRITE_OFF`), credit_number?, line_number?, amount_minor, reason, credited_on, journal_entry, approval? | Only on issued invoices, never more than the invoice still owes (`app_invoice_settled`: allocations not released plus credits, under the invoice's advisory lock). A credit note names its line, stays within it and is numbered per property; a write-off needs its approval (used once). Its posted entry (source `CREDIT_NOTE`/`WRITE_OFF`, same date) credits exactly the amount to the unit's receivables. Never changes. |
+| `payment_refunds` | unit, payment, amount_minor, method, refunded_on, journal_entry, approval | Only of a payment's unused money (`app_payment_used`: allocations not released plus refunds, under the payment's advisory lock), never of a reversed payment, by the approved method and amount; its posted `REFUND` entry debits exactly the amount from the unit's credit. Never changes. |
+| `payment_reversals` | payment (unique), reversed_on, journal_entry, approval | Only of a payment with nothing allocated or refunded, by the posted reversal of the payment's own entry; afterwards nothing more is allocated or refunded from it. Never changes. |
+
+Allocations (Part 3 trigger replaced) now also count refunds against the payment and credits
+against the invoice, and refuse reversed payments. **Reopening a closed period** (Part 1 guard
+replaced) needs an APPROVED `REOPEN_PERIOD` approval for that period carried out after it was
+closed, so an approval cannot be reused after the period is closed again.
+
 Invariants:
 
 1. For a posted entry, sum(debits) = sum(credits) (posting trigger; the API checks first).
@@ -238,9 +252,9 @@ Invariants:
 6. Accounting policy is defined with qualified finance professionals before VEYRA claims
    statutory accounting support.
 
-Finance entities still to come (Phase 6 Part 4 and later): `CreditNote`, `Refund`,
-`ReconciliationBatch`, `ReconciliationItem`, `Expense`, `Budget`. The ledger, billing and payment
-tables above are in place (the planned `ChargeDefinition` and
+Finance entities still to come (later phases): `ReconciliationBatch`, `ReconciliationItem`,
+`Expense`, `Budget`. The ledger, billing, payment and control tables above are in place (the
+planned `CreditNote` and `Refund` became `invoice_credits` and `payment_refunds`) (the planned `ChargeDefinition` and
 `ChargeSchedule` became `charge_types` and `recurring_charges`).
 
 ## 7. Identity vs person vs relationship

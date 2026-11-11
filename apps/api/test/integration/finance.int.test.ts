@@ -112,22 +112,29 @@ async function ledger(entryId: string) {
   }
 }
 
+/** Closes today's period, or reopens it through a request approved by a second person (Part 4). */
 async function setPeriodStatus(status: 'OPEN' | 'CLOSED') {
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("SELECT set_config('app.organisation_id', $1, true)", [org]);
-    await client.query(
-      `UPDATE accounting_periods
-          SET status = $3::"AccountingPeriodStatus",
-              closed_at = CASE WHEN $3 = 'CLOSED' THEN now() END
-        WHERE property_id = $1 AND $2::date BETWEEN start_date AND end_date`,
-      [P, today(), status],
-    );
-    await client.query('COMMIT');
-  } finally {
-    client.release();
+  const periods = (await as(finance).get(fUrl('periods')).expect(200)).body.data as {
+    id: string;
+    startDate: string;
+    endDate: string;
+  }[];
+  const current = periods.find((p) => p.startDate <= today() && today() <= p.endDate);
+  if (!current) throw new Error('No accounting period for today');
+  if (status === 'CLOSED') {
+    await as(finance)
+      .post(fUrl(`periods/${current.id}/close`))
+      .expect(200);
+    return;
   }
+  const requested = await as(finance)
+    .post(fUrl('approvals'))
+    .send({ action: 'REOPEN_PERIOD', periodId: current.id, reason: 'Test reopening' })
+    .expect(201);
+  await as(admin)
+    .post(fUrl(`approvals/${requested.body.id}/approve`))
+    .send({})
+    .expect(200);
 }
 
 beforeAll(async () => {
@@ -242,9 +249,10 @@ describe('access', () => {
       'SERVICE_CHARGE_INCOME',
       'UTILITY_INCOME',
       'OTHER_INCOME',
+      'BAD_DEBT',
     ]);
     const second = await as(finance).post(fUrl('setup')).expect(200);
-    expect(second.body.accounts).toHaveLength(9);
+    expect(second.body.accounts).toHaveLength(10);
     expect(second.body.chargeTypes.map((c: { code: string }) => c.code)).toEqual([
       'SERVICE',
       'UTILITIES',

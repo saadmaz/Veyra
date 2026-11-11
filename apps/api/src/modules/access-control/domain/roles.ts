@@ -50,6 +50,7 @@ export const ROLES = {
       'property.visitor.manage',
       'property.finance.read',
       'property.finance.manage',
+      'property.finance.approve',
     ],
   },
   PROPERTY_MANAGER: {
@@ -104,6 +105,7 @@ export const ROLES = {
       'unit.profile.read',
       'property.finance.read',
       'property.finance.manage',
+      'property.finance.approve',
     ],
   },
   // ------------------------------------------------------------------ derived resident roles

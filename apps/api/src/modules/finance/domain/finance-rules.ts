@@ -40,6 +40,7 @@ export const DEFAULT_ACCOUNTS: readonly AccountDefinition[] = [
   },
   { code: '4100', name: 'Utility income', type: 'INCOME', systemKey: 'UTILITY_INCOME' },
   { code: '4900', name: 'Other income', type: 'INCOME', systemKey: 'OTHER_INCOME' },
+  { code: '5100', name: 'Bad debts written off', type: 'EXPENSE', systemKey: 'BAD_DEBT' },
 ];
 
 /** The two charge types of the owner's decision: service charges to owners, utilities to occupants. */

@@ -91,13 +91,29 @@ export interface InvoiceRecord {
   totalMinor: bigint;
   /** Sum of the allocations not released. */
   paidMinor: bigint;
+  /** Credit notes and write-offs. */
+  creditedMinor: bigint;
+  /** Issued, not fully settled and past its due date (property-local today). */
+  overdue: boolean;
   journalEntryId: string | null;
   createdAt: Date;
   issuedAt: Date | null;
 }
 
+export interface InvoiceCreditRecord {
+  id: string;
+  kind: 'CREDIT_NOTE' | 'WRITE_OFF';
+  creditNumber: bigint | null;
+  lineNumber: number | null;
+  amountMinor: bigint;
+  reason: string;
+  creditedOn: IsoDate;
+  createdAt: Date;
+}
+
 export interface InvoiceDetailRecord extends InvoiceRecord {
   lines: InvoiceLineRecord[];
+  credits: InvoiceCreditRecord[];
 }
 
 export interface NewInvoice {
@@ -157,6 +173,67 @@ export interface PaymentRecord {
   idempotencyKey: string | null;
   createdAt: Date;
   allocations: AllocationRecord[];
+  refundedMinor: bigint;
+  /** Set when the payment was reversed (e.g. a bounced cheque). */
+  reversedOn: IsoDate | null;
+}
+
+export interface AccountingPeriodRecord {
+  id: string;
+  startDate: IsoDate;
+  endDate: IsoDate;
+  status: 'OPEN' | 'CLOSED';
+  closedAt: Date | null;
+}
+
+export type ApprovalAction = 'REVERSE_PAYMENT' | 'REFUND' | 'WRITE_OFF' | 'REOPEN_PERIOD';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export interface ApprovalRecord {
+  id: string;
+  action: ApprovalAction;
+  status: ApprovalStatus;
+  paymentId: string | null;
+  invoiceId: string | null;
+  periodId: string | null;
+  amountMinor: bigint | null;
+  /** The property's currency. */
+  currency: string;
+  refundMethod: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | null;
+  reason: string;
+  requestedByUserId: string;
+  requestedByName: string;
+  decidedByUserId: string | null;
+  decidedByName: string | null;
+  decidedAt: Date | null;
+  decisionNote: string | null;
+  executedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface StatementData {
+  invoices: { invoiceNumber: bigint; issueDate: IsoDate; totalMinor: bigint; issuedAt: Date }[];
+  credits: {
+    kind: 'CREDIT_NOTE' | 'WRITE_OFF';
+    creditNumber: bigint | null;
+    invoiceNumber: bigint | null;
+    creditedOn: IsoDate;
+    amountMinor: bigint;
+    createdAt: Date;
+  }[];
+  payments: { receiptNumber: bigint; receivedOn: IsoDate; amountMinor: bigint; createdAt: Date }[];
+  refunds: { receiptNumber: bigint; refundedOn: IsoDate; amountMinor: bigint; createdAt: Date }[];
+  reversals: { receiptNumber: bigint; reversedOn: IsoDate; amountMinor: bigint; createdAt: Date }[];
+}
+
+export interface OutstandingInvoice {
+  invoiceId: string;
+  unitId: string;
+  unitNumber: string;
+  billTo: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  dueDate: IsoDate;
+  outstandingMinor: bigint;
 }
 
 export interface NewPayment {
@@ -248,7 +325,7 @@ export interface FinanceUnitOfWork {
   ensureMonthlyPeriod(date: IsoDate): Promise<PeriodState>;
   /** Creates and posts a journal entry; returns its id. */
   postEntry(
-    source: 'INVOICE' | 'PAYMENT' | 'ALLOCATION',
+    source: 'INVOICE' | 'PAYMENT' | 'ALLOCATION' | 'CREDIT_NOTE' | 'WRITE_OFF' | 'REFUND',
     description: string,
     entryDate: IsoDate,
     currency: string,
@@ -299,6 +376,58 @@ export interface FinanceUnitOfWork {
     intentId: string;
     outcome: string;
   }): Promise<void>;
+  /** The ledger entry a payment was posted with. */
+  paymentEntryId(paymentId: string): Promise<string>;
+  /** Posts the mirror image of a posted entry (source REVERSAL); returns its id. */
+  postReversal(entryId: string, date: IsoDate, description: string): Promise<string>;
+  periods(): Promise<AccountingPeriodRecord[]>;
+  period(id: string): Promise<AccountingPeriodRecord | null>;
+  setPeriodStatus(id: string, status: 'OPEN' | 'CLOSED'): Promise<void>;
+  createApproval(input: {
+    action: ApprovalAction;
+    paymentId: string | null;
+    invoiceId: string | null;
+    periodId: string | null;
+    amountMinor: bigint | null;
+    refundMethod: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | null;
+    reason: string;
+  }): Promise<string>;
+  approval(id: string, options?: { lock?: boolean }): Promise<ApprovalRecord | null>;
+  approvals(filter: { status?: ApprovalStatus }): Promise<ApprovalRecord[]>;
+  /** APPROVED also marks the approval carried out (executed_at) in this transaction. */
+  decideApproval(
+    id: string,
+    status: Exclude<ApprovalStatus, 'PENDING'>,
+    note: string | null,
+  ): Promise<void>;
+  createInvoiceCredit(input: {
+    unitId: string;
+    invoiceId: string;
+    kind: 'CREDIT_NOTE' | 'WRITE_OFF';
+    lineNumber: number | null;
+    amountMinor: bigint;
+    reason: string;
+    creditedOn: IsoDate;
+    journalEntryId: string;
+    approvalId: string | null;
+  }): Promise<string>;
+  createRefund(input: {
+    unitId: string;
+    paymentId: string;
+    amountMinor: bigint;
+    method: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE';
+    refundedOn: IsoDate;
+    journalEntryId: string;
+    approvalId: string;
+  }): Promise<void>;
+  createReversal(input: {
+    paymentId: string;
+    reversedOn: IsoDate;
+    journalEntryId: string;
+    approvalId: string;
+  }): Promise<void>;
+  statementData(unitId: string, party: Party): Promise<StatementData>;
+  outstandingInvoices(): Promise<OutstandingInvoice[]>;
   audit(event: FinanceAuditEvent): Promise<void>;
 }
 

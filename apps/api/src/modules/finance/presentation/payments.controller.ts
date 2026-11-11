@@ -61,7 +61,9 @@ export const toPayment = (p: PaymentRecord): PaymentDto => {
     method: p.method,
     amount: money(p.amountMinor, p.currency),
     allocated: money(allocated, p.currency),
-    unallocated: money(p.amountMinor - allocated, p.currency),
+    unallocated: money(p.reversedOn ? 0n : p.amountMinor - allocated - p.refundedMinor, p.currency),
+    refunded: money(p.refundedMinor, p.currency),
+    reversedOn: p.reversedOn,
     receivedOn: p.receivedOn,
     reference: p.reference,
     allocations: p.allocations.map((a) => ({

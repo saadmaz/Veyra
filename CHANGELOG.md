@@ -23,6 +23,14 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 6 controls and reports** (migration `20261112180000_controls`): maker-checker
+  approvals for payment reversals, refunds, write-offs and reopening a closed period (any finance
+  officer or organisation admin other than the requester approves; new permission
+  `property.finance.approve`), carried out in the approving transaction and enforced by the
+  database; credit notes (`CRN-000001`) correcting issued invoice lines; closing accounting
+  periods; unit statements per party with a running balance; ageing by days past due; invoices
+  show credited and overdue, payments refunded and reversed. New default account: bad debts (re-run
+  set-up to add it). 15 database, 3 unit and 8 API integration tests.
 - **Phase 6 payments** (migration `20261112150000_payments`): recording bank transfers, cash and
   cheques for a unit's owners or tenancy, with an `Idempotency-Key` so a retry never records
   twice; each payment is its receipt (`RCT-000001`). Payments post to the unit's credit and are

@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { API_ENV, type ApiEnv } from '../../platform/config/env';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { ControlsService } from './application/controls.service';
 import { FinanceService } from './application/finance.service';
 import { FINANCE_REPOSITORY } from './application/finance-ports';
 import { PAYMENT_GATEWAYS, type PaymentGateway } from './application/payment-gateway';
 import { PaymentsService } from './application/payments.service';
 import { PrismaFinanceRepository } from './infrastructure/prisma-finance.repository';
 import { SandboxPaymentGateway } from './infrastructure/sandbox-payment-gateway';
+import { ControlsController } from './presentation/controls.controller';
 import { FinanceController } from './presentation/finance.controller';
 import { PaymentCallbacksController, PaymentsController } from './presentation/payments.controller';
 
@@ -27,10 +29,16 @@ function paymentGateways(env: ApiEnv): ReadonlyMap<string, PaymentGateway> {
  */
 @Module({
   imports: [AccessControlModule],
-  controllers: [FinanceController, PaymentsController, PaymentCallbacksController],
+  controllers: [
+    FinanceController,
+    PaymentsController,
+    PaymentCallbacksController,
+    ControlsController,
+  ],
   providers: [
     FinanceService,
     PaymentsService,
+    ControlsService,
     { provide: FINANCE_REPOSITORY, useClass: PrismaFinanceRepository },
     { provide: PAYMENT_GATEWAYS, useFactory: paymentGateways, inject: [API_ENV] },
   ],
