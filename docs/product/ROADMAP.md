@@ -28,7 +28,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
 | 6     | Finance and billing                      | Done. Exit review: [PHASE_6_REVIEW](../reviews/PHASE_6_REVIEW.md) |
-| 7     | Maintenance and work orders              | |
+| 7     | Maintenance and work orders              | In progress (Part 1 done) |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
 | 10    | Communications and documents             | |
@@ -165,6 +165,28 @@ ledger lines; callbacks are idempotent; no card data is stored.
 | 4 | Controls and reports: maker-checker for reversals, write-offs, refunds and period reopening; credit notes; statements, overdue status and ageing | ✅ Done |
 | 5 | Console finance screens for staff over the existing API: set-up, charge types and recurring charges, billing runs, invoices (one-off drafts, issue, discard, credit notes), payments (record, apply, take back), maker-checker requests and decisions, ageing, statements, periods; browser journeys per role | ✅ Done |
 | 6 | Residents: unit-scoped finance read permissions for owners and current tenants (their own party only), their invoices, receipts and statement in the console, and bank-transfer references submitted for finance to confirm (new table, RLS, confirm or reject); browser journeys; Phase 6 exit review | ✅ Done |
+
+## Phase 7 plan (Maintenance and work orders)
+
+Decisions (owner, 2026-11-11):
+
+- **Who raises requests:** owners, tenants and household members of the unit (the same people
+  who register visitors), and staff from the console, also for common areas.
+- **Photos:** before/after evidence is in scope, so Phase 7 adds S3-compatible file storage
+  (MinIO locally) that later modules reuse.
+- **Costs:** labour, materials and other costs are recorded for reporting only; charging a
+  resident for damage stays a one-off invoice raised by finance by hand.
+- **Workforce and SLAs:** new Maintenance Manager and Technician roles per property; technicians
+  see only work assigned to them. SLA targets per priority per property; a worker job flags
+  breaches into the manager's queue. Vendors arrive in Phase 9, notifications in Phase 10.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Data foundation: SLA targets, requests (unit or common area) and work orders numbered per property, validated status transitions with required reasons, resolution only when the work is done, database-owned timestamps and due times, costs corrected by voiding, append-only history written by the database, RLS | ✅ Done |
+| 2 | Roles and API: Maintenance Manager and Technician; residents raise, follow, confirm or reopen their unit's requests (resident-visible history only); staff triage, accept, reject, raise and assign work orders, add notes; technicians see and progress only their own work and record costs | |
+| 3 | File storage: S3-compatible adapter (MinIO in Docker Compose), signed upload and download URLs, type and size limits, tenant-scoped keys; photos on requests and work orders | |
+| 4 | SLAs: targets per property in the API; a worker job marks response and resolution breaches; the manager's queue sorted by urgency and breach | |
+| 5 | Console: residents' maintenance pages, the manager's queue and request page, the technician's work list; browser journeys; Phase 7 exit review | |
 
 ## Release gates
 

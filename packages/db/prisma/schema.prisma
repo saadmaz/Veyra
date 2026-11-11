@@ -68,6 +68,13 @@ model User {
   paymentReversalsCreated PaymentReversal[]        @relation("PaymentReversalCreatedBy")
   bankTransfersSubmitted  BankTransferSubmission[] @relation("BankTransferSubmittedBy")
   bankTransfersDecided    BankTransferSubmission[] @relation("BankTransferDecidedBy")
+  maintenanceRequests     MaintenanceRequest[]     @relation("MaintenanceRequestSubmittedBy")
+  maintenanceAccepted     MaintenanceRequest[]     @relation("MaintenanceRequestAcceptedBy")
+  workOrdersAssigned      WorkOrder[]              @relation("WorkOrderAssignee")
+  workOrdersCreated       WorkOrder[]              @relation("WorkOrderCreatedBy")
+  workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
+  workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
+  maintenanceEvents       MaintenanceEvent[]       @relation("MaintenanceEventActor")
 
   @@map("users")
 }
@@ -360,6 +367,12 @@ model Property {
   financeApprovals FinanceApproval[]
   bankTransfers    BankTransferSubmission[]
 
+  maintenanceSlaTargets MaintenanceSlaTarget[]
+  maintenanceRequests   MaintenanceRequest[]
+  workOrders            WorkOrder[]
+  workOrderCosts        WorkOrderCost[]
+  maintenanceEvents     MaintenanceEvent[]
+
   @@unique([organisationId, id])
   @@unique([organisationId, code])
   @@map("properties")
@@ -451,6 +464,9 @@ model Unit {
   paymentIntents   PaymentIntent[]
   bankTransfers    BankTransferSubmission[]
 
+  maintenanceRequests MaintenanceRequest[]
+  workOrders          WorkOrder[]
+
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
   @@index([buildingId])
@@ -473,6 +489,10 @@ model CommonArea {
   property Property  @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
   building Building? @relation(fields: [organisationId, propertyId, buildingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
 
+  maintenanceRequests MaintenanceRequest[]
+  workOrders          WorkOrder[]
+
+  @@unique([organisationId, propertyId, id])
   @@unique([propertyId, name])
   @@index([organisationId, propertyId])
   @@map("common_areas")
@@ -1642,4 +1662,249 @@ model BankTransferSubmission {
   @@index([organisationId, propertyId, status, createdAt])
   @@index([organisationId, unitId])
   @@map("bank_transfer_submissions")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Maintenance and work orders (Phase 7). A resident or staff member reports a problem (request);
+// staff accept it and do the work through work orders, record costs (for reporting only) and
+// the resident confirms or reopens. Every status change is logged by the database. Rules are
+// hand-written in migration 20261114090000_maintenance.
+// ---------------------------------------------------------------------------------------------
+
+enum MaintenanceCategory {
+  PLUMBING
+  ELECTRICAL
+  HVAC
+  APPLIANCE
+  STRUCTURAL
+  CARPENTRY
+  PAINTING
+  PEST_CONTROL
+  CLEANING
+  LIFT
+  SECURITY_SYSTEM
+  OTHER
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MaintenanceRequestStatus {
+  /// Reported; waiting for staff to look at it.
+  SUBMITTED
+  /// Staff took it on; work orders do the work.
+  ACCEPTED
+  /// Work done; waiting for the requester to confirm (or reopen).
+  RESOLVED
+  /// Confirmed, or closed by staff. Final.
+  CLOSED
+  /// Declined by staff with a reason. Final.
+  REJECTED
+  /// Withdrawn before the work was done. Final.
+  CANCELLED
+}
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  /// Final.
+  COMPLETED
+  /// Final.
+  CANCELLED
+}
+
+enum WorkOrderCostKind {
+  LABOUR
+  MATERIAL
+  OTHER
+}
+
+enum MaintenanceEventType {
+  /// A status change of a request or work order (written by the database only).
+  STATUS_CHANGED
+  /// A work order's assignee changed (written by the database only).
+  ASSIGNEE_CHANGED
+  /// A request's or work order's priority changed (written by the database only).
+  PRIORITY_CHANGED
+  /// A note or an update for the requester.
+  NOTE
+}
+
+enum MaintenanceEventVisibility {
+  /// Shown to the requester and the unit's residents.
+  RESIDENT
+  /// Staff only.
+  INTERNAL
+}
+
+/// How quickly a property promises to respond to (accept) and resolve requests of a priority.
+model MaintenanceSlaTarget {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  organisationId    String              @map("organisation_id") @db.Uuid
+  propertyId        String              @map("property_id") @db.Uuid
+  priority          MaintenancePriority
+  responseMinutes   Int                 @map("response_minutes")
+  resolutionMinutes Int                 @map("resolution_minutes")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([propertyId, priority])
+  @@index([organisationId, propertyId])
+  @@map("maintenance_sla_targets")
+}
+
+/// A reported problem in a unit or a common area. The report itself never changes; its status
+/// moves only along the allowed transitions, each logged in maintenance_events.
+model MaintenanceRequest {
+  id                String                   @id @default(uuid(7)) @db.Uuid
+  organisationId    String                   @map("organisation_id") @db.Uuid
+  propertyId        String                   @map("property_id") @db.Uuid
+  /// Exactly one of unit and common area.
+  unitId            String?                  @map("unit_id") @db.Uuid
+  commonAreaId      String?                  @map("common_area_id") @db.Uuid
+  /// Sequential per property, assigned on insert (MR-000042).
+  requestNumber     BigInt?                  @map("request_number")
+  category          MaintenanceCategory
+  priority          MaintenancePriority
+  title             String
+  description       String
+  /// Where exactly, e.g. "Kitchen sink".
+  locationDetail    String?                  @map("location_detail")
+  status            MaintenanceRequestStatus @default(SUBMITTED)
+  /// The reason given with the latest status change that needs one (reject, cancel, reopen).
+  statusNote        String?                  @map("status_note")
+  submittedByUserId String                   @map("submitted_by_user_id") @db.Uuid
+  acceptedByUserId  String?                  @map("accepted_by_user_id") @db.Uuid
+  acceptedAt        DateTime?                @map("accepted_at") @db.Timestamptz(3)
+  /// From the property's SLA target for the priority (null without a target).
+  responseDueAt     DateTime?                @map("response_due_at") @db.Timestamptz(3)
+  resolutionDueAt   DateTime?                @map("resolution_due_at") @db.Timestamptz(3)
+  resolvedAt        DateTime?                @map("resolved_at") @db.Timestamptz(3)
+  closedAt          DateTime?                @map("closed_at") @db.Timestamptz(3)
+  reopenCount       Int                      @default(0) @map("reopen_count")
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit        Unit?              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea  CommonArea?        @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  submittedBy User               @relation("MaintenanceRequestSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  acceptedBy  User?              @relation("MaintenanceRequestAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workOrders  WorkOrder[]
+  events      MaintenanceEvent[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, requestNumber])
+  @@index([organisationId, propertyId, status, createdAt])
+  @@index([organisationId, unitId])
+  @@map("maintenance_requests")
+}
+
+/// A piece of work, from an accepted request or raised by staff directly.
+model WorkOrder {
+  id               String              @id @default(uuid(7)) @db.Uuid
+  organisationId   String              @map("organisation_id") @db.Uuid
+  propertyId       String              @map("property_id") @db.Uuid
+  requestId        String?             @map("request_id") @db.Uuid
+  /// Exactly one of unit and common area; the request's when there is one.
+  unitId           String?             @map("unit_id") @db.Uuid
+  commonAreaId     String?             @map("common_area_id") @db.Uuid
+  /// Sequential per property, assigned on insert (WO-000042).
+  workOrderNumber  BigInt?             @map("work_order_number")
+  category         MaintenanceCategory
+  priority         MaintenancePriority
+  title            String
+  description      String?
+  status           WorkOrderStatus     @default(OPEN)
+  /// The reason or note given with the latest status change that needs one (cancel, complete).
+  statusNote       String?             @map("status_note")
+  assignedToUserId String?             @map("assigned_to_user_id") @db.Uuid
+  createdByUserId  String              @map("created_by_user_id") @db.Uuid
+  dueAt            DateTime?           @map("due_at") @db.Timestamptz(3)
+  startedAt        DateTime?           @map("started_at") @db.Timestamptz(3)
+  completedAt      DateTime?           @map("completed_at") @db.Timestamptz(3)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  request    MaintenanceRequest? @relation(fields: [organisationId, propertyId, requestId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit       Unit?               @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea CommonArea?         @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignedTo User?               @relation("WorkOrderAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User                @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  costs      WorkOrderCost[]
+  events     MaintenanceEvent[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, workOrderNumber])
+  @@index([organisationId, propertyId, status, createdAt])
+  @@index([organisationId, assignedToUserId, status])
+  @@index([organisationId, requestId])
+  @@map("work_orders")
+}
+
+/// Labour, materials or other cost of a work order, for reporting (never billed in Phase 7).
+/// Corrected by voiding, never edited.
+model WorkOrderCost {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  organisationId   String            @map("organisation_id") @db.Uuid
+  propertyId       String            @map("property_id") @db.Uuid
+  workOrderId      String            @map("work_order_id") @db.Uuid
+  kind             WorkOrderCostKind
+  description      String
+  /// Minor units, positive.
+  amountMinor      BigInt            @map("amount_minor")
+  /// The property's currency.
+  currency         String            @db.Char(3)
+  recordedByUserId String            @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt         DateTime?         @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId   String?           @map("voided_by_user_id") @db.Uuid
+  voidReason       String?           @map("void_reason")
+
+  property   Property  @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder  WorkOrder @relation(fields: [organisationId, propertyId, workOrderId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy User      @relation("WorkOrderCostRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy   User?     @relation("WorkOrderCostVoidedBy", fields: [voidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, workOrderId])
+  @@map("work_order_costs")
+}
+
+/// History of a request and its work orders. Append-only for every role. Status, assignee and
+/// priority changes are written by the database itself; notes by the application.
+model MaintenanceEvent {
+  id             String                     @id @default(uuid(7)) @db.Uuid
+  /// The order of history (several events can share a timestamp).
+  sequence       BigInt                     @default(autoincrement())
+  organisationId String                     @map("organisation_id") @db.Uuid
+  propertyId     String                     @map("property_id") @db.Uuid
+  /// Set on every event of a request or of a work order that belongs to one.
+  requestId      String?                    @map("request_id") @db.Uuid
+  workOrderId    String?                    @map("work_order_id") @db.Uuid
+  type           MaintenanceEventType
+  visibility     MaintenanceEventVisibility
+  fromValue      String?                    @map("from_value")
+  toValue        String?                    @map("to_value")
+  body           String?
+  actorUserId    String?                    @map("actor_user_id") @db.Uuid
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property  Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  request   MaintenanceRequest? @relation(fields: [organisationId, propertyId, requestId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder WorkOrder?          @relation(fields: [organisationId, propertyId, workOrderId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor     User?               @relation("MaintenanceEventActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([sequence])
+  @@index([organisationId, requestId, sequence])
+  @@index([organisationId, workOrderId, sequence])
+  @@map("maintenance_events")
 }

@@ -497,6 +497,30 @@ expiry, rehash on sign-in, idempotent sign-out).
   reason and "not found" for the owners' invoice; an owner reads an invoice. axe WCAG 2.2 AA and
   no horizontal scroll on phones.
 
+## Phase 7 tests
+
+### Part 1: maintenance data (`packages/db` integration, 16, `maintenance.int.test.ts`)
+
+- Requests are numbered per property and get response and resolution due times from the
+  property's SLA target for their priority (none without a target), recomputed and logged when
+  the priority changes.
+- Exactly one place (unit or common area), never an archived one; trimmed text; what was
+  reported never changes; accepted-by/at, reopen count and due times cannot be set by a client.
+- Only the allowed request transitions, with a reason to reject, cancel or reopen; final states
+  never change; acceptance records the current user; a request resolves only with completed work
+  and none open, and cancels only with no open work; reopen, resolve again and close, with the
+  full resident-visible history in order and the reopening resident as actor.
+- Work orders are numbered per property, raised only for accepted requests and at their place;
+  open work has no assignee and assigned work has one; only the allowed transitions, with a note
+  to pause, complete or cancel; start and completion times set by the database; the internal
+  history records each status and assignee change with its actor; work never moves to another
+  request or place.
+- Costs only in the property currency and never on cancelled work; never edited, voided once.
+- History: the application adds notes only; a work order's note is filed under its request;
+  UPDATE, DELETE and TRUNCATE are refused even for the superuser; the application cannot delete
+  requests.
+- Another organisation, and a connection without tenant context, see none of it.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
