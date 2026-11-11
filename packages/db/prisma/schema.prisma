@@ -50,6 +50,10 @@ model User {
   walkInRequestsDecided     WalkInRequest[]     @relation("WalkInDecidedBy")
   visitsReviewed            Visit[]             @relation("VisitReviewedBy")
 
+  accountingPeriodsClosed AccountingPeriod[] @relation("PeriodClosedBy")
+  journalEntriesCreated   JournalEntry[]     @relation("JournalEntryCreatedBy")
+  journalEntriesPosted    JournalEntry[]     @relation("JournalEntryPostedBy")
+
   @@map("users")
 }
 
@@ -328,6 +332,10 @@ model Property {
   accessEvents       AccessEvent[]
   walkInRequests     WalkInRequest[]
 
+  ledgerAccounts    LedgerAccount[]
+  accountingPeriods AccountingPeriod[]
+  journalEntries    JournalEntry[]
+
   @@unique([organisationId, id])
   @@unique([organisationId, code])
   @@map("properties")
@@ -411,6 +419,8 @@ model Unit {
   visitorInvitations VisitorInvitation[]
   visits             Visit[]
   walkInRequests     WalkInRequest[]
+
+  journalLines JournalLine[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -853,4 +863,161 @@ model WalkInRequest {
   @@index([organisationId, unitId, expiresAt])
   @@index([organisationId, propertyId, createdAt])
   @@map("walk_in_requests")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Finance ledger (Phase 6). Double-entry, per property, in the property's currency. Posting
+// rules, immutability of posted entries, reversals and the period lock are hand-written in
+// migration 20261112090000_ledger. Amounts are integers in the currency's minor unit (bigint),
+// never floating point.
+// ---------------------------------------------------------------------------------------------
+
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum LedgerAccountStatus {
+  ACTIVE
+  /// Kept for history; refuses new postings.
+  ARCHIVED
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  /// No posting may be dated inside a closed period.
+  CLOSED
+}
+
+enum JournalEntryStatus {
+  /// Being prepared: lines may be added, changed or removed, and the draft may be deleted.
+  DRAFT
+  /// Immutable. Corrected only by a reversing entry.
+  POSTED
+}
+
+/// What produced the entry. Business documents (invoices, payments, credit notes, refunds,
+/// write-offs) add their own values as they are built.
+enum JournalSource {
+  MANUAL
+  OPENING_BALANCE
+  REVERSAL
+}
+
+/// An account in a property's chart of accounts. Accounts are archived, never deleted.
+model LedgerAccount {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  organisationId String              @map("organisation_id") @db.Uuid
+  propertyId     String              @map("property_id") @db.Uuid
+  /// Unique within the property, e.g. "1100". Upper-case letters, digits, dots and hyphens.
+  code           String
+  name           String
+  type           LedgerAccountType
+  /// Set on accounts the system posts to (e.g. RECEIVABLES, UNIT_CREDIT); unique per property.
+  systemKey      String?             @map("system_key")
+  status         LedgerAccountStatus @default(ACTIVE)
+  archivedAt     DateTime?           @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines    JournalLine[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, code])
+  @@unique([propertyId, systemKey])
+  @@map("ledger_accounts")
+}
+
+/// A span of the property's local calendar (inclusive dates). Postings must fall inside an OPEN
+/// period; periods of one property never overlap.
+model AccountingPeriod {
+  id             String                 @id @default(uuid(7)) @db.Uuid
+  organisationId String                 @map("organisation_id") @db.Uuid
+  propertyId     String                 @map("property_id") @db.Uuid
+  startDate      DateTime               @map("start_date") @db.Date
+  endDate        DateTime               @map("end_date") @db.Date
+  status         AccountingPeriodStatus @default(OPEN)
+  closedAt       DateTime?              @map("closed_at") @db.Timestamptz(3)
+  closedByUserId String?                @map("closed_by_user_id") @db.Uuid
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  closedBy User?    @relation("PeriodClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, startDate])
+  @@map("accounting_periods")
+}
+
+/// A ledger transaction. Posting checks balance, accounts, the period and the currency, and
+/// assigns the next entry number of the property; after that nothing about it changes.
+model JournalEntry {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  organisationId  String             @map("organisation_id") @db.Uuid
+  propertyId      String             @map("property_id") @db.Uuid
+  /// Sequential per property, assigned when posted (no gaps among posted entries).
+  entryNumber     BigInt?            @map("entry_number")
+  /// The accounting date, in the property's local calendar.
+  entryDate       DateTime           @map("entry_date") @db.Date
+  description     String
+  source          JournalSource
+  /// ISO 4217; always the property's currency.
+  currency        String             @db.Char(3)
+  status          JournalEntryStatus @default(DRAFT)
+  /// The posted entry this one reverses (source REVERSAL). An entry is reversed at most once.
+  reversesEntryId String?            @map("reverses_entry_id") @db.Uuid
+  /// Null when the system created it (e.g. a payment provider callback).
+  createdByUserId String?            @map("created_by_user_id") @db.Uuid
+  postedAt        DateTime?          @map("posted_at") @db.Timestamptz(3)
+  postedByUserId  String?            @map("posted_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  reverses   JournalEntry? @relation("Reversal", fields: [organisationId, propertyId, reversesEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversedBy JournalEntry? @relation("Reversal")
+  createdBy  User?         @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  postedBy   User?         @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines      JournalLine[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([organisationId, propertyId, id, currency])
+  @@unique([organisationId, propertyId, reversesEntryId])
+  @@unique([propertyId, entryNumber])
+  @@index([organisationId, propertyId, entryDate])
+  @@map("journal_entries")
+}
+
+/// One side of a ledger transaction: exactly one of debit or credit is positive.
+model JournalLine {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  propertyId     String   @map("property_id") @db.Uuid
+  entryId        String   @map("entry_id") @db.Uuid
+  /// Order within the entry, from 1.
+  lineNumber     Int      @map("line_number")
+  accountId      String   @map("account_id") @db.Uuid
+  /// The unit the amount concerns (receivables, unit credit); null for property-level lines.
+  unitId         String?  @map("unit_id") @db.Uuid
+  /// Minor units of the currency (e.g. paisa). Never negative.
+  debitMinor     BigInt   @default(0) @map("debit_minor")
+  creditMinor    BigInt   @default(0) @map("credit_minor")
+  /// ISO 4217; always the entry's currency (composite key).
+  currency       String   @db.Char(3)
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  entry   JournalEntry  @relation(fields: [organisationId, propertyId, entryId, currency], references: [organisationId, propertyId, id, currency], onDelete: Restrict, onUpdate: Restrict)
+  account LedgerAccount @relation(fields: [organisationId, propertyId, accountId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit    Unit?         @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([entryId, lineNumber])
+  @@index([organisationId, accountId])
+  @@index([organisationId, unitId])
+  @@map("journal_lines")
 }
