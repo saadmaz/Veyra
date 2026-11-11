@@ -114,6 +114,32 @@ Dates are `YYYY-MM-DD` in the property's calendar with inclusive end dates. Arch
 or a property, is refused with `UNIT_OCCUPIED` / `PROPERTY_OCCUPIED` while current or future
 ownership, tenancy or household records exist.
 
+## Visitors and the gate (Phase 5)
+
+All under `/organisations/{organisationId}/properties/{propertyId}`. Times are ISO 8601 instants
+with an offset; the console shows them in the property's time zone.
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| POST | `units/{unitId}/visitor-invitations` | `unit.visitor.invite`; returns the pass (QR `token`, reference `code`) **once**; only hashes are stored |
+| GET | `units/{unitId}/visitor-invitations` | `unit.visitor.invite`; current, upcoming and recently ended |
+| POST | `units/{unitId}/visitor-invitations/{invitationId}/revoke` | `unit.visitor.invite` (anyone who may register visitors for the unit) |
+| GET | `visitor-invitations` | `property.visitor.read` |
+| POST | `visitor-invitations/{invitationId}/revoke` | `property.visitor.manage` |
+| POST | `gate/validate` | `property.visitor.check_in`; `{ token }` or `{ code }`; answers `{ valid, pass }` or `{ valid: false, reason }`; 60 checks per guard per minute |
+| POST | `gate/admit` | `property.visitor.check_in`; `{ passId }`; re-checked under a row lock (409 `PASS_NOT_VALID`) |
+| POST | `gate/deny` | `property.visitor.check_in`; for a pass or a named person; needs a reason |
+| POST | `gate/walk-in` | `property.visitor.check_in`; to a unit: 409 `WALK_IN_NEEDS_APPROVAL` until in-app approval (Part 3); to the property: admitted |
+| POST | `visits/{visitId}/depart` | `property.visitor.check_in`; once (409 `VISIT_ALREADY_DEPARTED`) |
+| GET | `visits/inside` | `property.visitor.check_in`; admitted and not departed |
+| GET | `visits?from=&to=` | `property.visitor.read`; up to 31 days |
+
+What a guard sees of a pass is limited to visitor name, category, plate, unit number, end of the
+window and entries left: no phone, no resident names. Rejection reasons: `NOT_FOUND`, `REVOKED`,
+`NOT_YET_VALID`, `EXPIRED`, `NO_ENTRIES_LEFT`, `HOST_NO_LONGER_RESIDENT` (the resident who
+registered the visitor no longer lives there). Every check, admission, denial and departure is
+written to the append-only access log.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

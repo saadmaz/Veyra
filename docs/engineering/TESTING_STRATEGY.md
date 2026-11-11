@@ -274,6 +274,26 @@ expiry, rehash on sign-in, idempotent sign-out).
 - Access events: UPDATE and DELETE refused for the application and for the superuser.
 - The migration drift test confirms the migrated database matches `schema.prisma`.
 
+### Part 2: roles and visitor API
+
+- `apps/api` integration (14, `visitors.int.test.ts`): owners, household members and staff
+  register visitors and get the pass once (never listed again); residents of another unit (404),
+  guards and finance officers (403) and another property's guard (404) cannot; window too long
+  (400), already over or more than 90 days ahead (422). A guard sees name, category, plate and
+  unit number only (no phone, no resident names), by QR token or by typed code in any case and
+  spacing; a pass does not work at another property's gate. A single-entry pass admits once;
+  two gates racing for the last entry: one 201, one 409. Revoked, not-yet-valid and
+  host-moved-out passes are refused (voiding the host's tenancy stops the pass at once).
+  Denials, for a pass or a named person, do not use up entries. Walk-ins to a unit are refused
+  until in-app approval exists; walk-ins to the property are admitted, listed as inside and
+  depart once. Only supervisors read the log and revoke any invitation. The 61st pass check in a
+  minute is rate limited.
+- `apps/api` unit (+11): pass rejection order and inclusive window ends; secrets (token length,
+  code alphabet without look-alikes, per-property code hashing); input normalisation; local
+  times without a zone rejected (this caught a crash in the window checks); a guard's
+  permissions at a property and none at its units; only holders of gate permissions can appoint
+  a guard.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

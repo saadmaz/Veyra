@@ -541,3 +541,138 @@ export interface PersonDetailResponse {
   household: HouseholdMemberDto[];
   emergencyContacts: EmergencyContactDto[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Visitors and access (Phase 5). Times are ISO 8601 instants (UTC); the console shows them in
+// the property's time zone. A pass is never proof of identity: the guard still checks the person.
+// ---------------------------------------------------------------------------------------------
+
+export type VisitorCategory = 'GUEST' | 'DELIVERY' | 'CONTRACTOR' | 'SERVICE_PROVIDER';
+
+/** POST …/units/:unitId/visitor-invitations */
+export interface CreateVisitorInvitationRequest {
+  category: VisitorCategory;
+  visitorName: string;
+  /** E.164; spaces and dashes are removed. */
+  visitorPhone?: string;
+  /** Normalised to upper case without spaces. */
+  vehiclePlate?: string;
+  /** ISO 8601 instant with an offset, e.g. "2026-11-12T18:00:00+05:00". */
+  validFrom: string;
+  /** After validFrom, at most 31 days later. */
+  validUntil: string;
+  /** 1-50; default 1. */
+  maxEntries?: number;
+}
+
+export interface VisitorInvitationDto {
+  id: string;
+  unitId: string;
+  unitNumber: string;
+  category: VisitorCategory;
+  visitorName: string;
+  visitorPhone: string | null;
+  vehiclePlate: string | null;
+  validFrom: string;
+  validUntil: string;
+  maxEntries: number;
+  entriesUsed: number;
+  status: 'ACTIVE' | 'REVOKED';
+  revokedAt: string | null;
+  /** True when the caller created it (residents may revoke any invitation of their unit). */
+  createdByMe: boolean;
+  createdAt: string;
+}
+
+/**
+ * The pass, returned once when an invitation is created and never again (only hashes are
+ * stored). The QR code encodes `token`; `code` is typed by a guard when scanning is not possible.
+ */
+export interface VisitorPassSecretDto {
+  token: string;
+  /** Eight characters shown as XXXX-XXXX. */
+  code: string;
+}
+
+export interface CreateVisitorInvitationResponse {
+  invitation: VisitorInvitationDto;
+  pass: VisitorPassSecretDto;
+}
+
+/** POST …/properties/:propertyId/gate/validate: exactly one of token or code. */
+export interface ValidatePassRequest {
+  token?: string;
+  code?: string;
+  gate?: string;
+}
+
+export type PassRejectionReason =
+  | 'NOT_FOUND'
+  | 'REVOKED'
+  | 'NOT_YET_VALID'
+  | 'EXPIRED'
+  | 'NO_ENTRIES_LEFT'
+  | 'HOST_NO_LONGER_RESIDENT';
+
+/** What a guard sees: the minimum needed to check the person in front of them. */
+export interface GatePassView {
+  invitationId: string;
+  passId: string;
+  category: VisitorCategory;
+  visitorName: string;
+  vehiclePlate: string | null;
+  unitNumber: string;
+  validUntil: string;
+  entriesLeft: number;
+}
+
+export type ValidatePassResponse =
+  | { valid: true; pass: GatePassView }
+  | { valid: false; reason: PassRejectionReason };
+
+/** POST …/gate/admit */
+export interface AdmitVisitorRequest {
+  passId: string;
+  gate?: string;
+}
+
+/** POST …/gate/deny: for a pass (details come from it) or for someone without one. */
+export interface DenyVisitorRequest {
+  passId?: string;
+  unitId?: string;
+  category?: VisitorCategory;
+  visitorName?: string;
+  vehiclePlate?: string;
+  reason: string;
+  gate?: string;
+}
+
+/**
+ * POST …/gate/walk-in: someone without a pass. Walk-ins to a unit need the resident's in-app
+ * approval (Phase 5 Part 3) and are refused with WALK_IN_NEEDS_APPROVAL until then; walk-ins to
+ * the property itself (no unitId) are admitted and recorded.
+ */
+export interface WalkInRequest {
+  unitId?: string;
+  category: VisitorCategory;
+  visitorName: string;
+  visitorPhone?: string;
+  vehiclePlate?: string;
+  gate?: string;
+}
+
+export interface VisitDto {
+  id: string;
+  unitId: string | null;
+  unitNumber: string | null;
+  invitationId: string | null;
+  category: VisitorCategory;
+  visitorName: string;
+  vehiclePlate: string | null;
+  decision: 'ADMITTED' | 'DENIED';
+  denialReason: string | null;
+  gate: string | null;
+  arrivedAt: string;
+  departedAt: string | null;
+  source: 'ONLINE' | 'PAPER' | 'OFFLINE_SYNC';
+}

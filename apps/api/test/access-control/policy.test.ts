@@ -304,6 +304,7 @@ describe('unit scope and derived resident roles', () => {
     expect([...permissionsAt(owner, 'ACTIVE', unitIn(U1), now)].sort()).toEqual([
       'unit.profile.read',
       'unit.residents.read',
+      'unit.visitor.invite',
     ]);
     expect(hasCoveringGrant(owner, unitIn(U2), now)).toBe(false);
     expect(hasCoveringGrant(owner, property(P1), now)).toBe(false);
@@ -312,14 +313,39 @@ describe('unit scope and derived resident roles', () => {
     ]);
   });
 
-  it('a household member sees the unit but not who else lives there', () => {
+  it('a household member sees the unit and may register visitors, but not who else lives there', () => {
     const permissions = permissionsAt(
       [resident('HOUSEHOLD_MEMBER', U1)],
       'ACTIVE',
       unitIn(U1),
       now,
     );
-    expect([...permissions]).toEqual(['unit.profile.read']);
+    expect([...permissions].sort()).toEqual(['unit.profile.read', 'unit.visitor.invite']);
+  });
+
+  it('a security guard operates the gate of their property only, with no resident access', () => {
+    const guard = [managerOf(P1, { role: 'SECURITY_GUARD' })];
+    expect([...permissionsAt(guard, 'ACTIVE', property(P1), now)].sort()).toEqual([
+      'property.profile.read',
+      'property.structure.read',
+      'property.visitor.check_in',
+    ]);
+    expect(hasCoveringGrant(guard, property(P2), now)).toBe(false);
+    // Covers units through the property, but holds no unit permission there.
+    expect([...permissionsAt(guard, 'ACTIVE', unitIn(U1, P1), now)]).toEqual([]);
+  });
+
+  it('only someone holding gate permissions can appoint a guard', () => {
+    const admin = permissionsAt([grant()], 'ACTIVE', property(P1), now);
+    expect(canAssignRole(admin, 'SECURITY_GUARD', 'PROPERTY')).toBe(true);
+    expect(canAssignRole(admin, 'SECURITY_GUARD', 'ORGANISATION')).toBe(false);
+    const finance = permissionsAt(
+      [grant({ role: 'FINANCE_OFFICER' })],
+      'ACTIVE',
+      property(P1),
+      now,
+    );
+    expect(canAssignRole(finance, 'SECURITY_GUARD', 'PROPERTY')).toBe(false);
   });
 
   it('staff cover units through their property or organisation grants', () => {

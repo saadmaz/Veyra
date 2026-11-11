@@ -250,6 +250,9 @@ describe('a property manager of P1', () => {
       'property.settings.manage',
       'property.structure.manage',
       'property.structure.read',
+      'property.visitor.check_in',
+      'property.visitor.manage',
+      'property.visitor.read',
     ]);
     const other = await as(pam)
       .get(`/api/v1/organisations/${orgA}/properties/${p2.id}`)

@@ -21,6 +21,14 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 5 visitor API and security roles**: `SECURITY_GUARD` and `SECURITY_SUPERVISOR`
+  (property-scoped) and permissions `unit.visitor.invite`, `property.visitor.check_in`,
+  `property.visitor.read`, `property.visitor.manage`; owners, tenants, household members and
+  staff register visitors and receive the pass once (QR token and reference code, stored as
+  hashes); guards validate (minimal data, rate limited), admit (re-checked under a row lock),
+  deny, record walk-ins to the property and departures; supervisors read the visit log and
+  revoke invitations; a pass stops working when its host no longer lives at the unit. Phone
+  and plate validation moved to shared schemas.
 - **Phase 5 visitor data foundation** (migration `20261111120000_visitors`): visitor
   invitations (unit, category, name, optional phone and plate, time window, entries), passes
   stored as SHA-256 hashes of a QR token and a reference code, visits (admitted or denied, gate,

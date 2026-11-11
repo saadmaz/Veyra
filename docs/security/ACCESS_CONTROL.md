@@ -107,11 +107,14 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   `organisation.profile.read`, `organisation.settings.manage`, `organisation.member.read`,
   `organisation.member.manage`, `organisation.member.invite`, `organisation.property.create`,
   `property.profile.read`, `property.settings.manage`, `property.lifecycle.manage`,
-  `property.structure.read` and `property.structure.manage`. Each module adds its permissions
-  with its first endpoint.
+  `property.structure.read` and `property.structure.manage`, the resident permissions below,
+  and for visitors (Phase 5) `property.visitor.check_in` (operate a gate), `property.visitor.read`
+  (visit log and invitations) and `property.visitor.manage` (revoke any invitation). Each module
+  adds its permissions with its first endpoint.
 - **Three evaluation scopes.** `unit.*` permissions are evaluated against the route's `:unitId`,
   `property.*` against `:propertyId`, all others against the organisation. Unit permissions
-  today: `unit.profile.read`, `unit.residents.read` (names and roles only, no contact details).
+  today: `unit.profile.read`, `unit.residents.read` (names and roles only, no contact details),
+  `unit.visitor.invite` (register, list and revoke the unit's visitors).
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
@@ -119,18 +122,23 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | `ORGANISATION_ADMIN` | Organisation | Every registered permission |
   | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins) |
   | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read` (finance arrives in Phase 6) |
+  | `SECURITY_SUPERVISOR` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in`, `property.visitor.read`, `property.visitor.manage` |
+  | `SECURITY_GUARD` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in` (no resident data, no visit log) |
 
-  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read` |
-  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read` |
+  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read`, `unit.visitor.invite` |
+  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read`, `unit.visitor.invite` (owner decision, 2026-11-11) |
 
   Organisation admins and property managers also hold `unit.profile.read`,
   `unit.residents.read`, `property.resident.read` and `property.resident.manage` (admins also
   `organisation.resident.read` for the organisation-wide directory); finance officers only
   `unit.profile.read` (no resident names or contact details until billing needs them).
+  Organisation admins and property managers also hold all four visitor permissions, gate
+  operation included, so admins can appoint guards (anti-escalation: you can only give
+  permissions you hold).
 - **Resident visibility for property staff:** a property manager sees a person only if the
   person has a record (ownership, tenancy, household or vehicle, even past or voided) on one of
   the property's units, or no records at all yet (just created). People of other properties
-  return 404. Security, maintenance and vendor roles arrive with their phases. A role
+  return 404. Maintenance and vendor roles arrive with their phases. A role
   key in the database that the registry does not know grants nothing.
 - **Derived roles** are never stored as memberships and can never be assigned or invited
   (`canAssignRole` refuses them; invitations accept only `ASSIGNABLE_ROLE_KEYS`). They come from

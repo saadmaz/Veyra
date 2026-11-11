@@ -40,3 +40,15 @@ export const listQuerySchema = z.object({
   cursor: z.uuid().optional(),
 });
 export type ListQuery = z.infer<typeof listQuerySchema>;
+
+/** E.164 phone: "+" then 7-15 digits. Spaces and dashes are removed first. */
+export const phoneSchema = z
+  .string()
+  .transform((value) => value.replace(/[\s-]/g, ''))
+  .pipe(z.string().regex(/^\+[1-9]\d{6,14}$/, 'Use international format, e.g. +923001234567'));
+
+/** Vehicle number plate, normalised: upper case, spaces removed; letters, digits and hyphens. */
+export const plateSchema = z
+  .string()
+  .transform((value) => value.toUpperCase().replace(/\s+/g, ''))
+  .pipe(z.string().regex(/^[A-Z0-9-]{2,15}$/, 'Use letters, digits and hyphens'));

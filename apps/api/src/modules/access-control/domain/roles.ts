@@ -44,6 +44,10 @@ export const ROLES = {
       'property.resident.manage',
       'unit.profile.read',
       'unit.residents.read',
+      'unit.visitor.invite',
+      'property.visitor.check_in',
+      'property.visitor.read',
+      'property.visitor.manage',
     ],
   },
   PROPERTY_MANAGER: {
@@ -59,7 +63,30 @@ export const ROLES = {
       'property.resident.manage',
       'unit.profile.read',
       'unit.residents.read',
+      'unit.visitor.invite',
+      'property.visitor.check_in',
+      'property.visitor.read',
+      'property.visitor.manage',
     ],
+  },
+  SECURITY_SUPERVISOR: {
+    name: 'Security supervisor',
+    grantableAt: ['PROPERTY'],
+    // Runs the gate team: operates the gate, reads the visit log, revokes invitations.
+    permissions: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.visitor.check_in',
+      'property.visitor.read',
+      'property.visitor.manage',
+    ],
+  },
+  SECURITY_GUARD: {
+    name: 'Security guard',
+    grantableAt: ['PROPERTY'],
+    // Gate work only. Sees unit numbers and the visitor in front of them, never resident contact
+    // details or the full visit log (PRD 3.3: the minimum necessary).
+    permissions: ['property.profile.read', 'property.structure.read', 'property.visitor.check_in'],
   },
   FINANCE_OFFICER: {
     name: 'Finance officer',
@@ -78,20 +105,20 @@ export const ROLES = {
     name: 'Owner',
     grantableAt: ['UNIT'],
     derived: true,
-    permissions: ['unit.profile.read', 'unit.residents.read'],
+    permissions: ['unit.profile.read', 'unit.residents.read', 'unit.visitor.invite'],
   },
   TENANT: {
     name: 'Tenant',
     grantableAt: ['UNIT'],
     derived: true,
-    permissions: ['unit.profile.read', 'unit.residents.read'],
+    permissions: ['unit.profile.read', 'unit.residents.read', 'unit.visitor.invite'],
   },
   HOUSEHOLD_MEMBER: {
     name: 'Household member',
     grantableAt: ['UNIT'],
     derived: true,
-    // Delegated rights (visitors, bookings) arrive with those modules.
-    permissions: ['unit.profile.read'],
+    // Household members may register visitors (owner decision, 2026-11-11); bookings come later.
+    permissions: ['unit.profile.read', 'unit.visitor.invite'],
   },
 } as const satisfies Record<string, RoleDefinition>;
 
