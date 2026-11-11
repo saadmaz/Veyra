@@ -35,6 +35,8 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 export interface RequestOptions {
   body?: unknown;
   signal?: AbortSignal;
+  /** Extra request headers, e.g. Idempotency-Key. */
+  headers?: Record<string, string>;
 }
 
 export async function apiRequest<T>(
@@ -54,6 +56,7 @@ export async function apiRequest<T>(
       headers: {
         Accept: 'application/json',
         ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...options.headers,
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal,

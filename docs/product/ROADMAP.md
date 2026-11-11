@@ -27,7 +27,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
-| 6     | Finance and billing                      | In progress (Parts 1-4 done) |
+| 6     | Finance and billing                      | In progress (Parts 1-5 done) |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
@@ -147,6 +147,10 @@ Decisions (owner, 2026-11-11):
 - **Residents** see their invoices, receipts and statement in the console and can submit a
   bank-transfer reference for finance to confirm.
 
+The original Part 5 (all console work and the exit review) was split in two (2026-11-12): staff
+screens need no API changes, while residents' access needs new permissions, a new table and a
+confirmation flow, and is reviewed on its own.
+
 Fixed by the PRD and data model: double-entry; posted entries are immutable and corrected only by
 reversing entries; amounts are integer minor units with the currency; balances are derived from
 ledger lines; callbacks are idempotent; no card data is stored.
@@ -157,7 +161,8 @@ ledger lines; callbacks are idempotent; no card data is stored.
 | 2 | Finance roles and billing: finance officer permissions, the default chart of accounts and monthly periods per property, charge types with their liable party, recurring (flat or per sqm) and one-off charges, invoice issue posting to the ledger; API | ✅ Done |
 | 3 | Payments: manual payments and receipts, oldest-first allocation, unit credit and reallocation; payment-gateway port with signed idempotent callbacks and a sandbox adapter | ✅ Done |
 | 4 | Controls and reports: maker-checker for reversals, write-offs, refunds and period reopening; credit notes; statements, overdue status and ageing | ✅ Done |
-| 5 | Console: finance screens for staff; residents' invoices, receipts, statement and bank-transfer reference; browser journeys; Phase 6 exit review | |
+| 5 | Console finance screens for staff over the existing API: set-up, charge types and recurring charges, billing runs, invoices (one-off drafts, issue, discard, credit notes), payments (record, apply, take back), maker-checker requests and decisions, ageing, statements, periods; browser journeys per role | ✅ Done |
+| 6 | Residents: unit-scoped finance read permissions for owners and current tenants (their own party only), their invoices, receipts and statement in the console, and bank-transfer references submitted for finance to confirm (new table, RLS, confirm or reject); browser journeys; Phase 6 exit review | |
 
 ## Release gates
 
@@ -184,6 +189,10 @@ readiness, user training and release communication, and known limitations docume
   reconstruct what was owed then; approvals list the 200 most recent; no notification tells an
   approver that a request is waiting (notifications module); refunds go to the payment's unit
   credit only (no refund of a deposit or of an overpayment across parties).
+- Finance console: a one-off invoice is created with one line (the API accepts several); there
+  is no screen yet for online payment intents or for resolving an `AMOUNT_MISMATCH` callback; the
+  invoice and payment lists show the API's 200 most recent with no paging; the chart of accounts
+  is read-only (no API to add or rename accounts yet).
 - Resident console: the people picker (`GET …/properties/:id/persons`) returns at most 200
   people and the console does not use its `query` filter yet; add type-ahead search when a
   property has more.
