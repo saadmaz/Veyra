@@ -17,6 +17,7 @@ import {
   TenanciesCard,
   UnitVehiclesCard,
 } from '@/components/unit-records';
+import { UnitVisitorsCard, WalkInRequestsCard } from '@/components/unit-visitors';
 import { ApiRequestError } from '@/lib/api-client';
 import { enumLabel, residentRoleLabel } from '@/lib/messages';
 import { formatShare, todayIn } from '@/lib/residents';
@@ -119,6 +120,21 @@ export default function UnitPage() {
           ) : null}
         </dl>
       </Card>
+
+      {u.permissions.includes('unit.visitor.invite') ? (
+        <>
+          <WalkInRequestsCard
+            unitPath={unitPath}
+            timeZone={u.propertyTimeZone}
+            canAnswer={u.myRoles.length > 0}
+          />
+          <UnitVisitorsCard
+            unitPath={unitPath}
+            timeZone={u.propertyTimeZone}
+            canInvite={u.status === 'ACTIVE'}
+          />
+        </>
+      ) : null}
 
       {p && canRead ? (
         <UnitResidents

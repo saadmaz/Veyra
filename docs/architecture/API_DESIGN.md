@@ -89,7 +89,7 @@ Unit `areaSqm` and `shareRatio` are decimal strings (`"85.50"`), never JSON numb
 | ------ | ---- | ------ |
 | POST | `/organisations/{organisationId}/persons/{personId}/invitations` | `organisation.member.invite`; links the profile to a login on acceptance |
 | GET | `/organisations/{organisationId}/my-units` | Any member; the caller's units today with their derived roles |
-| GET | `/organisations/{organisationId}/properties/{propertyId}/units/{unitId}` | `unit.profile.read` (includes `myRoles` and `permissions`) |
+| GET | `/organisations/{organisationId}/properties/{propertyId}/units/{unitId}` | `unit.profile.read` (includes `myRoles`, `permissions` and `propertyTimeZone`) |
 | GET | `…/units/{unitId}/residents` | `unit.residents.read`; current owners, tenants and household, names only |
 
 Staff side (all under `/organisations/{organisationId}`):

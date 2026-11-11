@@ -15,6 +15,9 @@ import type {
   TenancyDto,
   UnitDto,
   VehicleDto,
+  VisitDto,
+  VisitorInvitationDto,
+  WalkInRequestDto,
 } from '@veyra/api-contracts';
 
 /**
@@ -77,6 +80,10 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.structure.read',
       'unit.profile.read',
       'unit.residents.read',
+      'unit.visitor.invite',
+      'property.visitor.check_in',
+      'property.visitor.manage',
+      'property.visitor.read',
     ],
   },
   FINANCE_OFFICER: {
@@ -95,9 +102,42 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.structure.read',
       'unit.profile.read',
       'unit.residents.read',
+      'unit.visitor.invite',
+      'property.visitor.check_in',
+      'property.visitor.manage',
+      'property.visitor.read',
     ],
   },
+  SECURITY_SUPERVISOR: {
+    organisation: [],
+    property: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.visitor.check_in',
+      'property.visitor.manage',
+      'property.visitor.read',
+    ],
+  },
+  SECURITY_GUARD: {
+    organisation: [],
+    property: ['property.profile.read', 'property.structure.read', 'property.visitor.check_in'],
+  },
 };
+
+const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const normaliseCode = (code: string) => code.toUpperCase().replace(/[\s-]/g, '');
+
+type FakeVisitorInvitation = VisitorInvitationDto & {
+  propertyId: string;
+  token: string;
+  /** Without the hyphen. */
+  code: string;
+  createdByUserId: string;
+  /** The resident login that registered the visitor; null for staff. */
+  hostUserId: string | null;
+};
+type FakeVisit = VisitDto & { propertyId: string; walkInRequestId: string | null };
+type FakeWalkIn = WalkInRequestDto & { propertyId: string };
 
 /** Today in the property's time zone, as the API computes it. */
 const todayIn = (timeZone: string) =>
@@ -136,6 +176,9 @@ export class FakeApi {
   floors: FloorDto[] = [];
   units: UnitDto[] = [];
   commonAreas: CommonAreaDto[] = [];
+  visitorInvitations: FakeVisitorInvitation[] = [];
+  visits: FakeVisit[] = [];
+  walkIns: FakeWalkIn[] = [];
   /** userId: the login linked by an accepted resident invitation. */
   persons: (PersonDto & { organisationId: string; userId: string | null })[] = [];
   ownerships: OwnershipDto[] = [];
@@ -389,6 +432,7 @@ export class FakeApi {
       areaSqm: unit.areaSqm,
       propertyId: property.id,
       propertyName: property.name,
+      propertyTimeZone: property.timeZone,
       buildingName: this.buildings.find((b) => b.id === unit.buildingId)?.name ?? null,
       floorName: this.floors.find((f) => f.id === unit.floorId)?.name ?? null,
       myRoles,
@@ -653,22 +697,27 @@ export class FakeApi {
       (p) => p.id === propertyMatch[1] && p.organisationId === organisation.id,
     );
     const pp = property ? this.propertyPermissions(organisation.id, property.id, user.id) : null;
-    if (property && !pp && method === 'GET') {
+    if (property && !pp) {
       // Residents reach only their own unit (derived roles), never the property itself.
-      const own = /^\/units\/([^/]+)(\/residents)?$/.exec(propertyMatch[2] ?? '');
+      const own = /^\/units\/([^/]+)(\/.*)?$/.exec(propertyMatch[2] ?? '');
       const unit = own
         ? this.units.find((u) => u.id === own[1] && u.propertyId === property.id)
         : undefined;
       const roles = unit ? this.residentRoles(user.id, unit.id) : [];
       if (own && unit && roles.length > 0) {
-        const permissions = ['unit.profile.read'];
+        const permissions = ['unit.profile.read', 'unit.visitor.invite'];
         if (roles.includes('OWNER') || roles.includes('TENANT'))
           permissions.push('unit.residents.read');
-        if (!own[2])
-          return this.reply(route, 200, this.unitDetail(unit, property, permissions, roles));
-        if (!permissions.includes('unit.residents.read'))
-          return this.error(route, 403, 'FORBIDDEN');
-        return this.reply(route, 200, this.unitResidents(unit.id, todayIn(property.timeZone)));
+        const usub = own[2] ?? '';
+        if (usub === '' && method === 'GET')
+          return this.reply(route, 200, this.unitDetail(unit, property, permissions.sort(), roles));
+        if (usub === '/residents' && method === 'GET') {
+          if (!permissions.includes('unit.residents.read'))
+            return this.error(route, 403, 'FORBIDDEN');
+          return this.reply(route, 200, this.unitResidents(unit.id, todayIn(property.timeZone)));
+        }
+        const visitors = this.visitorUnitRoute(route, method, usub, body, property, unit, user.id);
+        if (visitors) return visitors;
       }
     }
     if (!property || !pp) return this.error(route, 404, 'NOT_FOUND');
@@ -704,6 +753,36 @@ export class FakeApi {
         if (row.status === 'ACTIVE') archiveRow(row);
       }
       return this.reply(route, 200, property);
+    }
+
+    const visitorRoute = this.visitorPropertyRoute(
+      route,
+      method,
+      sub,
+      body,
+      url,
+      property,
+      pp,
+      user.id,
+    );
+    if (visitorRoute) return visitorRoute;
+    const unitVisitors = /^\/units\/([^/]+)(\/(?:visitor-invitations|walk-in-requests).*)$/.exec(
+      sub,
+    );
+    if (unitVisitors) {
+      const unit = mine(this.units).find((u) => u.id === unitVisitors[1]);
+      if (!unit) return this.error(route, 404, 'NOT_FOUND');
+      if (!pp.includes('unit.visitor.invite')) return this.error(route, 403, 'FORBIDDEN');
+      const handled = this.visitorUnitRoute(
+        route,
+        method,
+        unitVisitors[2] ?? '',
+        body,
+        property,
+        unit,
+        user.id,
+      );
+      if (handled) return handled;
     }
 
     const residentRoute = this.residentRoute(
@@ -1226,6 +1305,364 @@ export class FakeApi {
         member.validTo = endDate;
       } else member.voidedAt = now();
       return this.reply(route, 200, member);
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------ visitors (Phase 5)
+
+  private visitorDto(i: FakeVisitorInvitation): VisitorInvitationDto {
+    const { propertyId: _p, token: _t, code: _c, createdByUserId, hostUserId: _h, ...dto } = i;
+    return {
+      ...dto,
+      entriesUsed: this.visits.filter((v) => v.invitationId === i.id && v.decision === 'ADMITTED')
+        .length,
+      createdByMe: createdByUserId === this.currentUserId,
+    };
+  }
+
+  private visitDto({ propertyId: _p, walkInRequestId: _w, ...v }: FakeVisit): VisitDto {
+    return v;
+  }
+
+  private walkInDto({ propertyId: _p, ...r }: FakeWalkIn): WalkInRequestDto {
+    const expired = r.status === 'PENDING' && Date.parse(r.expiresAt) < Date.now();
+    return {
+      ...r,
+      status: expired ? 'EXPIRED' : r.status,
+      used: this.visits.some((v) => v.walkInRequestId === r.id),
+    };
+  }
+
+  /** Why a pass is refused now, or null; same order as the API. */
+  private passProblem(i: FakeVisitorInvitation) {
+    const now = Date.now();
+    if (i.status === 'REVOKED') return 'REVOKED';
+    if (now < Date.parse(i.validFrom)) return 'NOT_YET_VALID';
+    if (now > Date.parse(i.validUntil)) return 'EXPIRED';
+    if (this.visitorDto(i).entriesUsed >= i.maxEntries) return 'NO_ENTRIES_LEFT';
+    if (i.hostUserId && this.residentRoles(i.hostUserId, i.unitId).length === 0)
+      return 'HOST_NO_LONGER_RESIDENT';
+    return null;
+  }
+
+  private newVisit(
+    property: PropertyDto,
+    userId: string,
+    fields: Omit<FakeVisit, 'id' | 'propertyId' | 'arrivedAt' | 'departedAt' | 'source'>,
+  ): FakeVisit {
+    const visit: FakeVisit = {
+      id: randomUUID(),
+      propertyId: property.id,
+      arrivedAt: now(),
+      departedAt: null,
+      source: 'ONLINE',
+      ...fields,
+    };
+    void userId;
+    this.visits.push(visit);
+    return visit;
+  }
+
+  /** A unit's visitors and walk-in requests, for its residents and for staff. */
+  private visitorUnitRoute(
+    route: Route,
+    method: string,
+    usub: string,
+    body: Record<string, unknown>,
+    property: PropertyDto,
+    unit: UnitDto,
+    userId: string,
+  ): Promise<void> | null {
+    const str = (key: string) =>
+      typeof body[key] === 'string' ? (body[key] as string) : undefined;
+    const resident = this.residentRoles(userId, unit.id).length > 0;
+    if (usub === '/visitor-invitations') {
+      if (method === 'GET') {
+        const data = this.visitorInvitations
+          .filter((i) => i.unitId === unit.id)
+          .map((i) => this.visitorDto(i));
+        return this.reply(route, 200, { data });
+      }
+      if (unit.status === 'ARCHIVED') return this.error(route, 409, 'ARCHIVED');
+      const validFrom = str('validFrom') ?? '';
+      const validUntil = str('validUntil') ?? '';
+      if (!(Date.parse(validUntil) > Date.parse(validFrom)))
+        return this.error(route, 400, 'VALIDATION_FAILED', [
+          { path: 'validUntil', message: 'The end must be after the start' },
+        ]);
+      let code = '';
+      for (let i = 0; i < 8; i += 1)
+        code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+      const token = Buffer.from(randomUUID() + randomUUID())
+        .toString('base64url')
+        .slice(0, 43);
+      const invitation: FakeVisitorInvitation = {
+        id: randomUUID(),
+        propertyId: property.id,
+        unitId: unit.id,
+        unitNumber: unit.number,
+        category: (str('category') ?? 'GUEST') as VisitorInvitationDto['category'],
+        visitorName: (str('visitorName') ?? '').trim(),
+        visitorPhone: str('visitorPhone')?.replace(/[\s-]/g, '') ?? null,
+        vehiclePlate: str('vehiclePlate')?.toUpperCase().replace(/\s+/g, '') ?? null,
+        validFrom: new Date(validFrom).toISOString(),
+        validUntil: new Date(validUntil).toISOString(),
+        maxEntries: typeof body.maxEntries === 'number' ? body.maxEntries : 1,
+        entriesUsed: 0,
+        status: 'ACTIVE',
+        revokedAt: null,
+        createdByMe: true,
+        createdAt: now(),
+        token,
+        code,
+        createdByUserId: userId,
+        hostUserId: resident ? userId : null,
+      };
+      this.visitorInvitations.push(invitation);
+      return this.reply(route, 201, {
+        invitation: this.visitorDto(invitation),
+        pass: { token, code: `${code.slice(0, 4)}-${code.slice(4)}` },
+      });
+    }
+    const revoke = /^\/visitor-invitations\/([^/]+)\/revoke$/.exec(usub);
+    if (revoke && method === 'POST') {
+      const invitation = this.visitorInvitations.find(
+        (i) => i.id === revoke[1] && i.unitId === unit.id,
+      );
+      if (!invitation) return this.error(route, 404, 'NOT_FOUND');
+      if (invitation.status === 'ACTIVE') {
+        invitation.status = 'REVOKED';
+        invitation.revokedAt = now();
+      }
+      return this.reply(route, 200, this.visitorDto(invitation));
+    }
+    if (usub === '/walk-in-requests' && method === 'GET') {
+      const data = this.walkIns
+        .filter((r) => r.unitId === unit.id)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .map((r) => this.walkInDto(r));
+      return this.reply(route, 200, { data });
+    }
+    const decide = /^\/walk-in-requests\/([^/]+)\/(approve|deny)$/.exec(usub);
+    if (decide && method === 'POST') {
+      // Only residents of the unit answer; staff are refused (owner decision).
+      if (!resident) return this.error(route, 403, 'FORBIDDEN');
+      const request = this.walkIns.find((r) => r.id === decide[1] && r.unitId === unit.id);
+      if (!request) return this.error(route, 404, 'NOT_FOUND');
+      const state = this.walkInDto(request).status;
+      if (state === 'EXPIRED') return this.error(route, 409, 'WALK_IN_EXPIRED');
+      if (state !== 'PENDING') return this.error(route, 409, 'WALK_IN_NOT_PENDING');
+      request.status = decide[2] === 'approve' ? 'APPROVED' : 'DENIED';
+      request.decidedAt = now();
+      request.approvalValidUntil =
+        request.status === 'APPROVED' ? new Date(Date.now() + 15 * 60_000).toISOString() : null;
+      return this.reply(route, 200, this.walkInDto(request));
+    }
+    return null;
+  }
+
+  /** The gate, the visit log and the property's invitations, for staff. */
+  private visitorPropertyRoute(
+    route: Route,
+    method: string,
+    sub: string,
+    body: Record<string, unknown>,
+    url: URL,
+    property: PropertyDto,
+    pp: string[],
+    userId: string,
+  ): Promise<void> | null {
+    const str = (key: string) =>
+      typeof body[key] === 'string' ? (body[key] as string) : undefined;
+    const gate = str('gate') ?? null;
+    const needs = (permission: string) =>
+      pp.includes(permission) ? null : this.error(route, 403, 'FORBIDDEN');
+    const mineInvitations = this.visitorInvitations.filter((i) => i.propertyId === property.id);
+    const gateRoute = sub.startsWith('/gate/') || sub.startsWith('/visits');
+
+    if (gateRoute && !sub.startsWith('/visits?') && sub !== '/visits') {
+      const denied = needs('property.visitor.check_in');
+      if (denied) return denied;
+    }
+
+    if (sub === '/gate/validate' && method === 'POST') {
+      const token = str('token');
+      const code = str('code');
+      const invitation = mineInvitations.find((i) =>
+        token ? i.token === token : code !== undefined && i.code === normaliseCode(code),
+      );
+      if (!invitation) return this.reply(route, 200, { valid: false, reason: 'NOT_FOUND' });
+      const problem = this.passProblem(invitation);
+      if (problem) return this.reply(route, 200, { valid: false, reason: problem });
+      const dto = this.visitorDto(invitation);
+      return this.reply(route, 200, {
+        valid: true,
+        pass: {
+          invitationId: invitation.id,
+          passId: invitation.id,
+          category: invitation.category,
+          visitorName: invitation.visitorName,
+          vehiclePlate: invitation.vehiclePlate,
+          unitNumber: invitation.unitNumber,
+          validUntil: invitation.validUntil,
+          entriesLeft: invitation.maxEntries - dto.entriesUsed,
+        },
+      });
+    }
+    if (sub === '/gate/admit' && method === 'POST') {
+      const invitation = mineInvitations.find((i) => i.id === str('passId'));
+      if (!invitation) return this.error(route, 404, 'NOT_FOUND');
+      if (this.passProblem(invitation)) return this.error(route, 409, 'PASS_NOT_VALID');
+      const visit = this.newVisit(property, userId, {
+        unitId: invitation.unitId,
+        unitNumber: invitation.unitNumber,
+        invitationId: invitation.id,
+        category: invitation.category,
+        visitorName: invitation.visitorName,
+        vehiclePlate: invitation.vehiclePlate,
+        decision: 'ADMITTED',
+        denialReason: null,
+        gate,
+        walkInRequestId: null,
+      });
+      return this.reply(route, 201, this.visitDto(visit));
+    }
+    if (sub === '/gate/deny' && method === 'POST') {
+      const invitation = mineInvitations.find((i) => i.id === str('passId'));
+      const visit = this.newVisit(property, userId, {
+        unitId: invitation?.unitId ?? null,
+        unitNumber: invitation?.unitNumber ?? null,
+        invitationId: invitation?.id ?? null,
+        category: invitation?.category ?? ((str('category') ?? 'GUEST') as VisitDto['category']),
+        visitorName: invitation?.visitorName ?? str('visitorName') ?? '',
+        vehiclePlate: invitation?.vehiclePlate ?? null,
+        decision: 'DENIED',
+        denialReason: str('reason') ?? '',
+        gate,
+        walkInRequestId: null,
+      });
+      return this.reply(route, 201, this.visitDto(visit));
+    }
+    if (sub === '/gate/walk-in' && method === 'POST') {
+      if (str('unitId')) return this.error(route, 409, 'WALK_IN_NEEDS_APPROVAL');
+      const visit = this.newVisit(property, userId, {
+        unitId: null,
+        unitNumber: null,
+        invitationId: null,
+        category: (str('category') ?? 'GUEST') as VisitDto['category'],
+        visitorName: str('visitorName') ?? '',
+        vehiclePlate: str('vehiclePlate')?.toUpperCase().replace(/\s+/g, '') ?? null,
+        decision: 'ADMITTED',
+        denialReason: null,
+        gate,
+        walkInRequestId: null,
+      });
+      return this.reply(route, 201, this.visitDto(visit));
+    }
+    if (sub === '/gate/walk-in-requests') {
+      if (method === 'GET') {
+        const data = this.walkIns
+          .filter((r) => r.propertyId === property.id)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+          .map((r) => this.walkInDto(r));
+        return this.reply(route, 200, { data });
+      }
+      const unit = this.units.find((u) => u.id === str('unitId') && u.propertyId === property.id);
+      if (!unit) return this.error(route, 404, 'NOT_FOUND');
+      const open = this.walkIns.filter(
+        (r) => r.unitId === unit.id && this.walkInDto(r).status === 'PENDING',
+      );
+      if (open.length >= 5) return this.error(route, 409, 'TOO_MANY_WALK_IN_REQUESTS');
+      const request: FakeWalkIn = {
+        id: randomUUID(),
+        propertyId: property.id,
+        unitId: unit.id,
+        unitNumber: unit.number,
+        category: (str('category') ?? 'GUEST') as WalkInRequestDto['category'],
+        visitorName: str('visitorName') ?? '',
+        visitorPhone: str('visitorPhone') ?? null,
+        vehiclePlate: str('vehiclePlate')?.toUpperCase().replace(/\s+/g, '') ?? null,
+        gate,
+        status: 'PENDING',
+        createdAt: now(),
+        expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+        decidedAt: null,
+        approvalValidUntil: null,
+        used: false,
+      };
+      this.walkIns.push(request);
+      return this.reply(route, 201, this.walkInDto(request));
+    }
+    const walkIn = /^\/gate\/walk-in-requests\/([^/]+)(\/admit|\/cancel)?$/.exec(sub);
+    if (walkIn) {
+      const request = this.walkIns.find((r) => r.id === walkIn[1] && r.propertyId === property.id);
+      if (!request) return this.error(route, 404, 'NOT_FOUND');
+      if (!walkIn[2]) return this.reply(route, 200, this.walkInDto(request));
+      if (walkIn[2] === '/cancel') {
+        if (request.status !== 'PENDING') return this.error(route, 409, 'WALK_IN_NOT_PENDING');
+        request.status = 'CANCELLED';
+        request.decidedAt = now();
+        return this.reply(route, 200, this.walkInDto(request));
+      }
+      const dto = this.walkInDto(request);
+      if (dto.status !== 'APPROVED' || dto.used)
+        return this.error(route, 409, 'WALK_IN_NOT_APPROVED');
+      const visit = this.newVisit(property, userId, {
+        unitId: request.unitId,
+        unitNumber: request.unitNumber,
+        invitationId: null,
+        category: request.category,
+        visitorName: request.visitorName,
+        vehiclePlate: request.vehiclePlate,
+        decision: 'ADMITTED',
+        denialReason: null,
+        gate: gate ?? request.gate,
+        walkInRequestId: request.id,
+      });
+      return this.reply(route, 201, this.visitDto(visit));
+    }
+    if (sub === '/visits/inside' && method === 'GET') {
+      const data = this.visits
+        .filter((v) => v.propertyId === property.id && v.decision === 'ADMITTED' && !v.departedAt)
+        .map((v) => this.visitDto(v));
+      return this.reply(route, 200, { data });
+    }
+    const depart = /^\/visits\/([^/]+)\/depart$/.exec(sub);
+    if (depart && method === 'POST') {
+      const visit = this.visits.find((v) => v.id === depart[1] && v.propertyId === property.id);
+      if (!visit) return this.error(route, 404, 'NOT_FOUND');
+      if (visit.departedAt) return this.error(route, 409, 'VISIT_ALREADY_DEPARTED');
+      visit.departedAt = now();
+      return this.reply(route, 200, this.visitDto(visit));
+    }
+    if (sub === '/visits' && method === 'GET') {
+      const denied = needs('property.visitor.read');
+      if (denied) return denied;
+      const from = Date.parse(url.searchParams.get('from') ?? '');
+      const to = Date.parse(url.searchParams.get('to') ?? '');
+      const data = this.visits
+        .filter((v) => {
+          const at = Date.parse(v.arrivedAt);
+          return v.propertyId === property.id && at >= from && at < to;
+        })
+        .map((v) => this.visitDto(v));
+      return this.reply(route, 200, { data });
+    }
+    if (sub === '/visitor-invitations' && method === 'GET') {
+      const denied = needs('property.visitor.read');
+      if (denied) return denied;
+      return this.reply(route, 200, { data: mineInvitations.map((i) => this.visitorDto(i)) });
+    }
+    const revoke = /^\/visitor-invitations\/([^/]+)\/revoke$/.exec(sub);
+    if (revoke && method === 'POST') {
+      const denied = needs('property.visitor.manage');
+      if (denied) return denied;
+      const invitation = mineInvitations.find((i) => i.id === revoke[1]);
+      if (!invitation) return this.error(route, 404, 'NOT_FOUND');
+      invitation.status = 'REVOKED';
+      invitation.revokedAt = now();
+      return this.reply(route, 200, this.visitorDto(invitation));
     }
     return null;
   }

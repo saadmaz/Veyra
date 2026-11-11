@@ -166,6 +166,24 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      {can('property.visitor.check_in') || can('property.visitor.read') ? (
+        <Card title="Visitors and gate">
+          <p className="muted">
+            Residents register their visitors on their unit page. Security staff check passes at the
+            gate.
+          </p>
+          <div className="form__actions">
+            {can('property.visitor.check_in') ? (
+              <ButtonLink href={`${base}/gate`}>Open the gate screen</ButtonLink>
+            ) : null}
+            {can('property.visitor.read') ? (
+              <ButtonLink href={`${base}/visitors`} variant="secondary">
+                Visit log
+              </ButtonLink>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
       {can('property.structure.read') ? (
         <>
           <Buildings base={base} canManage={canManage} />

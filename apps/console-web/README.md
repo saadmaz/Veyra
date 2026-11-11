@@ -22,8 +22,16 @@ bun run --cwd apps/console-web dev   # http://localhost:3000 (needs the API on :
 | `/organisations/[id]/properties/[pid]` | Property overview, activate/archive (admins), buildings, units, common areas, invite a property manager |
 | `/organisations/[id]/properties/[pid]/buildings/[bid]` | A building's floors and units |
 | `/organisations/[id]/properties/[pid]/units/[uid]` | A unit: details for every staff role and its residents; owners and tenants see who lives there; for admins and property managers its owners (exact shares, transfers), tenancies (move-in, move-out), household, vehicles; voiding mistakes with a reason |
+| `/organisations/[id]/properties/[pid]/gate` | Gate screen for security staff (phone-first): check a pass by reference code or by scanning its QR code, admit or refuse with a reason; send walk-in requests to a unit's residents and admit on their approval; record departures of visitors inside |
+| `/organisations/[id]/properties/[pid]/visitors` | Visit log by day (property time) and expected visitors with cancel, for supervisors and managers |
 | `/organisations/[id]/properties/[pid]/residents` | Current residents of the property with their units and roles; add a person |
 | `/organisations/[id]/properties/[pid]/residents/[personId]` | A resident's profile (edit), records at this property, emergency contacts, app invitation link |
+
+On the unit page, residents of the unit and staff also register visitors: the pass (QR code and
+`XXXX-XXXX` reference code) is shown once and only its hashes are stored by the API. The unit's
+residents answer walk-in requests from the gate there ("Visitors at the gate"); staff see them
+but cannot answer. Requests are checked for every 5 seconds while the page is open (instant
+delivery comes later). Visit times are entered and shown in the property's time zone.
 
 Resident records are never edited in place: periods are ended, and mistakes are voided (kept
 and shown as voided). Dates are calendar dates in the property's time zone. Ownership shares are
@@ -36,6 +44,18 @@ appear only when the API reports the matching permission (`permissions` on organ
 property responses); the API enforces every action regardless. Archiving asks for confirmation.
 
 The header has a skip link, an organisation switcher (native `<select>`) and sign-out.
+
+## Installable app and camera
+
+The console has a web app manifest (`src/app/manifest.ts`) so the gate phone can add it to its
+home screen. It needs a connection; offline gate mode is Phase 5 Part 5. The camera is allowed
+on the gate page only (`next.config.ts` overrides the shared `Permissions-Policy` for that
+route); every other page keeps it off. Scanning uses the browser's own `BarcodeDetector`
+(Chromium, e.g. Chrome on Android); elsewhere guards type the reference code.
+
+**Dependency:** `qrcode-generator` (MIT, no dependencies of its own) draws pass QR codes; the
+console renders its module grid as SVG elements (no HTML injection). There is no scanning
+library.
 
 ## How it talks to the API
 
