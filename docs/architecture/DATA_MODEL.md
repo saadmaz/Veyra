@@ -1,7 +1,7 @@
 # Data Model
 
-> Status: Phase 2. Section 2 describes implemented tables; later sections are the plan for
-> Phases 3-6.
+> Status: Phase 6. Sections 2-5 and the ledger tables in section 6 are implemented; the rest of
+> section 6 and section 8 are the plan.
 > The Prisma schema in `packages/db/prisma/schema.prisma` is the executable source of truth;
 > this document explains intent and invariants.
 
@@ -143,22 +143,42 @@ later additions, each once: the departure and the review; everything else never 
 
 Retention of visit records and access events is per jurisdiction and still to be set (section 9).
 
-## 6. Finance ledger approach (Phase 6)
+## 6. Finance ledger (Phase 6, foundation implemented)
 
-Double-entry, append-only:
+Migration `20261112090000_ledger`. Double-entry, one ledger per property, always in the
+property's currency. All tables are tenant-owned with RLS (FORCE) and composite tenant foreign
+keys. Amounts are `bigint` minor units (`debit_minor`, `credit_minor`); dates are the property's
+local calendar dates.
 
-- **Account** (chart of accounts per organisation/property): receivables, income, deposits,
-  bank, expenses.
-- **JournalEntry**: id, organisation_id, property_id, entry_date (property-local date),
-  description, status `DRAFT | POSTED`, posted_at, posted_by, reverses_entry_id.
-- **JournalLine**: entry_id, account_id, unit_id (optional), debit_minor, credit_minor,
-  currency.
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `ledger_accounts` | property, code, name, type (`ASSET`/`LIABILITY`/`EQUITY`/`INCOME`/`EXPENSE`), system_key?, status | Code unique per property (`0-9A-Z.-`); system key (e.g. `RECEIVABLES`, `BANK`) unique per property, set on accounts the system posts to. Never moves, never changes its system key; type fixed once lines use it. Archived, never deleted. |
+| `accounting_periods` | property, start_date, end_date, status (`OPEN`/`CLOSED`), closed_at?, closed_by_user? | Inclusive dates, at most one calendar year, never overlapping within a property (exclusion constraint), never moved. Who may reopen a closed period is an API rule (maker-checker, Part 4). |
+| `journal_entries` | property, entry_number?, entry_date, description, source (`MANUAL`/`OPENING_BALANCE`/`REVERSAL`), currency, status (`DRAFT`/`POSTED`), reverses_entry?, created_by_user?, posted_at?, posted_by_user? | Created as a draft, then posted. Posted entries carry a number and a posting time; drafts neither. A reversal says so (`source = REVERSAL`) and points at its original, at most once (unique key). Business documents add their own `source` values as they are built. |
+| `journal_lines` | entry, line_number, account, unit?, debit_minor, credit_minor, currency | Exactly one side positive, never negative. Account, unit and entry belong to the same property (composite keys); the line's currency is the entry's (composite key on `(entry, currency)`). |
+
+**Posting** (`journal_entries_guard`, DRAFT to POSTED) checks that the property is not
+archived, the entry is in the property's currency, an OPEN period covers the entry date (row
+lock, so a period cannot close while an entry is posted into it), there are at least two lines
+with equal debits and credits, every account is ACTIVE (row lock against archiving), and a
+reversal mirrors its posted original line for line (same account, unit and amount with the sides
+swapped) and is not dated before it. It then stamps `posted_at` and assigns the next
+`entry_number` of the property under an advisory lock, so posted numbers have no gaps or
+duplicates.
+
+**Immutability:** a posted entry and its lines never change: updates, deletes and new lines are
+refused by triggers that apply to every role, including the schema owner and the superuser, and
+TRUNCATE is refused. Line changes share-lock their entry, so they are serialised with posting.
+Drafts may be edited and deleted (lines first). Mistakes in posted entries are corrected by a
+reversal and, where needed, a new entry.
+
+**Currency lock:** a property's currency cannot change once it has any journal entry.
 
 Invariants:
 
-1. For a posted entry, sum(debits) = sum(credits) per currency (DB constraint trigger + domain check).
-2. Posted entries and lines are **immutable**: no UPDATE/DELETE (enforced by a trigger, not
-   only by convention). Corrections are new reversing/adjusting entries referencing the original.
+1. For a posted entry, sum(debits) = sum(credits) (posting trigger; the API checks first).
+2. Posted entries and lines are **immutable** (enforced by triggers, not only by convention).
+   Corrections are new reversing/adjusting entries referencing the original.
 3. Invoices, payments, credit notes and late fees are business documents that **produce**
    journal entries when posted; balances are derived from lines, never stored as a mutable
    number without a reconciliation check.
@@ -168,10 +188,10 @@ Invariants:
 6. Accounting policy is defined with qualified finance professionals before VEYRA claims
    statutory accounting support.
 
-Finance entities (Phase 6): `ChargeDefinition`, `ChargeSchedule`, `Invoice`, `InvoiceLine`,
-`CreditNote`, `Payment`, `PaymentAllocation`, `Refund`, `Account` (ledger account),
-`JournalEntry` (ledger transaction), `JournalLine` (ledger entry), `ReconciliationBatch`,
-`ReconciliationItem`, `Expense`, `Budget`.
+Finance entities still to come (Phase 6 Parts 2-4 and later): `ChargeDefinition`,
+`ChargeSchedule`, `Invoice`, `InvoiceLine`, `CreditNote`, `Payment`, `PaymentAllocation`,
+`Refund`, `ReconciliationBatch`, `ReconciliationItem`, `Expense`, `Budget`. The ledger tables
+above (`LedgerAccount`, `AccountingPeriod`, `JournalEntry`, `JournalLine`) are in place.
 
 ## 7. Identity vs person vs relationship
 

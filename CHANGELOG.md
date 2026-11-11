@@ -23,6 +23,16 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 6 ledger foundation** (migration `20261112090000_ledger`): a double-entry ledger per
+  property in the property's currency, with amounts as integer minor units. Ledger accounts
+  (archived, never deleted; optional system keys), accounting periods (no overlaps, at most a
+  year; postings only into an open period), journal entries and lines. Entries are created as
+  drafts and posted in a separate step. Posting checks balance, open period, active accounts,
+  currency and property, then assigns the next entry number of the property with no gaps.
+  Posted entries and their lines never change, not even for the superuser or the schema owner;
+  mistakes are corrected by a reversal that mirrors the original, at most once. A property's
+  currency is fixed once it has ledger entries. 31 database integration tests. Roadmap: the
+  Phase 6 plan and the owner's finance decisions.
 - **Phase 5 offline gate and paper log** (migration `20261111180000_offline_gate`): the gate
   screen keeps working when the connection drops, checking passes against a 4-hour list of
   hashes and queuing admissions, refusals, walk-ins to the property and departures on the device;

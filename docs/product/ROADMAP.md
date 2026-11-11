@@ -27,7 +27,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
-| 6     | Finance and billing                      | |
+| 6     | Finance and billing                      | In progress (Part 1 done) |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
@@ -126,6 +126,37 @@ personal data; a pass is never proof of identity; guards see the minimum necessa
 | 3 | In-app walk-in approval: the guard requests, a resident of the unit (not staff) approves or denies within 10 minutes, the approval admits once within 15; at most 5 open requests per unit; database backstop; polling endpoints for the app and the gate | ✅ Done |
 | 4 | Console: residents' visitor pages (register, pass, walk-in answers), the guard's gate screen (installable PWA), the supervisor's log; browser journeys per role | ✅ Done |
 | 5 | Offline: paper procedure ([GATE_OFFLINE](../operations/GATE_OFFLINE.md)) and paper-log entry for supervisors; offline gate mode with a 4-hour hashed list, a device queue and idempotent sync; entries re-checked at the time they happened and flagged for supervisor review | ✅ Done |
+
+## Phase 6 plan (Finance and billing)
+
+Decisions (owner, 2026-11-11):
+
+- **Liable party per charge type:** service charges are billed to the unit's owners; utilities
+  and similar usage charges to the current tenant, or to the owners while the unit is vacant.
+- **Recurring charges:** a flat amount per unit, or a rate per square metre of unit area. No
+  apportionment by share ratio yet.
+- **Payments:** manual (bank transfer, cash, cheque) and a payment-gateway port with signed,
+  idempotent callbacks and a sandbox adapter. No real provider yet.
+- **No late fees or penalties** in Phase 6: overdue status and ageing only.
+- **Maker-checker** (a second person approves) only for risky actions: reversals, write-offs,
+  refunds and reopening a closed period.
+- **No tax lines yet**; leave room for a per-country tax adapter.
+- **Allocation:** oldest invoice first; an overpayment is kept as unit credit and applied
+  automatically to later invoices; finance staff can reallocate.
+- **Residents** see their invoices, receipts and statement in the console and can submit a
+  bank-transfer reference for finance to confirm.
+
+Fixed by the PRD and data model: double-entry; posted entries are immutable and corrected only by
+reversing entries; amounts are integer minor units with the currency; balances are derived from
+ledger lines; callbacks are idempotent; no card data is stored.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Ledger foundation: accounts per property, accounting periods, journal entries and lines; posting checks (balance, open period, active accounts, currency) with gap-free numbering; posted entries immutable for every role; mirrored reversals, at most once; property currency fixed once entries exist; RLS | ✅ Done |
+| 2 | Finance roles and billing: finance officer permissions, the default chart of accounts and monthly periods per property, charge types with their liable party, recurring (flat or per sqm) and one-off charges, invoice issue posting to the ledger; API | |
+| 3 | Payments: manual payments and receipts, oldest-first allocation, unit credit and reallocation; payment-gateway port with signed idempotent callbacks and a sandbox adapter | |
+| 4 | Controls and reports: maker-checker for reversals, write-offs, refunds and period reopening; credit notes; statements, overdue status and ageing | |
+| 5 | Console: finance screens for staff; residents' invoices, receipts, statement and bank-transfer reference; browser journeys; Phase 6 exit review | |
 
 ## Release gates
 

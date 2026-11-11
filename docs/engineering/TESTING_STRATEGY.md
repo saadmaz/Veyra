@@ -350,6 +350,37 @@ expiry, rehash on sign-in, idempotent sign-out).
   (Playwright offline emulation); a supervisor reviews a flagged entry with a note and types in a
   paper-log walk-in that goes to review.
 
+## Phase 6 tests
+
+### Part 1: ledger data (`packages/db` integration, 31, `ledger.int.test.ts`)
+
+- No tenant context sees nothing in any ledger table; one tenant cannot see another's entries,
+  lines or accounts; rows filed under another organisation are refused by RLS; lines pointing at
+  another property's account or unit, lines in another currency than their entry, and reversals
+  of another property's entry are rejected by composite keys.
+- Accounts: code format; codes and system keys unique per property (the same key may exist in
+  another property); an account cannot move or change its system key, and its type is fixed once
+  lines use it; the application cannot delete accounts.
+- Periods: no overlap within a property (allowed across properties); at most one calendar year
+  long; dates never change; closing records when, reopening clears it.
+- Posting: a balanced entry posts and is stamped; entry numbers are consecutive per property and
+  start at 1 for each property; unbalanced, single-line and empty entries are refused; a line
+  must have exactly one positive side; amounts above 2^53 stay exact; dates in a closed period or
+  outside any period, archived accounts, a currency other than the property's and an archived
+  property are refused; entries cannot be inserted as already posted.
+- Immutability: no change to a posted entry or its lines (update, delete, adding a line, or
+  turning it back into a draft) for the application, the superuser or the schema owner; TRUNCATE
+  refused; drafts can be edited and discarded (lines first), but cannot move to another property
+  or be numbered by hand.
+- Reversals: a mirror image posts and nets every account and unit to zero; a reversal that does
+  not mirror (amount or unit), is dated before the original, or reverses a draft is refused; an
+  entry is reversed at most once.
+- Property currency: fixed once the property has a ledger entry, still changeable without one.
+- Concurrency: two concurrent postings get distinct consecutive numbers; a period cannot close
+  while an entry is being posted into it; a line added while its entry is being posted is refused
+  once the posting commits.
+- The migration drift test confirms the migrated database matches `schema.prisma`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
