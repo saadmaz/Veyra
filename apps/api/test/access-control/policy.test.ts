@@ -302,6 +302,8 @@ describe('unit scope and derived resident roles', () => {
   it('an owner covers their unit only, never a sibling unit, the property or the organisation', () => {
     const owner = [resident('OWNER', U1)];
     expect([...permissionsAt(owner, 'ACTIVE', unitIn(U1), now)].sort()).toEqual([
+      'unit.finance.pay',
+      'unit.finance.read',
       'unit.profile.read',
       'unit.residents.read',
       'unit.visitor.invite',
@@ -373,6 +375,11 @@ describe('unit scope and derived resident roles', () => {
       unitIn(U1, P1, 'ARCHIVED'),
       now,
     );
-    expect([...permissions].sort()).toEqual(['unit.profile.read', 'unit.residents.read']);
+    // Their statement stays readable; reporting a new transfer does not.
+    expect([...permissions].sort()).toEqual([
+      'unit.finance.read',
+      'unit.profile.read',
+      'unit.residents.read',
+    ]);
   });
 });

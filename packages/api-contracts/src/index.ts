@@ -1143,3 +1143,74 @@ export interface AgeingDto {
   rows: AgeingRowDto[];
   totals: AgeingBucketsDto;
 }
+
+// Residents' finance (Phase 6 Part 6). Under …/properties/:propertyId/units/:unitId/my-finance:
+// the caller's own account(s) of the unit only (owners: the owners' account; tenants: their
+// current tenancy's account).
+
+/** One of the caller's accounts on a unit. */
+export interface MyFinanceAccountDto {
+  paidBy: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  /** Positive: owed; negative: credit held for later invoices. */
+  balance: MoneyDto;
+  /** Owed on invoices past their due date. */
+  overdue: MoneyDto;
+  /** Bank transfers reported and not yet checked by finance. */
+  pendingTransfers: MoneyDto;
+}
+
+/** GET …/units/:unitId/my-finance */
+export interface MyFinanceDto {
+  unitId: string;
+  unitNumber: string;
+  /** Today in the property's time zone. */
+  asOf: string;
+  currency: string;
+  accounts: MyFinanceAccountDto[];
+}
+
+/** An issued invoice as its recipient sees it (no ledger internals). */
+export type MyInvoiceDetailDto = Omit<InvoiceDetailDto, 'journalEntryId'>;
+
+export type BankTransferStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
+
+/** A resident's report of a bank transfer, and finance's answer. */
+export interface BankTransferDto {
+  id: string;
+  unitId: string;
+  unitNumber: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  amount: MoneyDto;
+  transferredOn: string;
+  reference: string;
+  note: string | null;
+  status: BankTransferStatus;
+  submittedBy: { name: string };
+  decidedAt: string | null;
+  /** REJECTED: why, as finance wrote it for the resident. */
+  rejectionReason: string | null;
+  /** CONFIRMED: the payment recorded for it (its receipt). */
+  paymentId: string | null;
+  receiptNumber: string | null;
+  createdAt: string;
+}
+
+/** Send with an Idempotency-Key header (a UUID); a retry with the same key returns the same submission. */
+export interface SubmitBankTransferRequest {
+  paidBy: 'OWNERS' | 'TENANTS';
+  amount: string;
+  transferredOn: string;
+  reference: string;
+  note?: string;
+}
+
+export interface ConfirmBankTransferRequest {
+  /** When the money reached the bank account; defaults to the date the resident gave. */
+  receivedOn?: string;
+}
+
+export interface RejectBankTransferRequest {
+  /** Shown to the resident. */
+  reason: string;
+}

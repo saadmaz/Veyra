@@ -238,6 +238,15 @@ against the invoice, and refuse reversed payments. **Reopening a closed period**
 replaced) needs an APPROVED `REOPEN_PERIOD` approval for that period carried out after it was
 closed, so an approval cannot be reused after the period is closed again.
 
+### Residents' finance (migration `20261113090000_bank_transfers`)
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `bank_transfer_submissions` | unit, paid_by (`OWNERS`/`TENANTS`), tenancy?, amount_minor, currency, transferred_on, reference, note?, status (`PENDING`/`CONFIRMED`/`REJECTED`), submitted_by_user, idempotency_key, decided_by_user?, decided_at?, rejection_reason?, payment? | A resident's report of a bank transfer for **their own account**. On insert (trigger): starts PENDING, in the property's currency, not dated after today (property time zone), and the submitter is today a current owner of the unit (OWNERS) or a tenant of that current tenancy (TENANTS), by the same rules as `app_resident_grants`; at most 10 PENDING per account (serialised by an advisory lock on the unit). Decided once, never by the submitter (CHECK); CONFIRMED names a `BANK_TRANSFER` payment of the same unit, account, amount and currency (trigger), REJECTED carries a reason. What the resident reported never changes. `idempotency_key` unique per organisation. RLS; no DELETE grant. |
+
+Residents never read finance tables directly: the API resolves the caller's own account from
+their records on every request and filters every query by it (see ACCESS_CONTROL 6.1).
+
 Invariants:
 
 1. For a posted entry, sum(debits) = sum(credits) (posting trigger; the API checks first).

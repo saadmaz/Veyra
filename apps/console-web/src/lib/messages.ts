@@ -83,6 +83,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   NO_LONGER_OWED: 'The invoice no longer owes that much. Ask for a new approval.',
   NO_LONGER_UNUSED: 'Less of the payment is unused now. Ask for a new approval.',
   INVALID_MONEY: 'Enter a valid amount in the property currency.',
+  TOO_MANY_PENDING:
+    'Several transfers are already waiting for finance to check them. Please wait for their answer.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';

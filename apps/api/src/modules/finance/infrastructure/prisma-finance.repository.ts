@@ -16,6 +16,7 @@ import {
   AlreadyBilled,
   type ApprovalRecord,
   type ApprovalStatus,
+  type BankTransferRecord,
   type ChargeTypeRecord,
   type FinanceAuditEvent,
   type FinanceRepository,
@@ -337,6 +338,54 @@ const toApproval = ({ requestedBy, decidedBy, property, ...row }: ApprovalRow): 
   refundMethod: row.refundMethod as ApprovalRecord['refundMethod'],
   requestedByName: requestedBy.displayName,
   decidedByName: decidedBy?.displayName ?? null,
+});
+
+const TRANSFER_SELECT = {
+  id: true,
+  unitId: true,
+  paidBy: true,
+  tenancyId: true,
+  amountMinor: true,
+  currency: true,
+  transferredOn: true,
+  reference: true,
+  note: true,
+  status: true,
+  submittedByUserId: true,
+  idempotencyKey: true,
+  decidedAt: true,
+  rejectionReason: true,
+  paymentId: true,
+  createdAt: true,
+  unit: { select: { number: true } },
+  submittedBy: { select: { displayName: true } },
+  payment: { select: { receiptNumber: true } },
+} as const;
+
+type TransferRow = Omit<
+  BankTransferRecord,
+  'unitNumber' | 'transferredOn' | 'submittedByName' | 'receiptNumber'
+> & {
+  transferredOn: Date;
+  unit: { number: string };
+  submittedBy: { displayName: string };
+  payment: { receiptNumber: bigint | null } | null;
+};
+
+const toTransfer = ({
+  unit,
+  submittedBy,
+  payment,
+  transferredOn,
+  currency,
+  ...row
+}: TransferRow): BankTransferRecord => ({
+  ...row,
+  unitNumber: unit.number,
+  currency: currency.trim(),
+  transferredOn: toIso(transferredOn),
+  submittedByName: submittedBy.displayName,
+  receiptNumber: payment?.receiptNumber ?? null,
 });
 
 class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
@@ -1328,6 +1377,186 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
           r.credits.reduce((sum, c) => sum + c.amountMinor, 0n),
       }))
       .filter((r) => r.outstandingMinor > 0n);
+  }
+
+  // ------------------------------------------------------------------ residents (Part 6)
+
+  async residentStanding(
+    userId: string,
+    unitId: string,
+    date: IsoDate,
+  ): Promise<{ owner: boolean; tenancyId: string | null }> {
+    const day = toDate(date);
+    // The same rules as app_resident_grants: an ACTIVE person linked to the user, with a
+    // non-voided record whose inclusive period contains the date.
+    const me = { userId, status: 'ACTIVE' as const };
+    const [ownership, occupancy] = await Promise.all([
+      this.tx.ownership.findFirst({
+        where: {
+          ...this.scope,
+          unitId,
+          voidedAt: null,
+          effectiveFrom: { lte: day },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: day } }],
+          person: me,
+        },
+        select: { id: true },
+      }),
+      this.tx.tenancyOccupant.findFirst({
+        where: {
+          organisationId: this.organisationId,
+          person: me,
+          tenancy: {
+            propertyId: this.propertyId,
+            unitId,
+            voidedAt: null,
+            startDate: { lte: day },
+            OR: [{ endDate: null }, { endDate: { gte: day } }],
+          },
+        },
+        select: { tenancyId: true },
+      }),
+    ]);
+    return { owner: ownership !== null, tenancyId: occupancy?.tenancyId ?? null };
+  }
+
+  async partyInvoices(unitId: string, parties: readonly Party[]): Promise<InvoiceRecord[]> {
+    if (parties.length === 0) return [];
+    const rows = await this.tx.invoice.findMany({
+      where: {
+        ...this.scope,
+        unitId,
+        status: 'ISSUED',
+        OR: parties.map((p) => ({ billTo: p.billTo, tenancyId: p.tenancyId })),
+      },
+      select: INVOICE_SELECT,
+      orderBy: [{ issueDate: 'desc' }, { invoiceNumber: 'desc' }],
+      take: 200,
+    });
+    return rows.map(toInvoice);
+  }
+
+  async partyPayments(unitId: string, parties: readonly Party[]): Promise<PaymentRecord[]> {
+    if (parties.length === 0) return [];
+    const rows = await this.tx.payment.findMany({
+      where: {
+        ...this.scope,
+        unitId,
+        OR: parties.map((p) => ({ paidBy: p.billTo, tenancyId: p.tenancyId })),
+      },
+      select: PAYMENT_SELECT,
+      orderBy: [{ receivedOn: 'desc' }, { receiptNumber: 'desc' }],
+      take: 200,
+    });
+    return rows.map(toPayment);
+  }
+
+  async createTransfer(input: {
+    unitId: string;
+    party: Party;
+    amountMinor: bigint;
+    currency: string;
+    transferredOn: IsoDate;
+    reference: string;
+    note: string | null;
+    idempotencyKey: string;
+  }): Promise<string> {
+    if (!this.userId) throw new Error('A bank transfer is submitted by a signed-in user');
+    try {
+      const { id } = await this.tx.bankTransferSubmission.create({
+        data: {
+          ...this.scope,
+          unitId: input.unitId,
+          paidBy: input.party.billTo,
+          tenancyId: input.party.tenancyId,
+          amountMinor: input.amountMinor,
+          currency: input.currency,
+          transferredOn: toDate(input.transferredOn),
+          reference: input.reference,
+          note: input.note,
+          submittedByUserId: this.userId,
+          idempotencyKey: input.idempotencyKey,
+        },
+        select: { id: true },
+      });
+      return id;
+    } catch (error) {
+      if (isUniqueViolation(error, 'idempotency_key')) throw new IdempotencyConflict();
+      throw error;
+    }
+  }
+
+  async transfer(id: string, options?: { lock?: boolean }): Promise<BankTransferRecord | null> {
+    if (options?.lock) {
+      await this.tx.$queryRaw`
+        SELECT 1 FROM "bank_transfer_submissions"
+         WHERE "id" = ${id}::uuid AND "organisation_id" = ${this.organisationId}::uuid
+           AND "property_id" = ${this.propertyId}::uuid
+         FOR UPDATE`;
+    }
+    const row = await this.tx.bankTransferSubmission.findFirst({
+      where: { ...this.scope, id },
+      select: TRANSFER_SELECT,
+    });
+    return row && toTransfer(row);
+  }
+
+  async transferByIdempotencyKey(key: string): Promise<BankTransferRecord | null> {
+    const row = await this.tx.bankTransferSubmission.findFirst({
+      where: { organisationId: this.organisationId, idempotencyKey: key },
+      select: { ...TRANSFER_SELECT, propertyId: true },
+    });
+    if (!row) return null;
+    // A key reused at another property of the organisation is a conflict, not a match.
+    const { propertyId, ...rest } = row;
+    if (propertyId !== this.propertyId) throw new IdempotencyConflict();
+    return toTransfer(rest);
+  }
+
+  async transfers(filter: {
+    status?: BankTransferRecord['status'];
+    unitId?: string;
+    parties?: readonly Party[];
+  }): Promise<BankTransferRecord[]> {
+    if (filter.parties?.length === 0) return [];
+    const rows = await this.tx.bankTransferSubmission.findMany({
+      where: {
+        ...this.scope,
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.unitId ? { unitId: filter.unitId } : {}),
+        ...(filter.parties
+          ? { OR: filter.parties.map((p) => ({ paidBy: p.billTo, tenancyId: p.tenancyId })) }
+          : {}),
+      },
+      select: TRANSFER_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 200,
+    });
+    return rows.map(toTransfer);
+  }
+
+  async confirmTransfer(id: string, paymentId: string): Promise<void> {
+    await this.tx.bankTransferSubmission.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: {
+        status: 'CONFIRMED',
+        paymentId,
+        decidedByUserId: this.userId,
+        decidedAt: new Date(),
+      },
+    });
+  }
+
+  async rejectTransfer(id: string, reason: string): Promise<void> {
+    await this.tx.bankTransferSubmission.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason,
+        decidedByUserId: this.userId,
+        decidedAt: new Date(),
+      },
+    });
   }
 
   async audit(event: FinanceAuditEvent): Promise<void> {

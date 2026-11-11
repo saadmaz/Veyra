@@ -1,4 +1,5 @@
 import type {
+  BankTransferStatus,
   FinanceApprovalAction,
   InvoiceDto,
   MoneyDto,
@@ -167,4 +168,31 @@ export const INVOICE_STATE_TONES: Record<InvoiceState, 'success' | 'warning' | '
 /** The later of two property-local dates ("YYYY-MM-DD" strings sort chronologically). */
 export function laterDate(a: string, b: string): string {
   return [a, b].sort()[1] ?? a;
+}
+
+/** Residents' names for their accounts on a unit (Phase 6 Part 6). */
+export const ACCOUNT_LABELS: Record<'OWNERS' | 'TENANTS', string> = {
+  OWNERS: "Owners' account",
+  TENANTS: 'Tenancy account',
+};
+
+export const TRANSFER_STATUS_LABELS: Record<BankTransferStatus, string> = {
+  PENDING: 'waiting for finance',
+  CONFIRMED: 'confirmed',
+  REJECTED: 'not confirmed',
+};
+
+export const TRANSFER_STATUS_TONES: Record<BankTransferStatus, 'warning' | 'success' | 'danger'> = {
+  PENDING: 'warning',
+  CONFIRMED: 'success',
+  REJECTED: 'danger',
+};
+
+/** A resident's balance in words: "PKR 1,000.00 owed", "PKR 200.00 in credit" or "Nothing owed". */
+export function balanceText(balance: MoneyDto): string {
+  if (isPositive(balance)) return `${formatMoney(balance)} owed`;
+  if (isNegative(balance)) {
+    return `${formatMoney({ ...balance, amountMinor: (-minor(balance)).toString() })} in credit`;
+  }
+  return 'Nothing owed';
 }

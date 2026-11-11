@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiRequestError, NETWORK_ERROR } from '../src/lib/api-client';
 import {
   addDays,
+  balanceText,
   canDiscardIdempotencyKey,
   formatMoney,
   formatMonth,
@@ -139,5 +140,18 @@ describe('finance error messages', () => {
     expect(errorMessage(new ApiRequestError(500, 'INTERNAL', 'stack trace'))).not.toContain(
       'stack',
     );
+  });
+});
+
+describe("residents' account (Phase 6 Part 6)", () => {
+  it('says what is owed or held in credit, in words', () => {
+    expect(balanceText(pkr('100000'))).toBe('PKR 1,000.00 owed');
+    expect(balanceText(pkr('-25050'))).toBe('PKR 250.50 in credit');
+    expect(balanceText(pkr('0'))).toBe('Nothing owed');
+  });
+
+  it('explains a full transfer queue', () => {
+    const error = new ApiRequestError(409, 'TOO_MANY_PENDING', 'raw server text');
+    expect(errorMessage(error)).toMatch(/waiting for finance/);
   });
 });

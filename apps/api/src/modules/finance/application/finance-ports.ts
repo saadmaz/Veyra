@@ -265,6 +265,29 @@ export interface PaymentIntentRecord {
   paymentId: string | null;
 }
 
+/** A resident's report of a bank transfer (Phase 6 Part 6). */
+export interface BankTransferRecord {
+  id: string;
+  unitId: string;
+  unitNumber: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  amountMinor: bigint;
+  currency: string;
+  transferredOn: IsoDate;
+  reference: string;
+  note: string | null;
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED';
+  submittedByUserId: string;
+  submittedByName: string;
+  idempotencyKey: string;
+  decidedAt: Date | null;
+  rejectionReason: string | null;
+  paymentId: string | null;
+  receiptNumber: bigint | null;
+  createdAt: Date;
+}
+
 /** Thrown when another request with the same Idempotency-Key is being recorded right now. */
 export class IdempotencyConflict extends Error {}
 
@@ -427,6 +450,38 @@ export interface FinanceUnitOfWork {
     approvalId: string;
   }): Promise<void>;
   statementData(unitId: string, party: Party): Promise<StatementData>;
+  /** What the user's own records (an ACTIVE linked person) make them on the unit on the date. */
+  residentStanding(
+    userId: string,
+    unitId: string,
+    date: IsoDate,
+  ): Promise<{ owner: boolean; tenancyId: string | null }>;
+  /** Issued invoices of the unit addressed to any of the parties, newest first (at most 200). */
+  partyInvoices(unitId: string, parties: readonly Party[]): Promise<InvoiceRecord[]>;
+  /** Payments of the unit made by any of the parties, newest first (at most 200). */
+  partyPayments(unitId: string, parties: readonly Party[]): Promise<PaymentRecord[]>;
+  /** Throws IdempotencyConflict when the key was already used (or is being used right now). */
+  createTransfer(input: {
+    unitId: string;
+    party: Party;
+    amountMinor: bigint;
+    currency: string;
+    transferredOn: IsoDate;
+    reference: string;
+    note: string | null;
+    idempotencyKey: string;
+  }): Promise<string>;
+  transfer(id: string, options?: { lock?: boolean }): Promise<BankTransferRecord | null>;
+  /** Throws IdempotencyConflict when the key belongs to another property. */
+  transferByIdempotencyKey(key: string): Promise<BankTransferRecord | null>;
+  /** Newest first, at most 200. */
+  transfers(filter: {
+    status?: BankTransferRecord['status'];
+    unitId?: string;
+    parties?: readonly Party[];
+  }): Promise<BankTransferRecord[]>;
+  confirmTransfer(id: string, paymentId: string): Promise<void>;
+  rejectTransfer(id: string, reason: string): Promise<void>;
   outstandingInvoices(): Promise<OutstandingInvoice[]>;
   audit(event: FinanceAuditEvent): Promise<void>;
 }

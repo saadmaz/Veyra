@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   AccountingPeriodDto,
   AgeingDto,
+  BankTransferDto,
   ChargeTypeDto,
   FinanceApprovalDto,
   InvoiceCreditDto,
@@ -103,6 +104,34 @@ interface Allocation {
 
 type Approval = Omit<FinanceApprovalDto, 'amount'> & { propertyId: string; amount: bigint | null };
 
+interface Transfer {
+  id: string;
+  propertyId: string;
+  unitId: string;
+  paidBy: Party;
+  amount: bigint;
+  transferredOn: string;
+  reference: string;
+  note: string | null;
+  status: BankTransferDto['status'];
+  submittedBy: { userId: string; name: string };
+  idempotencyKey: string;
+  requestHash: string;
+  decidedAt: string | null;
+  rejectionReason: string | null;
+  paymentId: string | null;
+  createdAt: string;
+}
+
+/** A resident's request below …/units/:unitId/my-finance (Phase 6 Part 6). */
+export interface ResidentFinanceRequest extends Omit<FinanceRequest, 'sub' | 'permissions'> {
+  /** Path below /my-finance, e.g. "" or "/invoices". */
+  sub: string;
+  unit: UnitDto;
+  /** The caller's derived roles on the unit today. */
+  roles: string[];
+}
+
 const now = () => new Date().toISOString();
 const DAY = 86_400_000;
 
@@ -142,6 +171,7 @@ export class FakeFinance {
   allocations: Allocation[] = [];
   approvals: Approval[] = [];
   periods: (AccountingPeriodDto & { propertyId: string })[] = [];
+  transfers: Transfer[] = [];
   private counters = new Map<string, number>();
 
   private next(propertyId: string, prefix: string): string {
@@ -330,6 +360,163 @@ export class FakeFinance {
       })),
       createdAt: p.createdAt,
     };
+  }
+
+  private transferDto(t: Transfer, units: UnitDto[]): BankTransferDto {
+    return {
+      id: t.id,
+      unitId: t.unitId,
+      unitNumber: units.find((u) => u.id === t.unitId)?.number ?? '?',
+      paidBy: t.paidBy,
+      amount: this.money(t.amount),
+      transferredOn: t.transferredOn,
+      reference: t.reference,
+      note: t.note,
+      status: t.status,
+      submittedBy: { name: t.submittedBy.name },
+      decidedAt: t.decidedAt,
+      rejectionReason: t.rejectionReason,
+      paymentId: t.paymentId,
+      receiptNumber: this.payments.find((p) => p.id === t.paymentId)?.receiptNumber ?? null,
+      createdAt: t.createdAt,
+    };
+  }
+
+  /**
+   * A resident's own account(s) of a unit, as the real API narrows them: owners see the owners'
+   * account, tenants their tenancy's; drafts and other accounts do not exist for them.
+   */
+  handleResident(req: ResidentFinanceRequest): FinanceReply {
+    const { method, sub, body, url, property, today, unit } = req;
+    const pid = property.id;
+    const parties: Party[] = [];
+    if (req.roles.includes('OWNER')) parties.push('OWNERS');
+    if (req.roles.includes('TENANT')) parties.push('TENANTS');
+    if (parties.length === 0) return fail(403, 'FORBIDDEN');
+    const chosen = (paidBy: string | null): Party[] | null => {
+      if (!paidBy) return parties;
+      return parties.includes(paidBy as Party) ? [paidBy as Party] : null;
+    };
+    const visibleInvoices = (ps: Party[]) =>
+      this.invoices
+        .filter(
+          (i) =>
+            i.propertyId === pid &&
+            i.unitId === unit.id &&
+            i.status === 'ISSUED' &&
+            ps.includes(i.billTo),
+        )
+        .reverse();
+    const visiblePayments = (ps: Party[]) =>
+      this.payments
+        .filter((p) => p.propertyId === pid && p.unitId === unit.id && ps.includes(p.paidBy))
+        .reverse();
+    const transfers = (ps: Party[]) =>
+      this.transfers
+        .filter((t) => t.propertyId === pid && t.unitId === unit.id && ps.includes(t.paidBy))
+        .reverse();
+    const units = [unit];
+
+    if (sub === '' && method === 'GET') {
+      return ok({
+        unitId: unit.id,
+        unitNumber: unit.number,
+        asOf: today,
+        currency: property.currency,
+        accounts: parties.map((paidBy) => {
+          const overdue = visibleInvoices([paidBy])
+            .map((i) => this.invoiceDto(i, units, today))
+            .filter((i) => i.overdue)
+            .map((i) => BigInt(i.outstanding.amountMinor));
+          return {
+            paidBy,
+            tenancyId:
+              paidBy === 'TENANTS'
+                ? (req.tenancies.find(
+                    (t) =>
+                      t.unitId === unit.id && !t.voidedAt && covers(t.startDate, t.endDate, today),
+                  )?.id ?? null)
+                : null,
+            balance: this.statement(pid, unit, paidBy, today).balance,
+            overdue: this.money(sum(overdue)),
+            pendingTransfers: this.money(
+              sum(
+                transfers([paidBy])
+                  .filter((t) => t.status === 'PENDING')
+                  .map((t) => t.amount),
+              ),
+            ),
+          };
+        }),
+      });
+    }
+    if (sub === '/invoices' && method === 'GET') {
+      const ps = chosen(url.searchParams.get('paidBy'));
+      if (!ps) return fail(404, 'NOT_FOUND');
+      return ok({ data: visibleInvoices(ps).map((i) => this.invoiceDto(i, units, today)) });
+    }
+    const invoiceMatch = /^\/invoices\/([^/]+)$/.exec(sub);
+    if (invoiceMatch && method === 'GET') {
+      const invoice = visibleInvoices(parties).find((i) => i.id === invoiceMatch[1]);
+      if (!invoice) return fail(404, 'NOT_FOUND');
+      const { journalEntryId: _ledger, ...detail } = this.invoiceDetail(invoice, units, today);
+      return ok(detail);
+    }
+    if (sub === '/payments' && method === 'GET') {
+      const ps = chosen(url.searchParams.get('paidBy'));
+      if (!ps) return fail(404, 'NOT_FOUND');
+      return ok({ data: visiblePayments(ps).map((p) => this.paymentDto(p, units)) });
+    }
+    if (sub === '/statement' && method === 'GET') {
+      const ps = chosen(url.searchParams.get('paidBy'));
+      if (!ps || !url.searchParams.get('paidBy')) return fail(404, 'NOT_FOUND');
+      return ok(this.statement(pid, unit, ps[0] as Party, today));
+    }
+    if (sub === '/bank-transfers') {
+      if (method === 'GET')
+        return ok({ data: transfers(parties).map((t) => this.transferDto(t, units)) });
+      const key = req.idempotencyKey;
+      if (!key || !/^[0-9a-f-]{36}$/i.test(key)) return fail(400, 'IDEMPOTENCY_KEY_REQUIRED');
+      const requestHash = JSON.stringify(body);
+      const earlier = this.transfers.find((t) => t.idempotencyKey === key);
+      if (earlier) {
+        return earlier.requestHash === requestHash
+          ? ok(this.transferDto(earlier, units))
+          : fail(409, 'IDEMPOTENCY_KEY_REUSED');
+      }
+      const ps = chosen(typeof body.paidBy === 'string' ? body.paidBy : null);
+      if (!ps || !body.paidBy) return fail(404, 'NOT_FOUND');
+      const amount = parseMinor(body.amount);
+      const transferredOn = typeof body.transferredOn === 'string' ? body.transferredOn : '';
+      const reference = typeof body.reference === 'string' ? body.reference.trim() : '';
+      if (!amount || !/^\d{4}-\d{2}-\d{2}$/.test(transferredOn) || !reference)
+        return fail(400, 'VALIDATION_FAILED');
+      if (transferredOn > today)
+        return fail(422, 'VALIDATION_FAILED', 'A transfer cannot be dated in the future');
+      if (transfers(ps).filter((t) => t.status === 'PENDING').length >= 10)
+        return fail(409, 'TOO_MANY_PENDING');
+      const transfer: Transfer = {
+        id: randomUUID(),
+        propertyId: pid,
+        unitId: unit.id,
+        paidBy: ps[0] as Party,
+        amount,
+        transferredOn,
+        reference,
+        note: typeof body.note === 'string' && body.note.trim() ? body.note.trim() : null,
+        status: 'PENDING',
+        submittedBy: { userId: req.user.id, name: req.user.displayName },
+        idempotencyKey: key,
+        requestHash,
+        decidedAt: null,
+        rejectionReason: null,
+        paymentId: null,
+        createdAt: now(),
+      };
+      this.transfers.push(transfer);
+      return ok(this.transferDto(transfer, units), 201);
+    }
+    return fail(404, 'NOT_FOUND');
   }
 
   private approvalDto(a: Approval): FinanceApprovalDto {
@@ -826,6 +1013,57 @@ export class FakeFinance {
     }
 
     // ---------------------------------------------------------------- payments
+    // ---------------------------------------------------------------- residents' bank transfers
+    if (sub === '/bank-transfers' && method === 'GET') {
+      const status = url.searchParams.get('status');
+      return ok({
+        data: mine(this.transfers)
+          .filter((t) => !status || t.status === status)
+          .reverse()
+          .map((t) => this.transferDto(t, req.units)),
+      });
+    }
+    const decideTransfer = /^\/bank-transfers\/([^/]+)\/(confirm|reject)$/.exec(sub);
+    if (decideTransfer && method === 'POST') {
+      const denied = manage();
+      if (denied) return denied;
+      const transfer = mine(this.transfers).find((t) => t.id === decideTransfer[1]);
+      if (!transfer) return fail(404, 'NOT_FOUND');
+      if (transfer.status !== 'PENDING') return fail(409, 'ALREADY_DECIDED');
+      if (transfer.submittedBy.userId === req.user.id) return fail(403, 'SAME_PERSON');
+      if (decideTransfer[2] === 'reject') {
+        const reason = str('reason');
+        if (!reason) return fail(400, 'VALIDATION_FAILED');
+        Object.assign(transfer, { status: 'REJECTED', rejectionReason: reason, decidedAt: now() });
+        return ok(this.transferDto(transfer, req.units));
+      }
+      const receivedOn = str('receivedOn') ?? transfer.transferredOn;
+      if (receivedOn > today)
+        return fail(422, 'VALIDATION_FAILED', 'A payment cannot be received in the future');
+      const closed = this.postable(pid, receivedOn);
+      if (closed) return closed;
+      const payment: Payment = {
+        id: randomUUID(),
+        propertyId: pid,
+        receiptNumber: this.next(pid, 'RCT'),
+        unitId: transfer.unitId,
+        paidBy: transfer.paidBy,
+        method: 'BANK_TRANSFER',
+        amount: transfer.amount,
+        refunded: [],
+        reversedOn: null,
+        receivedOn,
+        reference: transfer.reference,
+        idempotencyKey: null,
+        requestHash: '',
+        createdAt: now(),
+      };
+      this.payments.push(payment);
+      this.allocateOldestFirst(payment, today);
+      Object.assign(transfer, { status: 'CONFIRMED', paymentId: payment.id, decidedAt: now() });
+      return ok(this.transferDto(transfer, req.units));
+    }
+
     if (sub === '/payments') {
       if (method === 'GET') {
         const unitId = url.searchParams.get('unitId');

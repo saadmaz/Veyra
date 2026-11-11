@@ -217,6 +217,33 @@ entry (a bounced cheque), after which the payment is ignored; **reopening** a pe
 postings into it again. Invoices show `credited` and `overdue`; payments show `refunded` and
 `reversedOn`.
 
+### Residents' finance (Phase 6 Part 6)
+
+Under `/organisations/{orgId}/properties/{propertyId}/units/{unitId}/my-finance`. Unit-scoped:
+`unit.finance.read` (owners and current tenants; household members 403). Every answer is
+narrowed to **the caller's own account**: an owner sees the owners' account, a tenant the account
+of the tenancy they are on today. Asking for an account that is not yours, an invoice or receipt
+of another account, or a draft invoice is 404; so is a caller with the permission but no
+account on the unit (e.g. an organisation admin who does not live there).
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| GET | (the base path) | read; `{ unitId, unitNumber, asOf, currency, accounts: [{ paidBy, tenancyId, balance, overdue, pendingTransfers }] }` |
+| GET | `invoices?paidBy=` | read; issued invoices of your account(s), newest first, at most 200 |
+| GET | `invoices/{id}` | read; lines and credits (a write-off's reason reads "Written off"); no `journalEntryId` |
+| GET | `payments?paidBy=`, `payments/{id}` | read; your receipts and what they paid |
+| GET | `statement?paidBy=OWNERS\|TENANTS` | read; the same statement finance sees for that account |
+| GET | `bank-transfers` | read; transfers reported for your accounts, newest first |
+| POST | `bank-transfers` | `unit.finance.pay`; header `Idempotency-Key` (400 without it); `{ paidBy, amount, transferredOn, reference, note? }`; 201 PENDING; a replay 200; the key with another request 409 `IDEMPOTENCY_KEY_REUSED`; future date 422; 10 already waiting 409 `TOO_MANY_PENDING` |
+
+Finance checks them under the property's `finance/`:
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| GET | `bank-transfers?status=PENDING\|CONFIRMED\|REJECTED` | read |
+| POST | `bank-transfers/{id}/confirm` | manage, never the submitter (403 `SAME_PERSON`); `{ receivedOn? }` (default: the date the resident gave); records a `BANK_TRANSFER` payment for that account with the resident's reference, applied oldest first like any payment; 409 `ALREADY_DECIDED` |
+| POST | `bank-transfers/{id}/reject` | manage, never the submitter; `{ reason }` (shown to the resident) |
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.
