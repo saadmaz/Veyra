@@ -13,11 +13,16 @@ import {
   hashCode,
   hashToken,
   MAX_LEAD_MS,
+  MAX_PENDING_WALK_INS_PER_UNIT,
   newPassSecret,
   type PassSecret,
   passRejection,
   type ValidatePassInput,
+  WALK_IN_ANSWER_MS,
   type WalkInInput,
+  type WalkInRequestInput,
+  walkInAdmissionProblem,
+  walkInStatus,
 } from '../domain/visitor-rules';
 import {
   type InvitationRecord,
@@ -26,12 +31,15 @@ import {
   VISITORS_REPOSITORY,
   type VisitorsRepository,
   type VisitorsUnitOfWork,
+  type WalkInRequestRecord,
 } from './visitor-ports';
 
 /** Pass lookups per guard: enough for a busy gate, too few to guess reference codes. */
 const VALIDATE_LIMIT = { limit: 60, windowMs: 60_000 };
 /** How long ended invitations stay in lists. */
 const RECENT_MS = 7 * 86_400_000;
+/** How far back walk-in requests are listed: the gate screen and a resident's recent answers. */
+const RECENT_WALK_INS_MS = 24 * 3_600_000;
 
 /**
  * The database backstop refused an admission the API had just allowed: a race lost to another
@@ -250,7 +258,7 @@ export class VisitorsService {
       throw new ApiError(
         409,
         'WALK_IN_NEEDS_APPROVAL',
-        'A visitor without a pass needs the resident’s approval before entering a unit',
+        'A visitor without a pass needs the resident’s approval before entering a unit: send a walk-in request',
       );
     }
     return this.inProperty(access, meta, async (uow) => {
@@ -299,7 +307,139 @@ export class VisitorsService {
     return this.inProperty(access, meta, (uow) => uow.visitorsInside());
   }
 
+  // ------------------------------------------------------------------ walk-in approval (Part 3)
+
+  /** The guard asks the unit's residents to let someone in; they have 10 minutes to answer. */
+  requestWalkIn(access: OrganisationAccess, input: WalkInRequestInput, meta: RequestMeta) {
+    const now = this.clock.now();
+    return this.inProperty(access, meta, async (uow) => {
+      const unit = await uow.unit(input.unitId);
+      if (!unit) throw notFound('Unit');
+      if (unit.status === 'ARCHIVED') throw new ApiError(409, 'ARCHIVED', 'This unit is archived');
+      if ((await uow.openWalkInCount(input.unitId, now)) >= MAX_PENDING_WALK_INS_PER_UNIT) {
+        throw new ApiError(
+          409,
+          'TOO_MANY_WALK_IN_REQUESTS',
+          'This unit already has several requests waiting for an answer',
+        );
+      }
+      const id = await uow.createWalkInRequest(input, new Date(now.getTime() + WALK_IN_ANSWER_MS));
+      return this.requireWalkIn(uow, id);
+    });
+  }
+
+  gateWalkInRequests(access: OrganisationAccess, meta: RequestMeta) {
+    const since = new Date(this.clock.now().getTime() - RECENT_WALK_INS_MS);
+    return this.inProperty(access, meta, (uow) => uow.walkInRequests({ createdAfter: since }));
+  }
+
+  gateWalkInRequest(access: OrganisationAccess, id: string, meta: RequestMeta) {
+    return this.inProperty(access, meta, (uow) => this.requireWalkIn(uow, id));
+  }
+
+  cancelWalkIn(access: OrganisationAccess, id: string, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => {
+      const request = await this.requireWalkIn(uow, id, true);
+      if (request.status !== 'PENDING') {
+        throw new ApiError(409, 'WALK_IN_NOT_PENDING', 'This request was already answered');
+      }
+      await uow.decideWalkInRequest(id, 'CANCELLED', this.clock.now());
+      return this.requireWalkIn(uow, id);
+    });
+  }
+
+  /** Admits the visitor on a resident's approval: once, and within 15 minutes of it. */
+  admitWalkIn(access: OrganisationAccess, id: string, gate: string | undefined, meta: RequestMeta) {
+    return this.inProperty(
+      access,
+      meta,
+      async (uow) => {
+        const request = await this.requireWalkIn(uow, id, true);
+        const problem = walkInAdmissionProblem(request, this.clock.now());
+        if (problem) {
+          throw new ApiError(
+            409,
+            'WALK_IN_NOT_APPROVED',
+            `This visitor cannot be admitted: ${problem}`,
+          );
+        }
+        const visit = await uow.createVisit({
+          unitId: request.unitId,
+          invitationId: null,
+          passId: null,
+          walkInRequestId: request.id,
+          category: request.category,
+          visitorName: request.visitorName,
+          visitorPhone: request.visitorPhone,
+          vehiclePlate: request.vehiclePlate,
+          decision: 'ADMITTED',
+          denialReason: null,
+          gate: gate ?? request.gate,
+          arrivedAt: this.clock.now(),
+        });
+        await uow.accessEvent('VISIT_ADMITTED', visit.arrivedAt, {
+          visitId: visit.id,
+          gate: visit.gate,
+        });
+        return visit;
+      },
+      () => new ApiError(409, 'WALK_IN_NOT_APPROVED', 'This approval can no longer be used'),
+    );
+  }
+
+  /** Requests waiting for this unit's residents, and recent answers. */
+  unitWalkInRequests(access: OrganisationAccess, meta: RequestMeta) {
+    const unitId = this.unitOf(access);
+    const since = new Date(this.clock.now().getTime() - RECENT_WALK_INS_MS);
+    return this.inProperty(access, meta, (uow) =>
+      uow.walkInRequests({ unitId, createdAfter: since }),
+    );
+  }
+
+  /**
+   * A resident approves or denies. Only someone who lives at the unit today may answer (owner
+   * decision: the resident approves), not staff; and only before the request expires.
+   */
+  decideWalkIn(access: OrganisationAccess, id: string, approve: boolean, meta: RequestMeta) {
+    const unitId = this.unitOf(access);
+    return this.inProperty(
+      access,
+      meta,
+      async (uow) => {
+        if (!(await uow.callerIsResidentOf(unitId))) {
+          throw new ApiError(
+            403,
+            'FORBIDDEN',
+            'Only residents of the unit can answer a walk-in request',
+          );
+        }
+        const request = await this.requireWalkIn(uow, id, true);
+        if (request.unitId !== unitId) throw notFound('Walk-in request');
+        const status = walkInStatus(request, this.clock.now());
+        if (status === 'EXPIRED') {
+          throw new ApiError(409, 'WALK_IN_EXPIRED', 'This request expired before it was answered');
+        }
+        if (status !== 'PENDING') {
+          throw new ApiError(409, 'WALK_IN_NOT_PENDING', 'This request was already answered');
+        }
+        await uow.decideWalkInRequest(id, approve ? 'APPROVED' : 'DENIED', this.clock.now());
+        return this.requireWalkIn(uow, id);
+      },
+      () => new ApiError(409, 'WALK_IN_EXPIRED', 'This request expired before it was answered'),
+    );
+  }
+
   // ------------------------------------------------------------------ helpers
+
+  private async requireWalkIn(
+    uow: VisitorsUnitOfWork,
+    id: string,
+    lock = false,
+  ): Promise<WalkInRequestRecord> {
+    const request = await uow.walkInRequest(id, { lock });
+    if (!request) throw notFound('Walk-in request');
+    return request;
+  }
 
   private async checkPass(uow: VisitorsUnitOfWork, pass: PassRecord | null): Promise<PassCheck> {
     if (!pass) return { valid: false, reason: 'NOT_FOUND', invitationId: null };
@@ -394,7 +534,9 @@ export class VisitorsService {
         work,
       );
     } catch (error) {
-      if (onCheckViolation && databaseErrorCode(error) === '23514') throw onCheckViolation();
+      // 23514: a CHECK or backstop trigger refused; 23505: a walk-in approval already used.
+      const code = databaseErrorCode(error);
+      if (onCheckViolation && (code === '23514' || code === '23505')) throw onCheckViolation();
       throw error;
     }
   }

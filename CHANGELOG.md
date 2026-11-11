@@ -7,6 +7,8 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Changed
 
+- Fixed an intermittent API integration test (membership valid from the database's `now()`
+  checked against the API's clock, which can differ by milliseconds on Windows).
 - Local PostgreSQL (docker compose) now runs as superuser `postgres` and bootstraps the
   VEYRA roles. `.env.example` uses `veyra_app` for `DATABASE_URL` and adds
   `MIGRATION_DATABASE_URL` (`veyra_owner`). Existing local volumes must be recreated.
@@ -21,6 +23,11 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 5 walk-in approval** (migration `20261111150000_walk_in_requests`): guards request
+  entry for someone without a pass; a resident of the unit (not staff) approves or denies in the
+  app within 10 minutes; an approval admits once within 15 minutes; at most five open requests
+  per unit. The database refuses decisions after expiry and any online admission to a unit
+  without an invitation or a fresh, unused approval. Polling endpoints for the gate and the app.
 - **Phase 5 visitor API and security roles**: `SECURITY_GUARD` and `SECURITY_SUPERVISOR`
   (property-scoped) and permissions `unit.visitor.invite`, `property.visitor.check_in`,
   `property.visitor.read`, `property.visitor.manage`; owners, tenants, household members and

@@ -348,7 +348,13 @@ describe('membership lifecycle takes effect on the next request', () => {
     );
     await as(carol).get(`/api/v1/organisations/${orgA}`).expect(404);
 
-    await inTenant(orgA, 'UPDATE memberships SET valid_from = now() WHERE id = $1', [id]);
+    // A second in the past, not now(): the database clock and the API's clock can differ by a
+    // few milliseconds (seen on Windows), which made this check fail intermittently.
+    await inTenant(
+      orgA,
+      `UPDATE memberships SET valid_from = now() - interval '1 second' WHERE id = $1`,
+      [id],
+    );
     await as(carol).get(`/api/v1/organisations/${orgA}`).expect(200);
   });
 

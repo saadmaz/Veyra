@@ -17,8 +17,9 @@ import {
   type VisitorsRepository,
   type VisitorsUnitOfWork,
   type VisitRecord,
+  type WalkInRequestRecord,
 } from '../application/visitor-ports';
-import type { CreateInvitationInput } from '../domain/visitor-rules';
+import type { CreateInvitationInput, WalkInRequestInput } from '../domain/visitor-rules';
 
 const clip = (value: string | null, max: number) => (value === null ? null : value.slice(0, max));
 
@@ -87,6 +88,33 @@ type VisitRow = Omit<VisitRecord, 'unitNumber'> & { unit: { number: string } | n
 const toVisit = ({ unit, ...row }: VisitRow): VisitRecord => ({
   ...row,
   unitNumber: unit?.number ?? null,
+});
+
+const WALK_IN_SELECT = {
+  id: true,
+  unitId: true,
+  category: true,
+  visitorName: true,
+  visitorPhone: true,
+  vehiclePlate: true,
+  gate: true,
+  status: true,
+  createdAt: true,
+  expiresAt: true,
+  decidedAt: true,
+  unit: { select: { number: true } },
+  _count: { select: { visits: true } },
+} as const;
+
+type WalkInRow = Omit<WalkInRequestRecord, 'unitNumber' | 'used'> & {
+  unit: { number: string };
+  _count: { visits: number };
+};
+
+const toWalkIn = ({ unit, _count, ...row }: WalkInRow): WalkInRequestRecord => ({
+  ...row,
+  unitNumber: unit.number,
+  used: _count.visits > 0,
 });
 
 class PrismaVisitorsUnitOfWork implements VisitorsUnitOfWork {
@@ -312,6 +340,73 @@ class PrismaVisitorsUnitOfWork implements VisitorsUnitOfWork {
       take: 1000,
     });
     return rows.map((row) => toVisit(row as VisitRow));
+  }
+
+  async callerIsResidentOf(unitId: string): Promise<boolean> {
+    const rows = await this.tx.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM app_resident_grants(${this.userId}::uuid) g
+       WHERE g."unit_id" = ${unitId}::uuid AND g."property_id" = ${this.propertyId}::uuid`;
+    return (rows[0]?.n ?? 0) > 0;
+  }
+
+  async createWalkInRequest(input: WalkInRequestInput, expiresAt: Date) {
+    const row = await this.tx.walkInRequest.create({
+      data: {
+        ...this.scope,
+        unitId: input.unitId,
+        category: input.category,
+        visitorName: input.visitorName,
+        visitorPhone: input.visitorPhone ?? null,
+        vehiclePlate: input.vehiclePlate ?? null,
+        gate: input.gate ?? null,
+        requestedByUserId: this.userId,
+        expiresAt,
+      },
+      select: { id: true },
+    });
+    return row.id;
+  }
+
+  async walkInRequest(id: string, options: { lock?: boolean } = {}) {
+    if (options.lock) {
+      await this.tx.$queryRaw`
+        SELECT "id" FROM "walk_in_requests"
+         WHERE "id" = ${id}::uuid AND "organisation_id" = ${this.organisationId}::uuid
+           AND "property_id" = ${this.propertyId}::uuid
+         FOR UPDATE`;
+    }
+    const row = await this.tx.walkInRequest.findFirst({
+      where: { id, ...this.scope },
+      select: WALK_IN_SELECT,
+    });
+    return row ? toWalkIn(row as WalkInRow) : null;
+  }
+
+  openWalkInCount(unitId: string, now: Date) {
+    return this.tx.walkInRequest.count({
+      where: { ...this.scope, unitId, status: 'PENDING', expiresAt: { gte: now } },
+    });
+  }
+
+  async walkInRequests(filter: { unitId?: string; createdAfter: Date }) {
+    const rows = await this.tx.walkInRequest.findMany({
+      where: {
+        ...this.scope,
+        ...(filter.unitId ? { unitId: filter.unitId } : {}),
+        createdAt: { gte: filter.createdAfter },
+      },
+      select: WALK_IN_SELECT,
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return rows.map((row) => toWalkIn(row as WalkInRow));
+  }
+
+  async decideWalkInRequest(id: string, status: 'APPROVED' | 'DENIED' | 'CANCELLED', at: Date) {
+    await this.tx.walkInRequest.updateMany({
+      where: { id, ...this.scope, status: 'PENDING' },
+      data: { status, decidedAt: at, decidedByUserId: this.userId },
+    });
   }
 
   async accessEvent(

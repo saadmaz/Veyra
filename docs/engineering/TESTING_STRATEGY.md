@@ -294,6 +294,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   permissions at a property and none at its units; only holders of gate permissions can appoint
   a guard.
 
+### Part 3: walk-in approval
+
+- `packages/db` integration (7, `walk-in-requests.int.test.ts`): no rows without tenant
+  context; expiry within 30 minutes; a decision records who made it; decided once and never
+  edited; no approval after expiry (cancel still allowed); admission to a unit refused without
+  a request, with a pending one, for another unit (composite key), twice on one approval
+  (unique) and after the 15-minute approval window; walk-ins to the property need no request.
+- `apps/api` integration (+5): a resident approves and the guard admits once (pending and
+  reused approvals refused); only residents of the unit answer, not admins, guards or residents
+  of other units (household members can); denied or cancelled requests cannot be approved or
+  used; at most five open requests per unit; the gate lists its requests; direct walk-ins to a
+  unit stay refused.
+- `apps/api` unit (+2): expiry after exactly 10 minutes; admission problems (not approved,
+  lapsed after 15 minutes, already used).
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

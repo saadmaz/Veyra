@@ -404,3 +404,81 @@ describe('supervision', () => {
     expect(limited.body.error.code).toBe('RATE_LIMITED');
   });
 });
+
+describe('walk-in approval (Part 3)', () => {
+  const walkIns = () => `${pUrl()}/gate/walk-in-requests`;
+  const unitWalkIns = (unit = 'U1') => `${uUrl(unit)}/walk-in-requests`;
+  const ask = async (unit = 'U1', name = 'Wally Walkin') =>
+    (
+      await as(guard)
+        .post(walkIns())
+        .send({ unitId: units[unit], category: 'GUEST', visitorName: name, gate: 'Main gate' })
+        .expect(201)
+    ).body as { id: string; status: string; expiresAt: string; approvalValidUntil: string | null };
+
+  it('lets a resident approve, and the guard admit once on it', async () => {
+    const request = await ask();
+    expect(request.status).toBe('PENDING');
+    const deadline = Date.parse(request.expiresAt) - Date.now();
+    expect(deadline).toBeGreaterThan(9 * 60_000);
+    expect(deadline).toBeLessThanOrEqual(10 * 60_000);
+
+    const waiting = await as(owner).get(unitWalkIns()).expect(200);
+    expect(waiting.body.data.map((r: { id: string }) => r.id)).toContain(request.id);
+    const early = await as(guard).post(`${walkIns()}/${request.id}/admit`).send({}).expect(409);
+    expect(early.body.error.code).toBe('WALK_IN_NOT_APPROVED');
+
+    const approved = await as(owner).post(`${unitWalkIns()}/${request.id}/approve`).expect(200);
+    expect(approved.body.status).toBe('APPROVED');
+    expect(approved.body.approvalValidUntil).not.toBeNull();
+    const polled = await as(guard).get(`${walkIns()}/${request.id}`).expect(200);
+    expect(polled.body).toMatchObject({ status: 'APPROVED', used: false });
+
+    const visit = await as(guard).post(`${walkIns()}/${request.id}/admit`).send({}).expect(201);
+    expect(visit.body).toMatchObject({ decision: 'ADMITTED', unitNumber: 'U1', gate: 'Main gate' });
+    const reused = await as(guard).post(`${walkIns()}/${request.id}/admit`).send({}).expect(409);
+    expect(reused.body.error.code).toBe('WALK_IN_NOT_APPROVED');
+  });
+
+  it('lets only residents of the unit answer, not staff, guards or neighbours', async () => {
+    const request = await ask();
+    await as(admin).post(`${unitWalkIns()}/${request.id}/approve`).expect(403);
+    await as(guard).post(`${unitWalkIns()}/${request.id}/approve`).expect(403);
+    await as(guard).get(unitWalkIns()).expect(403);
+    await as(tenant).post(`${unitWalkIns()}/${request.id}/approve`).expect(404);
+    // A household member is a resident too.
+    await as(child).post(`${unitWalkIns()}/${request.id}/deny`).expect(200);
+  });
+
+  it('decides once: denied or cancelled requests cannot be approved or used', async () => {
+    const denied = await ask();
+    await as(owner).post(`${unitWalkIns()}/${denied.id}/deny`).expect(200);
+    const again = await as(owner).post(`${unitWalkIns()}/${denied.id}/approve`).expect(409);
+    expect(again.body.error.code).toBe('WALK_IN_NOT_PENDING');
+    await as(guard).post(`${walkIns()}/${denied.id}/admit`).send({}).expect(409);
+
+    const cancelled = await ask();
+    const res = await as(guard).post(`${walkIns()}/${cancelled.id}/cancel`).expect(200);
+    expect(res.body.status).toBe('CANCELLED');
+    await as(owner).post(`${unitWalkIns()}/${cancelled.id}/approve`).expect(409);
+  });
+
+  it('keeps at most five open requests per unit', async () => {
+    for (let i = 0; i < 5; i += 1) await ask('U3', `Visitor ${i}`);
+    const sixth = await as(guard)
+      .post(walkIns())
+      .send({ unitId: units.U3, category: 'GUEST', visitorName: 'One too many' })
+      .expect(409);
+    expect(sixth.body.error.code).toBe('TOO_MANY_WALK_IN_REQUESTS');
+  });
+
+  it('shows the gate its recent requests and still refuses direct walk-ins to a unit', async () => {
+    const list = await as(guard).get(walkIns()).expect(200);
+    expect(list.body.data.length).toBeGreaterThan(0);
+    const direct = await as(guard)
+      .post(gate('walk-in'))
+      .send({ unitId: units.U1, category: 'GUEST', visitorName: 'Surprise Guest' })
+      .expect(409);
+    expect(direct.body.error.code).toBe('WALK_IN_NEEDS_APPROVAL');
+  });
+});
