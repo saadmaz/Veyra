@@ -20,6 +20,7 @@ import {
   recurringAmount,
   resolveBillTo,
 } from '../domain/finance-rules';
+import { applyCredit, requireOpenPeriod, systemAccount } from './credit';
 import {
   AlreadyBilled,
   FINANCE_REPOSITORY,
@@ -439,21 +440,9 @@ export class FinanceService {
     }
     if (dueDate !== invoice.dueDate) await uow.setDueDate(id, dueDate);
 
-    const period = await uow.ensureMonthlyPeriod(today);
-    if (period !== 'OPEN') {
-      throw new ApiError(409, 'PERIOD_CLOSED', 'The accounting period for today is closed');
-    }
+    await requireOpenPeriod(uow, today);
     const accounts = await uow.accounts();
-    const receivables = accounts.find(
-      (a) => a.systemKey === 'RECEIVABLES' && a.status === 'ACTIVE',
-    );
-    if (!receivables) {
-      throw new ApiError(
-        409,
-        'FINANCE_NOT_SET_UP',
-        "Set up this property's finance before issuing invoices",
-      );
-    }
+    const receivables = systemAccount(accounts, 'RECEIVABLES');
     const income = new Map<string, bigint>();
     for (const line of invoice.lines) {
       income.set(line.incomeAccountId, (income.get(line.incomeAccountId) ?? 0n) + line.amountMinor);
@@ -481,13 +470,21 @@ export class FinanceService {
         creditMinor: amount,
       })),
     ];
-    const entryId = await uow.postInvoiceEntry(
+    const entryId = await uow.postEntry(
+      'INVOICE',
       `Invoice for unit ${invoice.unitNumber}`,
       today,
       invoice.currency,
       lines,
     );
     await uow.markIssued(id, entryId, today);
+    // Credit the same party already has goes to the new invoice at once (owner decision).
+    await applyCredit(uow, {
+      unitId: invoice.unitId,
+      party: { billTo: invoice.billTo, tenancyId: invoice.tenancyId },
+      date: today,
+      currency: invoice.currency,
+    });
     await uow.audit({
       action: 'invoice.issued',
       resourceType: 'invoice',

@@ -81,6 +81,7 @@ export interface InvoiceRecord {
   unitId: string;
   unitNumber: string;
   billTo: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
   recipients: InvoiceRecipientRecord[];
   billingMonth: IsoDate | null;
   billingDate: IsoDate;
@@ -88,6 +89,8 @@ export interface InvoiceRecord {
   issueDate: IsoDate | null;
   currency: string;
   totalMinor: bigint;
+  /** Sum of the allocations not released. */
+  paidMinor: bigint;
   journalEntryId: string | null;
   createdAt: Date;
   issuedAt: Date | null;
@@ -121,6 +124,72 @@ export interface NewLedgerLine {
   debitMinor: bigint;
   creditMinor: bigint;
 }
+
+/** Who paid, or who an invoice is addressed to: the owners, or one tenancy. */
+export interface Party {
+  billTo: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+}
+
+export interface AllocationRecord {
+  id: string;
+  paymentId: string;
+  invoiceId: string;
+  invoiceNumber: bigint | null;
+  unitId: string;
+  amountMinor: bigint;
+  createdAt: Date;
+  releasedAt: Date | null;
+}
+
+export interface PaymentRecord {
+  id: string;
+  receiptNumber: bigint;
+  unitId: string;
+  unitNumber: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  method: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | 'GATEWAY';
+  amountMinor: bigint;
+  currency: string;
+  receivedOn: IsoDate;
+  reference: string | null;
+  idempotencyKey: string | null;
+  createdAt: Date;
+  allocations: AllocationRecord[];
+}
+
+export interface NewPayment {
+  unitId: string;
+  party: Party;
+  method: PaymentRecord['method'];
+  amountMinor: bigint;
+  currency: string;
+  receivedOn: IsoDate;
+  reference: string | null;
+  journalEntryId: string;
+  idempotencyKey: string | null;
+  paymentIntentId: string | null;
+}
+
+export interface PaymentIntentRecord {
+  id: string;
+  unitId: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  amountMinor: bigint;
+  currency: string;
+  provider: string;
+  providerReference: string;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED';
+  expiresAt: Date;
+  completedAt: Date | null;
+  createdAt: Date;
+  paymentId: string | null;
+}
+
+/** Thrown when another request with the same Idempotency-Key is being recorded right now. */
+export class IdempotencyConflict extends Error {}
 
 /** The state of the accounting period covering a date after trying to open its month. */
 export type PeriodState = 'OPEN' | 'CLOSED' | 'NONE';
@@ -177,14 +246,59 @@ export interface FinanceUnitOfWork {
   deleteDraftInvoice(id: string): Promise<void>;
   /** Opens the month's period for the date unless a period already covers it. */
   ensureMonthlyPeriod(date: IsoDate): Promise<PeriodState>;
-  /** Creates and posts an INVOICE journal entry; returns its id. */
-  postInvoiceEntry(
+  /** Creates and posts a journal entry; returns its id. */
+  postEntry(
+    source: 'INVOICE' | 'PAYMENT' | 'ALLOCATION',
     description: string,
     entryDate: IsoDate,
     currency: string,
     lines: NewLedgerLine[],
   ): Promise<string>;
   markIssued(id: string, journalEntryId: string, issueDate: IsoDate): Promise<void>;
+  /** Throws IdempotencyConflict when the key was used concurrently. */
+  createPayment(payment: NewPayment): Promise<string>;
+  payment(id: string): Promise<PaymentRecord | null>;
+  paymentByIdempotencyKey(key: string): Promise<PaymentRecord | null>;
+  payments(filter: { unitId?: string }): Promise<PaymentRecord[]>;
+  /** The party's payments with money not yet allocated, oldest first. */
+  creditSources(
+    unitId: string,
+    party: Party,
+  ): Promise<{ paymentId: string; remainingMinor: bigint }[]>;
+  /** The party's issued invoices not fully paid, oldest due first. */
+  openInvoices(
+    unitId: string,
+    party: Party,
+  ): Promise<{ invoiceId: string; outstandingMinor: bigint }[]>;
+  createAllocation(input: {
+    unitId: string;
+    paymentId: string;
+    invoiceId: string;
+    amountMinor: bigint;
+    journalEntryId: string;
+  }): Promise<string>;
+  allocation(id: string): Promise<AllocationRecord | null>;
+  releaseAllocation(id: string, releaseEntryId: string): Promise<void>;
+  createPaymentIntent(input: {
+    unitId: string;
+    party: Party;
+    amountMinor: bigint;
+    currency: string;
+    provider: string;
+    providerReference: string;
+    expiresAt: Date;
+  }): Promise<string>;
+  paymentIntent(id: string, options?: { lock?: boolean }): Promise<PaymentIntentRecord | null>;
+  completePaymentIntent(id: string, status: 'SUCCEEDED' | 'FAILED'): Promise<void>;
+  /** True when this provider event was already processed. */
+  providerEventSeen(provider: string, eventId: string): Promise<boolean>;
+  recordProviderEvent(input: {
+    provider: string;
+    eventId: string;
+    type: string;
+    intentId: string;
+    outcome: string;
+  }): Promise<void>;
   audit(event: FinanceAuditEvent): Promise<void>;
 }
 
@@ -192,10 +306,16 @@ export interface FinanceRepository {
   inProperty<T>(
     organisationId: string,
     propertyId: string,
-    userId: string,
+    /** Null for provider callbacks (no signed-in user). */
+    userId: string | null,
     meta: RequestMeta,
     work: (uow: FinanceUnitOfWork) => Promise<T>,
   ): Promise<T>;
+  /** Finds the intent a verified provider callback refers to, across organisations. */
+  intentByProviderReference(
+    provider: string,
+    providerReference: string,
+  ): Promise<{ id: string; organisationId: string; propertyId: string } | null>;
 }
 
 export const FINANCE_REPOSITORY = Symbol('FINANCE_REPOSITORY');

@@ -28,6 +28,7 @@ export interface AccountDefinition {
 export const DEFAULT_ACCOUNTS: readonly AccountDefinition[] = [
   { code: '1000', name: 'Bank', type: 'ASSET', systemKey: 'BANK' },
   { code: '1010', name: 'Cash', type: 'ASSET', systemKey: 'CASH' },
+  { code: '1050', name: 'Payment gateway clearing', type: 'ASSET', systemKey: 'GATEWAY_CLEARING' },
   { code: '1100', name: 'Receivables from units', type: 'ASSET', systemKey: 'RECEIVABLES' },
   { code: '2100', name: 'Unit credit (overpayments)', type: 'LIABILITY', systemKey: 'UNIT_CREDIT' },
   { code: '3000', name: 'Opening balances', type: 'EQUITY', systemKey: 'OPENING_BALANCE' },
@@ -264,3 +265,88 @@ export function monthBounds(date: IsoDate): { start: IsoDate; end: IsoDate } {
 
 /** "INV-000042". */
 export const formatInvoiceNumber = (n: bigint | number) => `INV-${String(n).padStart(6, '0')}`;
+
+// ------------------------------------------------------------------ payments (Part 3)
+
+export type PaidBy = 'OWNERS' | 'TENANTS';
+export type ManualPaymentMethod = 'BANK_TRANSFER' | 'CASH' | 'CHEQUE';
+
+export const recordPaymentSchema = z.object({
+  unitId: z.uuid(),
+  paidBy: z.enum(['OWNERS', 'TENANTS']),
+  method: z.enum(['BANK_TRANSFER', 'CASH', 'CHEQUE']),
+  amount: amountSchema,
+  receivedOn: calendarDateSchema,
+  reference: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+});
+export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+
+export const allocatePaymentSchema = z.object({ invoiceId: z.uuid(), amount: amountSchema });
+export type AllocatePaymentInput = z.infer<typeof allocatePaymentSchema>;
+
+export const createPaymentIntentSchema = z.object({
+  unitId: z.uuid(),
+  paidBy: z.enum(['OWNERS', 'TENANTS']),
+  amount: amountSchema,
+});
+export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema>;
+
+export const paymentListQuerySchema = z.object({ unitId: z.uuid().optional() });
+
+/** The Idempotency-Key header: a UUID chosen by the client for one logical request. */
+export const idempotencyKeySchema = z.uuid({ message: 'Send an Idempotency-Key header (a UUID)' });
+
+/** The ledger account money arrives in, by payment method. */
+export function cashAccountKey(method: ManualPaymentMethod | 'GATEWAY'): string {
+  if (method === 'CASH') return 'CASH';
+  if (method === 'GATEWAY') return 'GATEWAY_CLEARING';
+  return 'BANK';
+}
+
+export interface CreditSource {
+  paymentId: string;
+  remainingMinor: bigint;
+}
+
+export interface OpenInvoice {
+  invoiceId: string;
+  outstandingMinor: bigint;
+}
+
+/**
+ * Oldest first (owner decision, 2026-11-11): the oldest unpaid invoice is paid from the oldest
+ * unused payment, and so on. Both lists arrive oldest first. Whatever is left stays as credit.
+ */
+export function planAllocations(
+  credits: readonly CreditSource[],
+  invoices: readonly OpenInvoice[],
+): { paymentId: string; invoiceId: string; amountMinor: bigint }[] {
+  const left = credits.map((c) => ({ ...c }));
+  const plan: { paymentId: string; invoiceId: string; amountMinor: bigint }[] = [];
+  let source = 0;
+  for (const invoice of invoices) {
+    let due = invoice.outstandingMinor;
+    while (due > 0n && source < left.length) {
+      const credit = left[source];
+      if (!credit || credit.remainingMinor <= 0n) {
+        source += 1;
+        continue;
+      }
+      // biome-ignore lint/complexity/useMathMinMax: Math.min does not accept bigint.
+      const amount = credit.remainingMinor < due ? credit.remainingMinor : due;
+      plan.push({ paymentId: credit.paymentId, invoiceId: invoice.invoiceId, amountMinor: amount });
+      credit.remainingMinor -= amount;
+      due -= amount;
+    }
+    if (source >= left.length) break;
+  }
+  return plan;
+}
+
+/** "RCT-000042". */
+export const formatReceiptNumber = (n: bigint | number) => `RCT-${String(n).padStart(6, '0')}`;

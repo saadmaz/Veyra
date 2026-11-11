@@ -23,6 +23,16 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 6 payments** (migration `20261112150000_payments`): recording bank transfers, cash and
+  cheques for a unit's owners or tenancy, with an `Idempotency-Key` so a retry never records
+  twice; each payment is its receipt (`RCT-000001`). Payments post to the unit's credit and are
+  applied to the same party's unpaid invoices oldest first; the rest stays as credit and is applied
+  when the next invoice is issued. Finance staff can release an allocation and allocate it
+  elsewhere. Online payments through a payment-gateway port: intents, a sandbox adapter (no money
+  moves; refused in production) and signed callbacks processed once per provider event, recording
+  a payment only when the amount and currency match. Invoices now show paid and outstanding
+  amounts. New default account: payment gateway clearing (re-run set-up to add it). New setting:
+  `PAYMENT_SANDBOX_SECRET`. 14 database, 6 unit and 11 API integration tests.
 - **Phase 6 billing** (migration `20261112120000_billing`): finance permissions
   (`property.finance.read` for property managers, `property.finance.manage` for finance officers
   and organisation admins); per-property finance set-up with a default chart of accounts and the

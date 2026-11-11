@@ -80,6 +80,8 @@ const toInvoice = (i: InvoiceRecord): InvoiceDto => ({
   dueDate: i.dueDate,
   issueDate: i.issueDate,
   total: money(i.totalMinor, i.currency),
+  paid: money(i.paidMinor, i.currency),
+  outstanding: money(i.totalMinor - i.paidMinor, i.currency),
   createdAt: i.createdAt.toISOString(),
   issuedAt: i.issuedAt?.toISOString() ?? null,
 });

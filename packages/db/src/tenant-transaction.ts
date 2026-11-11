@@ -83,3 +83,27 @@ export async function withInvitationTokenTransaction<TTx extends SqlExecutor, R>
     return work(tx);
   });
 }
+
+const PAYMENT_REFERENCE = /^[a-z][a-z0-9_-]{1,30}:[A-Za-z0-9_-]{8,200}$/;
+
+/**
+ * Runs `work` in a transaction that may see exactly one payment intent: the one whose provider
+ * and provider reference are given (RLS policy payment_intents_select). Used to route a payment
+ * provider's callback to its organisation. Call it only after the callback's signature has been
+ * verified; then continue in that organisation's tenant transaction.
+ */
+export async function withPaymentReferenceTransaction<TTx extends SqlExecutor, R>(
+  client: TransactionRunner<TTx>,
+  provider: string,
+  providerReference: string,
+  work: (tx: TTx) => Promise<R>,
+): Promise<R> {
+  const reference = `${provider}:${providerReference}`;
+  if (!PAYMENT_REFERENCE.test(reference)) {
+    throw new DomainError('INVALID_PAYMENT_REFERENCE', 'Malformed payment provider reference');
+  }
+  return client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.payment_reference', ${reference}, true)`;
+    return work(tx);
+  });
+}

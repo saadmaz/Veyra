@@ -235,6 +235,7 @@ describe('access', () => {
     expect(first.body.accounts.map((a: { systemKey: string }) => a.systemKey)).toEqual([
       'BANK',
       'CASH',
+      'GATEWAY_CLEARING',
       'RECEIVABLES',
       'UNIT_CREDIT',
       'OPENING_BALANCE',
@@ -243,7 +244,7 @@ describe('access', () => {
       'OTHER_INCOME',
     ]);
     const second = await as(finance).post(fUrl('setup')).expect(200);
-    expect(second.body.accounts).toHaveLength(8);
+    expect(second.body.accounts).toHaveLength(9);
     expect(second.body.chargeTypes.map((c: { code: string }) => c.code)).toEqual([
       'SERVICE',
       'UTILITIES',

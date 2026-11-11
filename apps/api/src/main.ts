@@ -8,6 +8,8 @@ import { loadApiEnv } from './platform/config/env';
 async function main(): Promise<void> {
   const env = loadApiEnv();
   const app = await NestFactory.create(AppModule.forRoot(env), {
+    // Payment provider callbacks are verified against the exact bytes received.
+    rawBody: true,
     logger:
       env.LOG_LEVEL === 'debug' || env.LOG_LEVEL === 'trace'
         ? ['error', 'warn', 'log', 'debug', 'verbose']

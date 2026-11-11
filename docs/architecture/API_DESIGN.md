@@ -173,7 +173,27 @@ than the currency. Months are `YYYY-MM`; dates are property-local `YYYY-MM-DD`.
 Who pays (owner decision): `OWNERS` charge types bill the unit's owners on the billing date (the
 first day of the month for runs, today for one-off invoices); `OCCUPANT` types bill the current
 tenancy, or the owners while the unit has none. Issuing opens the month's accounting period if
-no period covers today.
+no period covers today. Invoices show `paid` and `outstanding`.
+
+### Payments (Phase 6 Part 3)
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| POST | `payments` | manage; header `Idempotency-Key` (a UUID, 400 without it); `{ unitId, paidBy: OWNERS \| TENANTS, method: BANK_TRANSFER \| CASH \| CHEQUE, amount, receivedOn, reference? }`; 201 with the payment (its receipt, `RCT-000042`); the same key and request again: 200 with the same payment; the same key with a different request: 409 `IDEMPOTENCY_KEY_REUSED`; applied to the paying party's unpaid invoices oldest first, the rest kept as credit |
+| GET | `payments?unitId=`, `payments/{id}` | read; the 200 most recent / one payment with its allocations |
+| POST | `payments/{id}/allocations` | manage; `{ invoiceId, amount }`; an issued invoice of the same unit and party, within what is left of both (422) |
+| POST | `allocations/{id}/release` | manage; once (409 `ALREADY_RELEASED`); the money returns to the payment's unused part and is not re-applied automatically |
+| POST | `payment-intents` | manage; `{ unitId, paidBy, amount }`; returns the intent and the provider's `checkoutUrl`; 409 `GATEWAY_NOT_CONFIGURED` |
+| GET | `payment-intents/{id}` | read |
+
+Provider callbacks: `POST /api/v1/payment-callbacks/{provider}` is public but must carry the
+provider's signature over the raw body (sandbox: header `veyra-sandbox-signature:
+t=<unix>,v1=<hex HMAC-SHA256 of "t.body">`, 5-minute window): 401 `INVALID_SIGNATURE` otherwise,
+404 for an unknown provider. A verified callback always gets 200 with an `outcome`: `RECORDED`,
+`FAILED`, `DUPLICATE` (event already processed), `IGNORED_NOT_PENDING`, `AMOUNT_MISMATCH` (left
+pending for finance) or `UNKNOWN_REFERENCE`. Only the signed callback records an online payment,
+never a browser redirect. The sandbox gateway (no money moves) is enabled by
+`PAYMENT_SANDBOX_SECRET` and refused in production.
 
 ## Pagination
 
