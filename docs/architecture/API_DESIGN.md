@@ -138,6 +138,10 @@ with an offset; the console shows them in the property's time zone.
 | POST | `visits/{visitId}/depart` | `property.visitor.check_in`; once (409 `VISIT_ALREADY_DEPARTED`) |
 | GET | `visits/inside` | `property.visitor.check_in`; admitted and not departed |
 | GET | `visits?from=&to=` | `property.visitor.read`; up to 31 days |
+| GET | `gate/offline-list` | `property.visitor.check_in`; passes usable in the next 4 hours as hashes (`tokenHash`, `codeHash`), never codes; refused by the device after `trustUntil` |
+| POST | `gate/late-entries` | `property.visitor.check_in`; `{ source: OFFLINE_SYNC \| PAPER, entries }` (PAPER also needs `property.visitor.manage`); up to 200 entries; per entry `RECORDED`, `ALREADY_RECORDED` (same `clientRef`) or `REJECTED` (`TOO_OLD` over 7 days, `IN_THE_FUTURE`, `NOT_FOUND`, `BEFORE_ARRIVAL`); recorded entries carry `reviewReason` when flagged |
+| GET | `visits/needs-review` | `property.visitor.read`; flagged entries not yet reviewed |
+| POST | `visits/{visitId}/review` | `property.visitor.manage`; `{ note? }`; once (409 `ALREADY_REVIEWED`, `NOT_FLAGGED`) |
 
 What a guard sees of a pass is limited to visitor name, category, plate, unit number, end of the
 window and entries left: no phone, no resident names. Rejection reasons: `NOT_FOUND`, `REVOKED`,

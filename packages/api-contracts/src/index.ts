@@ -677,6 +677,10 @@ export interface VisitDto {
   arrivedAt: string;
   departedAt: string | null;
   source: 'ONLINE' | 'PAPER' | 'OFFLINE_SYNC';
+  /** Paper and offline entries the pass would not have allowed, e.g. REVOKED; null otherwise. */
+  reviewReason: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -715,4 +719,80 @@ export interface WalkInRequestDto {
   approvalValidUntil: string | null;
   /** True once a visit was admitted on this approval. */
   used: boolean;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Offline gate and paper log (Phase 5 Part 5). The offline list holds pass hashes, never codes:
+// the gate device hashes what it scans or is told, exactly as the API does:
+//   tokenHash = sha256hex("token:" + token)
+//   codeHash  = sha256hex("code:" + propertyId + ":" + CODE)   (CODE: upper case, no spaces/hyphens)
+// ---------------------------------------------------------------------------------------------
+
+export interface OfflineListEntry {
+  invitationId: string;
+  passId: string;
+  tokenHash: string;
+  codeHash: string;
+  category: VisitorCategory;
+  visitorName: string;
+  vehiclePlate: string | null;
+  unitNumber: string;
+  validFrom: string;
+  validUntil: string;
+  entriesLeft: number;
+}
+
+/** GET …/gate/offline-list: passes usable in the next 4 hours. Not to be used after trustUntil. */
+export interface OfflineListResponse {
+  propertyId: string;
+  generatedAt: string;
+  trustUntil: string;
+  entries: OfflineListEntry[];
+}
+
+export type LateEntryKind = 'ADMIT' | 'DENY' | 'WALK_IN' | 'DEPART';
+
+/** One thing that happened at the gate while VEYRA could not be reached. */
+export interface LateEntry {
+  /** Chosen by the device (UUID); a retried sync with the same reference records nothing new. */
+  clientRef: string;
+  kind: LateEntryKind;
+  /** When it happened: at most 7 days ago, never in the future. */
+  occurredAt: string;
+  gate?: string;
+  /** ADMIT / DENY on a pass: from the offline list. */
+  passId?: string;
+  /** Paper log: the reference code written down, instead of passId. */
+  code?: string;
+  /** DENY: why. */
+  reason?: string;
+  /** WALK_IN / DENY without a pass. */
+  category?: VisitorCategory;
+  visitorName?: string;
+  vehiclePlate?: string;
+  /** WALK_IN to a unit (recorded and flagged: the resident could not approve). */
+  unitId?: string;
+  /** DEPART: a visit recorded online, or the clientRef of an entry in the same or an earlier sync. */
+  visitId?: string;
+  departRef?: string;
+}
+
+/** POST …/gate/late-entries. OFFLINE_SYNC: the gate device. PAPER: a supervisor typing the log. */
+export interface SyncLateEntriesRequest {
+  source: 'OFFLINE_SYNC' | 'PAPER';
+  entries: LateEntry[];
+}
+
+export interface LateEntryResult {
+  clientRef: string;
+  status: 'RECORDED' | 'ALREADY_RECORDED' | 'REJECTED';
+  visitId?: string;
+  /** Set when the entry was recorded but needs a supervisor's review. */
+  reviewReason?: string | null;
+  /** For REJECTED: a stable code, e.g. TOO_OLD, IN_THE_FUTURE, NOT_FOUND. */
+  error?: string;
+}
+
+export interface SyncLateEntriesResponse {
+  results: LateEntryResult[];
 }

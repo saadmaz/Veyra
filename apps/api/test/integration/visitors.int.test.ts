@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -480,5 +480,129 @@ describe('walk-in approval (Part 3)', () => {
       .send({ unitId: units.U1, category: 'GUEST', visitorName: 'Surprise Guest' })
       .expect(409);
     expect(direct.body.error.code).toBe('WALK_IN_NEEDS_APPROVAL');
+  });
+});
+
+describe('offline gate and paper log (Part 5)', () => {
+  const sha = (value: string) => createHash('sha256').update(value).digest('hex');
+  const late = (user: TestUser, source: 'OFFLINE_SYNC' | 'PAPER', entries: object[]) =>
+    as(user).post(gate('late-entries')).send({ source, entries });
+  const entry = (kind: string, minutesAgo: number, extra: object = {}) => ({
+    clientRef: randomUUID(),
+    kind,
+    occurredAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+    gate: 'Main gate',
+    ...extra,
+  });
+  const passIdOf = async (token: string) => (await validate({ token })).pass.passId as string;
+
+  it('gives the gate an offline list of hashes, never codes, trusted for 4 hours', async () => {
+    const { invitation, pass } = await register(owner, 'U1', { visitorName: 'Lisa List' });
+    const res = await as(guard).get(gate('offline-list')).expect(200);
+    const trust = Date.parse(res.body.trustUntil) - Date.parse(res.body.generatedAt);
+    expect(trust).toBe(4 * 3_600_000);
+    const row = res.body.entries.find(
+      (e: { invitationId: string }) => e.invitationId === invitation.id,
+    );
+    // The device matches what it scans or is told by hashing it the same way.
+    expect(row).toMatchObject({
+      visitorName: 'Lisa List',
+      unitNumber: 'U1',
+      tokenHash: sha(`token:${pass.token}`),
+      codeHash: sha(`code:${P}:${pass.code.replace('-', '')}`),
+    });
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain(pass.token);
+    expect(body).not.toContain(pass.code);
+    expect(body).not.toContain('7654321');
+    await as(finance).get(gate('offline-list')).expect(403);
+  });
+
+  it('records an offline admission at the time it happened, once per device reference', async () => {
+    const { pass } = await register(owner);
+    const passId = await passIdOf(pass.token);
+    const admit = entry('ADMIT', 10, { passId });
+    const first = await late(guard, 'OFFLINE_SYNC', [admit]).expect(200);
+    expect(first.body.results[0]).toMatchObject({ status: 'RECORDED', reviewReason: null });
+    const retry = await late(guard, 'OFFLINE_SYNC', [admit]).expect(200);
+    expect(retry.body.results[0]).toMatchObject({
+      status: 'ALREADY_RECORDED',
+      visitId: first.body.results[0].visitId,
+    });
+    // Departure later, by the same device's reference; also idempotent.
+    const depart = entry('DEPART', 2, { departRef: admit.clientRef });
+    const departed = await late(guard, 'OFFLINE_SYNC', [depart]).expect(200);
+    expect(departed.body.results[0].status).toBe('RECORDED');
+    const departedAgain = await late(guard, 'OFFLINE_SYNC', [depart]).expect(200);
+    expect(departedAgain.body.results[0].status).toBe('ALREADY_RECORDED');
+  });
+
+  it('flags an offline admission on a pass cancelled before it, not after', async () => {
+    const before = await register(owner);
+    const beforeId = await passIdOf(before.pass.token);
+    await as(owner)
+      .post(`${invitationsUrl('U1')}/${before.invitation.id}/revoke`)
+      .expect(200);
+    const flagged = await late(guard, 'OFFLINE_SYNC', [entry('ADMIT', 0, { passId: beforeId })]);
+    expect(flagged.body.results[0]).toMatchObject({ status: 'RECORDED', reviewReason: 'REVOKED' });
+
+    const after = await register(owner);
+    const afterId = await passIdOf(after.pass.token);
+    const admitted = entry('ADMIT', 1, { passId: afterId });
+    await as(owner)
+      .post(`${invitationsUrl('U1')}/${after.invitation.id}/revoke`)
+      .expect(200);
+    const fine = await late(guard, 'OFFLINE_SYNC', [admitted]);
+    expect(fine.body.results[0]).toMatchObject({ status: 'RECORDED', reviewReason: null });
+  });
+
+  it('records walk-ins truthfully and refuses entries from the future or too long ago', async () => {
+    const res = await late(guard, 'OFFLINE_SYNC', [
+      entry('WALK_IN', 5, { unitId: units.U1, category: 'GUEST', visitorName: 'Nobody Asked' }),
+      entry('WALK_IN', 5, { category: 'DELIVERY', visitorName: 'Gate Parcel' }),
+      entry('WALK_IN', -10, { category: 'GUEST', visitorName: 'Time Traveller' }),
+      entry('WALK_IN', 8 * 24 * 60, { category: 'GUEST', visitorName: 'Old News' }),
+    ]).expect(200);
+    const outcomes = res.body.results.map(
+      (r: { reviewReason?: string | null; error?: string }) => r.reviewReason ?? r.error ?? null,
+    );
+    expect(outcomes).toEqual(['WALK_IN_WITHOUT_APPROVAL', null, 'IN_THE_FUTURE', 'TOO_OLD']);
+  });
+
+  it('lets supervisors, not guards, type in the paper log by reference code', async () => {
+    const { pass } = await register(owner, 'U1', { visitorName: 'Paula Paper' });
+    const paper = entry('ADMIT', 30, { code: pass.code });
+    await late(guard, 'PAPER', [paper]).expect(403);
+    const res = await late(supervisor, 'PAPER', [paper]).expect(200);
+    expect(res.body.results[0].status).toBe('RECORDED');
+    const period = `from=${encodeURIComponent(hours(-6))}&to=${encodeURIComponent(hours(1))}`;
+    const log = await as(supervisor).get(`${pUrl()}/visits?${period}`).expect(200);
+    const recorded = log.body.data.find(
+      (v: { id: string }) => v.id === res.body.results[0].visitId,
+    );
+    expect(recorded).toMatchObject({ source: 'PAPER', visitorName: 'Paula Paper' });
+    expect(Date.parse(recorded.arrivedAt)).toBe(Date.parse(paper.occurredAt));
+  });
+
+  it('puts flagged entries in front of a supervisor, who reviews each once', async () => {
+    const queue = await as(supervisor).get(`${pUrl()}/visits/needs-review`).expect(200);
+    const first = queue.body.data[0] as { id: string; reviewReason: string };
+    expect(first.reviewReason).toMatch(/REVOKED|WALK_IN_WITHOUT_APPROVAL/);
+    await as(guard).get(`${pUrl()}/visits/needs-review`).expect(403);
+    await as(guard).post(`${pUrl()}/visits/${first.id}/review`).send({}).expect(403);
+
+    const reviewed = await as(supervisor)
+      .post(`${pUrl()}/visits/${first.id}/review`)
+      .send({ note: 'Resident confirmed by phone' })
+      .expect(200);
+    expect(reviewed.body).toMatchObject({ reviewNote: 'Resident confirmed by phone' });
+    expect(reviewed.body.reviewedAt).not.toBeNull();
+    const again = await as(supervisor)
+      .post(`${pUrl()}/visits/${first.id}/review`)
+      .send({})
+      .expect(409);
+    expect(again.body.error.code).toBe('ALREADY_REVIEWED');
+    const after = await as(supervisor).get(`${pUrl()}/visits/needs-review`).expect(200);
+    expect(after.body.data.map((v: { id: string }) => v.id)).not.toContain(first.id);
   });
 });

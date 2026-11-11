@@ -42,6 +42,9 @@ export interface VisitRecord {
   arrivedAt: Date;
   departedAt: Date | null;
   source: 'ONLINE' | 'PAPER' | 'OFFLINE_SYNC';
+  reviewReason: string | null;
+  reviewedAt: Date | null;
+  reviewNote: string | null;
 }
 
 export interface NewVisit {
@@ -58,6 +61,15 @@ export interface NewVisit {
   denialReason: string | null;
   gate: string | null;
   arrivedAt: Date;
+  /** Default ONLINE. Paper and offline entries carry the device's clientRef. */
+  source?: 'ONLINE' | 'PAPER' | 'OFFLINE_SYNC';
+  clientRef?: string | null;
+  reviewReason?: string | null;
+}
+
+export interface OfflineCandidate {
+  invitation: InvitationRecord;
+  pass: { id: string; tokenHash: string; codeHash: string };
 }
 
 export interface WalkInRequestRecord {
@@ -139,6 +151,12 @@ export interface VisitorsUnitOfWork {
     status: 'APPROVED' | 'DENIED' | 'CANCELLED',
     at: Date,
   ): Promise<void>;
+  /** Live passes of active invitations whose window overlaps [now, until]. */
+  offlineCandidates(now: Date, until: Date): Promise<OfflineCandidate[]>;
+  visitByClientRef(clientRef: string): Promise<VisitRecord | null>;
+  /** Flagged paper and offline entries no supervisor has reviewed yet. */
+  visitsNeedingReview(): Promise<VisitRecord[]>;
+  markReviewed(visitId: string, note: string | null, at: Date): Promise<VisitRecord>;
   accessEvent(
     type: AccessEventType,
     at: Date,

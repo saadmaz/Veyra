@@ -288,6 +288,9 @@ test.describe('supervision and access', () => {
       arrivedAt: new Date().toISOString(),
       departedAt: null,
       source: 'ONLINE',
+      reviewReason: null,
+      reviewedAt: null,
+      reviewNote: null,
       walkInRequestId: null,
     });
     const supervisor = api.addUser('sup@example.test', PASSWORD, 'Sue Supervisor');
@@ -334,5 +337,103 @@ test.describe('supervision and access', () => {
     await expect(page.getByRole('heading', { name: 'Unit 101', level: 1 })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Visitors', exact: true })).toHaveCount(0);
     expect(api.log.filter((line) => /visitor-invitations|walk-in-requests/.test(line))).toEqual([]);
+  });
+});
+
+test.describe('offline gate and paper log', () => {
+  test('without a connection the guard checks against the saved list, admits, and the entry is sent later', async ({
+    page,
+    context,
+  }) => {
+    const ctx = setup();
+    const { api, guard, base } = ctx;
+    seedInvitation(ctx, 'Olive Offline', 'OFFL-INE2');
+    api.currentUserId = guard.id;
+    await api.install(page);
+    await page.goto(`${base}/gate`);
+    // The gate saves the offline list while it still has a connection.
+    await expect.poll(() => api.log.some((line) => line.endsWith('/gate/offline-list'))).toBe(true);
+
+    await context.setOffline(true);
+    await expect(page.getByText('No connection')).toBeVisible();
+    const check = page.getByRole('region', { name: 'Check a pass' });
+    await check.getByLabel('Reference code', { exact: true }).fill('offl ine2');
+    await check.getByRole('button', { name: 'Check code' }).click();
+    await expect(check).toContainText('Valid pass (offline check)');
+    await expect(check).toContainText('Olive Offline');
+    await check.getByRole('button', { name: 'Admit' }).click();
+    await expect(check).toContainText('Saved on this device');
+    await expect(page.getByText('1 entry is waiting to be sent.')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Admitted while offline' })).toContainText(
+      'Olive Offline',
+    );
+
+    // Walk-ins to a unit need a resident's approval, which is impossible offline.
+    const walkIn = page.getByRole('region', { name: 'Visitor without a pass' });
+    await walkIn.getByLabel('Going to').selectOption({ label: 'Unit 101' });
+    await walkIn.getByLabel("Visitor's name").fill('Wanda Waiting');
+    await walkIn.getByRole('button', { name: 'Continue' }).click();
+    await expect(appAlert(page)).toContainText('Follow the paper procedure');
+    await expectAccessible(page);
+
+    await context.setOffline(false);
+    await expect(page.getByText('Offline entries sent')).toBeVisible();
+    await expect(page.getByText('1 recorded')).toBeVisible();
+    expect(api.visits).toHaveLength(1);
+    expect(api.visits[0]).toMatchObject({ source: 'OFFLINE_SYNC', visitorName: 'Olive Offline' });
+    await expect(page.getByText(/waiting to be sent/)).toHaveCount(0);
+  });
+
+  test('a supervisor reviews a flagged entry and types in the paper log', async ({ page }) => {
+    const ctx = setup();
+    const { api, org, property, unit, base } = ctx;
+    api.visits.push({
+      id: crypto.randomUUID(),
+      propertyId: property.id,
+      unitId: unit.id,
+      unitNumber: unit.number,
+      invitationId: null,
+      category: 'GUEST',
+      visitorName: 'Rita Revoked',
+      vehiclePlate: null,
+      decision: 'ADMITTED',
+      denialReason: null,
+      gate: 'Main gate',
+      arrivedAt: new Date(Date.now() - 3_600_000).toISOString(),
+      departedAt: null,
+      source: 'OFFLINE_SYNC',
+      reviewReason: 'REVOKED',
+      reviewedAt: null,
+      reviewNote: null,
+      walkInRequestId: null,
+      clientRef: crypto.randomUUID(),
+    });
+    const supervisor = api.addUser('sup@example.test', PASSWORD, 'Sue Supervisor');
+    api.addMembership(org.id, supervisor.id, 'SECURITY_SUPERVISOR', property.id);
+    api.currentUserId = supervisor.id;
+    await api.install(page);
+    await page.goto(`${base}/visitors`);
+
+    const review = page.getByRole('region', { name: 'Needs review' });
+    await expect(review).toContainText('Rita Revoked');
+    await expect(review).toContainText('This pass was cancelled.');
+    await expectAccessible(page);
+    await review.getByRole('button', { name: 'Review entry for Rita Revoked' }).click();
+    await review.getByLabel('What you found (optional)').fill('Resident confirmed by phone');
+    await review.getByRole('button', { name: 'Mark reviewed' }).click();
+    await expect(page.getByRole('region', { name: 'Needs review' })).toHaveCount(0);
+    expect(api.visits[0]?.reviewNote).toBe('Resident confirmed by phone');
+
+    const paper = page.getByRole('region', { name: 'Enter from the paper log' });
+    await paper.getByLabel('What happened').selectOption({ label: 'Admitted without a pass' });
+    await paper.getByLabel("Visitor's name").fill('Paul Paper');
+    await paper.getByLabel('Going to').selectOption({ label: 'Unit 101' });
+    await paper.getByRole('button', { name: 'Record entry' }).click();
+    await expect(paper).toContainText('It needs a review');
+    expect(api.visits.at(-1)).toMatchObject({
+      source: 'PAPER',
+      reviewReason: 'WALK_IN_WITHOUT_APPROVAL',
+    });
+    await expectNoHorizontalScroll(page);
   });
 });

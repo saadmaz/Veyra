@@ -23,6 +23,13 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 5 offline gate and paper log** (migration `20261111180000_offline_gate`): the gate
+  screen keeps working when the connection drops, checking passes against a 4-hour list of
+  hashes and queuing admissions, refusals, walk-ins to the property and departures on the device;
+  they are sent when the connection returns, recorded at the time they happened, once per device
+  reference, and flagged when the pass would not have allowed them. Supervisors type in the paper
+  log and review flagged entries ("Needs review"). Gate procedure in
+  `docs/operations/GATE_OFFLINE.md`.
 - **Phase 5 visitor console**: on the unit page residents and staff register visitors and get
   the pass once (QR code and reference code), list and cancel them; residents answer walk-in
   requests (checked every 5 seconds). Gate screen for security staff: check a pass by code or

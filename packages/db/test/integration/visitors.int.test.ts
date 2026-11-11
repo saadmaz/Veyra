@@ -112,8 +112,8 @@ const visit = (c: pg.PoolClient, input: VisitInput = {}) => {
   return c
     .query(
       `INSERT INTO visits (id, organisation_id, property_id, unit_id, invitation_id, pass_id, category,
-         visitor_name, decision, denial_reason, arrived_at, recorded_by_user_id, source, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 'GUEST', 'Vera Visitor', $7, $8, $9, $10, $11, now())`,
+         visitor_name, decision, denial_reason, arrived_at, recorded_by_user_id, source, client_ref, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'GUEST', 'Vera Visitor', $7, $8, $9, $10, $11, $12, now())`,
       [
         id,
         ids.orgA,
@@ -126,6 +126,8 @@ const visit = (c: pg.PoolClient, input: VisitInput = {}) => {
         input.arrivedAt ?? new Date().toISOString(),
         ids.guard,
         input.source ?? 'ONLINE',
+        // Entries recorded after the fact carry the device's reference (Part 5).
+        (input.source ?? 'ONLINE') === 'ONLINE' ? null : randomUUID(),
       ],
     )
     .then(() => id);

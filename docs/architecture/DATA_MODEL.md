@@ -134,6 +134,13 @@ itself (no unit) need neither. PAPER and OFFLINE_SYNC records describe what alre
 are stored as they are; the API flags those the invitation would not have allowed, so a stale
 offline copy never silently counts as a valid admission.
 
+**Offline and paper entries** (migration `20261111180000_offline_gate`): `visits.client_ref` is
+set by the device for every non-ONLINE entry and unique per organisation, so a retried sync never
+records twice. `review_reason` flags entries the pass would not have allowed at the time they
+happened (only non-ONLINE entries can be flagged); a supervisor's review (`reviewed_at`,
+`reviewed_by_user_id`, optional `review_note`) is recorded once. The visit trigger now allows two
+later additions, each once: the departure and the review; everything else never changes.
+
 Retention of visit records and access events is per jurisdiction and still to be set (section 9).
 
 ## 6. Finance ledger approach (Phase 6)

@@ -226,3 +226,93 @@ export function walkInAdmissionProblem(
   if (now.getTime() > request.decidedAt.getTime() + WALK_IN_APPROVAL_MS) return 'APPROVAL_LAPSED';
   return null;
 }
+
+// ------------------------------------------------------------------------------ offline (Part 5)
+
+/** How long a gate device may trust its offline list (owner decision, 2026-11-11). */
+export const OFFLINE_TRUST_MS = 4 * 3_600_000;
+/** Paper and offline entries older than this are refused: write an incident report instead. */
+export const LATE_ENTRY_MAX_AGE_MS = 7 * 86_400_000;
+/** Device clocks drift: entries up to this far in the future are accepted as "now". */
+export const CLOCK_SKEW_MS = 5 * 60_000;
+
+const lateEntrySchema = z
+  .object({
+    clientRef: z.uuid(),
+    kind: z.enum(['ADMIT', 'DENY', 'WALK_IN', 'DEPART']),
+    occurredAt: instant,
+    gate,
+    passId: z.uuid().optional(),
+    code: z
+      .string()
+      .max(20)
+      .transform(normaliseCode)
+      .pipe(z.string().regex(CODE_PATTERN, 'Codes have 8 letters and digits'))
+      .optional(),
+    reason: z.string().trim().min(1).max(500).optional(),
+    category: category.optional(),
+    visitorName: visitorName.optional(),
+    vehiclePlate: plateSchema.optional(),
+    unitId: z.uuid().optional(),
+    visitId: z.uuid().optional(),
+    departRef: z.uuid().optional(),
+  })
+  .superRefine((e, ctx) => {
+    const fail = (message: string, path: string) =>
+      ctx.addIssue({ code: 'custom', message, path: [path] });
+    const withPass = e.passId !== undefined || e.code !== undefined;
+    if (e.kind === 'ADMIT' && !withPass) fail('An admission needs the pass or its code', 'passId');
+    if (e.kind === 'DENY' && !e.reason) fail('A refusal needs a reason', 'reason');
+    if (e.kind === 'DENY' && !withPass && !(e.category && e.visitorName))
+      fail('For someone without a pass, give their name and category', 'visitorName');
+    if (e.kind === 'WALK_IN' && !(e.category && e.visitorName))
+      fail('A walk-in needs a name and category', 'visitorName');
+    if (e.kind === 'DEPART' && (e.visitId === undefined) === (e.departRef === undefined))
+      fail('A departure names the visit or the earlier entry (one of them)', 'visitId');
+  });
+export type LateEntryInput = z.infer<typeof lateEntrySchema>;
+
+export const syncLateEntriesSchema = z.object({
+  source: z.enum(['OFFLINE_SYNC', 'PAPER']),
+  entries: z.array(lateEntrySchema).min(1).max(200),
+});
+export type SyncLateEntriesInput = z.infer<typeof syncLateEntriesSchema>;
+
+export const reviewSchema = z.object({ note: z.string().trim().min(1).max(500).optional() });
+
+export interface LateEntryState {
+  invitationStatus: 'ACTIVE' | 'REVOKED';
+  invitationRevokedAt: Date | null;
+  passRevokedAt: Date | null;
+  validFrom: Date;
+  validUntil: Date;
+  maxEntries: number;
+  /** Admissions already recorded on the invitation (before this one). */
+  entriesUsed: number;
+  hostStillResident: boolean;
+}
+
+/**
+ * Whether an admission recorded after the fact needs a supervisor's review: judged at the time
+ * it happened, so a pass cancelled after the visitor came in is not flagged, and one cancelled
+ * before is, even if the gate's offline copy did not know.
+ */
+export function lateAdmissionFlag(s: LateEntryState, at: Date): PassRejectionReason | null {
+  const revokedBefore = (when: Date | null) => when !== null && when <= at;
+  if (revokedBefore(s.invitationRevokedAt) || revokedBefore(s.passRevokedAt)) return 'REVOKED';
+  if (at < s.validFrom) return 'NOT_YET_VALID';
+  if (at > s.validUntil) return 'EXPIRED';
+  if (s.entriesUsed >= s.maxEntries) return 'NO_ENTRIES_LEFT';
+  if (!s.hostStillResident) return 'HOST_NO_LONGER_RESIDENT';
+  return null;
+}
+
+/** Why a late entry is refused outright (nothing recorded), or null. */
+export function lateEntryTimeProblem(
+  occurredAt: Date,
+  now: Date,
+): 'TOO_OLD' | 'IN_THE_FUTURE' | null {
+  if (occurredAt.getTime() > now.getTime() + CLOCK_SKEW_MS) return 'IN_THE_FUTURE';
+  if (now.getTime() - occurredAt.getTime() > LATE_ENTRY_MAX_AGE_MS) return 'TOO_OLD';
+  return null;
+}

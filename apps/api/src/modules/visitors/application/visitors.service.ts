@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { PassRejectionReason } from '@veyra/api-contracts';
-import { databaseErrorCode } from '@veyra/db';
+import type { LateEntryResult, OfflineListEntry, PassRejectionReason } from '@veyra/api-contracts';
+import { databaseErrorCode, isUniqueViolation } from '@veyra/db';
 import { CLOCK, type Clock } from '../../../platform/clock';
 import { ApiError } from '../../../platform/errors/api-error';
 import { RATE_LIMITER, type RateLimiter } from '../../../platform/rate-limit/rate-limiter';
@@ -12,11 +12,16 @@ import {
   type DenyInput,
   hashCode,
   hashToken,
+  type LateEntryInput,
+  lateAdmissionFlag,
+  lateEntryTimeProblem,
   MAX_LEAD_MS,
   MAX_PENDING_WALK_INS_PER_UNIT,
   newPassSecret,
+  OFFLINE_TRUST_MS,
   type PassSecret,
   passRejection,
+  type SyncLateEntriesInput,
   type ValidatePassInput,
   WALK_IN_ANSWER_MS,
   type WalkInInput,
@@ -427,6 +432,213 @@ export class VisitorsService {
       },
       () => new ApiError(409, 'WALK_IN_EXPIRED', 'This request expired before it was answered'),
     );
+  }
+
+  // ------------------------------------------------------------------ offline and paper (Part 5)
+
+  /**
+   * Passes usable in the next 4 hours, with their hashes (never their codes), for the gate
+   * device to check while offline. The device must not use the list after trustUntil.
+   */
+  offlineList(access: OrganisationAccess, meta: RequestMeta) {
+    const now = this.clock.now();
+    const trustUntil = new Date(now.getTime() + OFFLINE_TRUST_MS);
+    return this.inProperty(access, meta, async (uow) => {
+      const entries: OfflineListEntry[] = [];
+      for (const { invitation: i, pass } of await uow.offlineCandidates(now, trustUntil)) {
+        if (i.entriesUsed >= i.maxEntries) continue;
+        if (!(await uow.hostStillResident(i.id))) continue;
+        entries.push({
+          invitationId: i.id,
+          passId: pass.id,
+          tokenHash: pass.tokenHash,
+          codeHash: pass.codeHash,
+          category: i.category,
+          visitorName: i.visitorName,
+          vehiclePlate: i.vehiclePlate,
+          unitNumber: i.unitNumber,
+          validFrom: i.validFrom.toISOString(),
+          validUntil: i.validUntil.toISOString(),
+          entriesLeft: i.maxEntries - i.entriesUsed,
+        });
+      }
+      return { generatedAt: now, trustUntil, entries };
+    });
+  }
+
+  /**
+   * Records what happened at the gate while VEYRA could not be reached (OFFLINE_SYNC, from the
+   * gate device) or what was written in the paper log (PAPER, typed in by a supervisor). Each
+   * entry keeps the time it happened, is recorded once per clientRef, and is flagged for review
+   * when the pass would not have allowed it at that time. Nothing is ever refused just because it
+   * should not have happened: the record must say what really happened.
+   */
+  async syncLateEntries(
+    access: OrganisationAccess,
+    input: SyncLateEntriesInput,
+    meta: RequestMeta,
+  ) {
+    if (input.source === 'PAPER' && !access.permissions.has('property.visitor.manage')) {
+      throw new ApiError(
+        403,
+        'FORBIDDEN',
+        'Entering the paper log is for security supervisors and managers',
+      );
+    }
+    const results: LateEntryResult[] = [];
+    for (const entry of input.entries) {
+      results.push(await this.recordLateEntry(access, input.source, entry, meta));
+    }
+    return results;
+  }
+
+  private async recordLateEntry(
+    access: OrganisationAccess,
+    source: 'OFFLINE_SYNC' | 'PAPER',
+    entry: LateEntryInput,
+    meta: RequestMeta,
+  ): Promise<LateEntryResult> {
+    const { clientRef } = entry;
+    const timeProblem = lateEntryTimeProblem(entry.occurredAt, this.clock.now());
+    if (timeProblem) return { clientRef, status: 'REJECTED', error: timeProblem };
+    try {
+      return await this.inProperty(access, meta, async (uow) => {
+        if (entry.kind === 'DEPART') return this.lateDeparture(uow, entry);
+        const existing = await uow.visitByClientRef(clientRef);
+        if (existing) return { clientRef, status: 'ALREADY_RECORDED', visitId: existing.id };
+
+        const at = entry.occurredAt;
+        const gate = entry.gate ?? null;
+        let visit: Awaited<ReturnType<VisitorsUnitOfWork['createVisit']>>;
+        if (entry.passId || entry.code) {
+          const pass = entry.passId
+            ? await uow.pass(entry.passId)
+            : await uow.passByCodeHash(hashCode(this.propertyOf(access), entry.code as string));
+          if (!pass) return { clientRef, status: 'REJECTED', error: 'NOT_FOUND' };
+          const inv = await uow.invitation(pass.invitationId, { lock: true });
+          if (!inv) return { clientRef, status: 'REJECTED', error: 'NOT_FOUND' };
+          const flag =
+            entry.kind === 'ADMIT'
+              ? lateAdmissionFlag(
+                  {
+                    invitationStatus: inv.status,
+                    invitationRevokedAt: inv.revokedAt,
+                    passRevokedAt: pass.revokedAt,
+                    validFrom: inv.validFrom,
+                    validUntil: inv.validUntil,
+                    maxEntries: inv.maxEntries,
+                    entriesUsed: inv.entriesUsed,
+                    hostStillResident: await uow.hostStillResident(inv.id),
+                  },
+                  at,
+                )
+              : null;
+          visit = await uow.createVisit({
+            unitId: inv.unitId,
+            invitationId: inv.id,
+            passId: pass.id,
+            category: inv.category,
+            visitorName: inv.visitorName,
+            visitorPhone: inv.visitorPhone,
+            vehiclePlate: inv.vehiclePlate,
+            decision: entry.kind === 'DENY' ? 'DENIED' : 'ADMITTED',
+            denialReason: entry.kind === 'DENY' ? (entry.reason as string) : null,
+            gate,
+            arrivedAt: at,
+            source,
+            clientRef,
+            reviewReason: flag,
+          });
+        } else {
+          if (entry.kind === 'ADMIT') return { clientRef, status: 'REJECTED', error: 'NOT_FOUND' };
+          if (entry.unitId && !(await uow.unit(entry.unitId))) {
+            return { clientRef, status: 'REJECTED', error: 'NOT_FOUND' };
+          }
+          const toUnit = entry.kind === 'WALK_IN' && entry.unitId !== undefined;
+          visit = await uow.createVisit({
+            unitId: entry.unitId ?? null,
+            invitationId: null,
+            passId: null,
+            category: entry.category as InvitationRecord['category'],
+            visitorName: entry.visitorName as string,
+            visitorPhone: null,
+            vehiclePlate: entry.vehiclePlate ?? null,
+            decision: entry.kind === 'DENY' ? 'DENIED' : 'ADMITTED',
+            denialReason: entry.kind === 'DENY' ? (entry.reason as string) : null,
+            gate,
+            arrivedAt: at,
+            source,
+            clientRef,
+            // Nobody could ask the resident: a supervisor reviews every such entry.
+            reviewReason: toUnit ? 'WALK_IN_WITHOUT_APPROVAL' : null,
+          });
+        }
+        await uow.accessEvent(
+          visit.decision === 'ADMITTED' ? 'VISIT_ADMITTED' : 'VISIT_DENIED',
+          at,
+          { invitationId: visit.invitationId, visitId: visit.id, gate },
+        );
+        return {
+          clientRef,
+          status: 'RECORDED',
+          visitId: visit.id,
+          reviewReason: visit.reviewReason,
+        };
+      });
+    } catch (error) {
+      // Two syncs of the same entry at once: the other one recorded it.
+      if (isUniqueViolation(error)) return { clientRef, status: 'ALREADY_RECORDED' };
+      if (error instanceof ApiError) return { clientRef, status: 'REJECTED', error: error.code };
+      throw error;
+    }
+  }
+
+  private async lateDeparture(
+    uow: VisitorsUnitOfWork,
+    entry: LateEntryInput,
+  ): Promise<LateEntryResult> {
+    const { clientRef } = entry;
+    const found = entry.visitId
+      ? await uow.visit(entry.visitId)
+      : await uow.visitByClientRef(entry.departRef as string);
+    if (!found) return { clientRef, status: 'REJECTED', error: 'NOT_FOUND' };
+    const visit = await uow.visit(found.id, { lock: true });
+    if (visit?.decision !== 'ADMITTED') {
+      return { clientRef, status: 'REJECTED', error: 'NOT_ADMITTED' };
+    }
+    if (visit.departedAt) return { clientRef, status: 'ALREADY_RECORDED', visitId: visit.id };
+    if (entry.occurredAt < visit.arrivedAt) {
+      return { clientRef, status: 'REJECTED', error: 'BEFORE_ARRIVAL' };
+    }
+    await uow.recordDeparture(visit.id, entry.occurredAt);
+    await uow.accessEvent('VISIT_DEPARTED', entry.occurredAt, {
+      invitationId: visit.invitationId,
+      visitId: visit.id,
+      gate: entry.gate ?? null,
+    });
+    return { clientRef, status: 'RECORDED', visitId: visit.id };
+  }
+
+  visitsNeedingReview(access: OrganisationAccess, meta: RequestMeta) {
+    return this.inProperty(access, meta, (uow) => uow.visitsNeedingReview());
+  }
+
+  /** A supervisor marks a flagged paper or offline entry as reviewed, once, with a note. */
+  reviewVisit(
+    access: OrganisationAccess,
+    visitId: string,
+    note: string | undefined,
+    meta: RequestMeta,
+  ) {
+    return this.inProperty(access, meta, async (uow) => {
+      const visit = await uow.visit(visitId, { lock: true });
+      if (!visit) throw notFound('Visit');
+      if (!visit.reviewReason) {
+        throw new ApiError(409, 'NOT_FLAGGED', 'This visit does not need a review');
+      }
+      if (visit.reviewedAt) throw new ApiError(409, 'ALREADY_REVIEWED', 'Already reviewed');
+      return uow.markReviewed(visitId, note ?? null, this.clock.now());
+    });
   }
 
   // ------------------------------------------------------------------ helpers
