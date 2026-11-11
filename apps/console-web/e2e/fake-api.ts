@@ -19,6 +19,7 @@ import type {
   VisitorInvitationDto,
   WalkInRequestDto,
 } from '@veyra/api-contracts';
+import { FakeFinance } from './fake-finance';
 
 /**
  * In-memory stand-in for the VEYRA API, answering the console's browser requests through
@@ -84,12 +85,22 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.visitor.check_in',
       'property.visitor.manage',
       'property.visitor.read',
+      'property.finance.read',
+      'property.finance.manage',
+      'property.finance.approve',
     ],
   },
   FINANCE_OFFICER: {
     organisation: ['organisation.profile.read'],
-    // No resident permissions until billing needs them (data minimisation).
-    property: ['property.profile.read', 'property.structure.read', 'unit.profile.read'],
+    // No resident directory: finance sees invoice recipients' names only (data minimisation).
+    property: [
+      'property.profile.read',
+      'property.structure.read',
+      'unit.profile.read',
+      'property.finance.read',
+      'property.finance.manage',
+      'property.finance.approve',
+    ],
   },
   PROPERTY_MANAGER: {
     organisation: [],
@@ -106,6 +117,8 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.visitor.check_in',
       'property.visitor.manage',
       'property.visitor.read',
+      // Reads billing; finance officers run it.
+      'property.finance.read',
     ],
   },
   SECURITY_SUPERVISOR: {
@@ -191,6 +204,7 @@ export class FakeApi {
   household: HouseholdMemberDto[] = [];
   vehicles: (VehicleDto & { propertyId: string })[] = [];
   emergencyContacts: (EmergencyContactDto & { personId: string })[] = [];
+  finance = new FakeFinance();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -801,6 +815,24 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    if (sub === '/finance' || sub.startsWith('/finance/')) {
+      const reply = this.finance.handle({
+        method,
+        sub,
+        body,
+        url,
+        idempotencyKey: request.headers()['idempotency-key'],
+        property,
+        permissions: pp,
+        user,
+        units: mine(this.units),
+        ownerships: this.ownerships,
+        tenancies: this.tenancies,
+        today: todayIn(property.timeZone),
+      });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
 
     const readOrManage = method === 'GET' ? 'property.structure.read' : 'property.structure.manage';
     if (need(readOrManage)) return;
@@ -1833,7 +1865,7 @@ export class FakeApi {
         'Access-Control-Allow-Origin':
           origin && /^http:\/\/localhost:\d+$/.test(origin) ? origin : ORIGIN,
         'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept, Idempotency-Key',
         'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },

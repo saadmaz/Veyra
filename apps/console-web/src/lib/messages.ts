@@ -58,12 +58,47 @@ const ERROR_MESSAGES: Record<string, string> = {
   TOO_MANY_WALK_IN_REQUESTS:
     'This unit already has several requests waiting. Wait for an answer or cancel one first.',
   VISIT_ALREADY_DEPARTED: 'This departure has already been recorded.',
+  // Finance (Phase 6)
+  FINANCE_NOT_SET_UP: 'Set up finance for this property first.',
+  CODE_TAKEN: 'Another charge type already uses this code.',
+  OVERLAPPING_CHARGE:
+    'This unit (or the whole property) already has a recurring charge of this type for some of these months.',
+  ALREADY_BILLED:
+    'Someone else billed some of these charges at the same time. Run billing again to bill the rest.',
+  NO_ONE_TO_BILL: 'This unit has nobody to bill for these charges: record its owners first.',
+  ALREADY_ISSUED: 'This invoice has already been issued.',
+  PERIOD_CLOSED: 'The accounting period for this date is closed.',
+  ALREADY_CLOSED: 'This period is already closed.',
+  NOT_CLOSED: 'This period is open.',
+  IDEMPOTENCY_KEY_REUSED:
+    'This payment may already have been recorded. Check the payment list before trying again.',
+  IDEMPOTENCY_KEY_REQUIRED: 'This request was incomplete. Reload the page and try again.',
+  ALREADY_RELEASED: 'This allocation has already been taken back.',
+  PAYMENT_REVERSED: 'This payment has been reversed.',
+  PAYMENT_REFUNDED: 'A payment with a refund cannot be reversed.',
+  GATEWAY_NOT_CONFIGURED: 'Online payments are not set up.',
+  SAME_PERSON: 'Someone other than the person who asked must decide this.',
+  NOT_REQUESTER: 'Only the person who asked can cancel this request.',
+  ALREADY_DECIDED: 'This request has already been decided.',
+  NO_LONGER_OWED: 'The invoice no longer owes that much. Ask for a new approval.',
+  NO_LONGER_UNUSED: 'Less of the payment is unused now. Ask for a new approval.',
+  INVALID_MONEY: 'Enter a valid amount in the property currency.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';
 
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiRequestError) {
+    // A business-rule refusal (422 with no field details) explains itself, e.g. "That is more
+    // than what is left of this payment".
+    if (
+      error.code === 'VALIDATION_FAILED' &&
+      error.status === 422 &&
+      error.details.length === 0 &&
+      error.message
+    ) {
+      return error.message;
+    }
     return ERROR_MESSAGES[error.code] ?? (error.status >= 500 ? GENERIC : error.message || GENERIC);
   }
   return GENERIC;

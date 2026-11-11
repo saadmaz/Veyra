@@ -231,3 +231,53 @@ export function StatusBadge({ status }: { status: string }) {
         : 'muted';
   return <span className={`badge badge--${tone}`}>{status.toLowerCase().replace('_', ' ')}</span>;
 }
+
+export function Badge({
+  tone = 'muted',
+  children,
+}: {
+  tone?: 'success' | 'warning' | 'muted' | 'danger';
+  children: ReactNode;
+}) {
+  return <span className={`badge badge--${tone}`}>{children}</span>;
+}
+
+export function CheckboxField({
+  label,
+  hint,
+  id,
+  ...rest
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: string; hint?: string }) {
+  const generated = useId();
+  const inputId = id ?? generated;
+  const hintId = hint ? `${inputId}-hint` : undefined;
+  return (
+    <div className="field field--checkbox">
+      <input {...rest} id={inputId} type="checkbox" aria-describedby={hintId} />
+      <label htmlFor={inputId} className="field__label">
+        {label}
+      </label>
+      {hint ? (
+        <p id={hintId} className="field__hint">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Wraps a table that may scroll sideways on a narrow screen. The wrapper takes keyboard focus so
+ * the hidden columns can be reached without a mouse (WCAG 2.1.1).
+ */
+export function TableWrap({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    // A group, not a fieldset (no form controls) and not a landmark region (one per table would
+    // flood the landmark list).
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must be focusable.
+    // biome-ignore lint/a11y/useSemanticElements: see above.
+    <div className="table-wrap" role="group" aria-label={label} tabIndex={0}>
+      {children}
+    </div>
+  );
+}

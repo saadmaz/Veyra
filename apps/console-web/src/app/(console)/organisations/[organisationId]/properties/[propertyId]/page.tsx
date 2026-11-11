@@ -184,6 +184,18 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      {can('property.finance.read') ? (
+        <Card title="Finance">
+          <p className="muted">
+            Charges, invoices, payments and receipts, approvals and reports, in {p.currency}.
+          </p>
+          <div className="form__actions">
+            <ButtonLink href={`${base}/finance`} variant="secondary">
+              Open finance
+            </ButtonLink>
+          </div>
+        </Card>
+      ) : null}
       {can('property.structure.read') ? (
         <>
           <Buildings base={base} canManage={canManage} />
