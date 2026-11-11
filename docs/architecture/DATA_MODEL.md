@@ -1,6 +1,6 @@
 # Data Model
 
-> Status: Phase 6. Sections 2-5 and the ledger and billing tables in section 6 are implemented;
+> Status: Phase 6. Sections 2-5 and the ledger, billing and payment tables in section 6 are implemented;
 > the rest of section 6 and section 8 are the plan.
 > The Prisma schema in `packages/db/prisma/schema.prisma` is the executable source of truth;
 > this document explains intent and invariants.
@@ -197,6 +197,33 @@ The API issues in one transaction: open the month's accounting period if no peri
 the entry (debit the unit's receivables, credit each charge type's income account), then mark
 the invoice issued.
 
+### Payments (migration `20261112150000_payments`)
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `payments` | property, unit, paid_by (`OWNERS`/`TENANTS`), tenancy?, method (`BANK_TRANSFER`/`CASH`/`CHEQUE`/`GATEWAY`), amount_minor, currency, received_on, reference?, receipt_number, journal_entry, idempotency_key?, payment_intent?, recorded_by_user? | Money received from one party of a unit. Exists only with its posted `PAYMENT` entry of the same date and currency that credits exactly the amount to the unit's `UNIT_CREDIT` (trigger). Receipt numbers per property without gaps (advisory lock). `idempotency_key` unique per organisation. A GATEWAY payment completes a PENDING intent of the same unit, party, amount and currency. Never changes or is deleted, for any role. |
+| `payment_allocations` | unit, payment, invoice, amount_minor, journal_entry, allocated_by_user?, released_at?, release_entry?, released_by_user? | Part of a payment applied to an ISSUED invoice of the same unit (composite keys) and the same party. Never more than what is left of the payment or of the invoice (trigger under advisory locks on the payment, then the invoice, so concurrent allocations cannot overpay). Released once, with a posted entry moving the money back; otherwise never changes. |
+| `payment_intents` | unit, paid_by, tenancy?, amount_minor, currency, provider, provider_reference, status (`PENDING`/`SUCCEEDED`/`FAILED`/`EXPIRED`), expires_at, completed_at? | An online payment in progress. `(provider, provider_reference)` unique. Completed once; SUCCEEDED only once its payment is recorded. |
+| `payment_provider_events` | provider, provider_event_id, type, intent, outcome | Every processed provider callback, unique per `(provider, provider_event_id)`, append-only for every role. |
+
+**Ledger flow.** A payment debits `BANK` (transfers and cheques), `CASH` or `GATEWAY_CLEARING`
+and credits `UNIT_CREDIT` for the unit. Each allocation posts its own `ALLOCATION` entry
+(debit `UNIT_CREDIT`, credit `RECEIVABLES`, both for the unit); a release posts the reverse. So
+the unit's `UNIT_CREDIT` balance is always the unallocated money of its payments, and its
+`RECEIVABLES` balance what its issued invoices still owe.
+
+**Who pays what.** Allocations stay within one party: a tenancy's payments pay only that
+tenancy's invoices, the owners' only the owners'. The API applies a party's unused payments to
+its unpaid invoices oldest first (by due date, then invoice number) whenever a payment arrives
+or an invoice is issued (owner decision, 2026-11-11); releasing an allocation does not re-apply
+it automatically, so finance staff can allocate it elsewhere.
+
+**Callback routing.** Provider callbacks arrive without tenant context. As for invitation
+tokens, the `payment_intents` SELECT policy also admits the one intent whose
+`"<provider>:<provider_reference>"` is presented in the transaction-local setting
+`app.payment_reference` (`withPaymentReferenceTransaction`). The API sets it only after the
+callback's signature is verified, then continues in that organisation's tenant transaction.
+
 Invariants:
 
 1. For a posted entry, sum(debits) = sum(credits) (posting trigger; the API checks first).
@@ -211,9 +238,9 @@ Invariants:
 6. Accounting policy is defined with qualified finance professionals before VEYRA claims
    statutory accounting support.
 
-Finance entities still to come (Phase 6 Parts 3-4 and later): `CreditNote`, `Payment`,
-`PaymentAllocation`, `Refund`, `ReconciliationBatch`, `ReconciliationItem`, `Expense`, `Budget`.
-The ledger and billing tables above are in place (the planned `ChargeDefinition` and
+Finance entities still to come (Phase 6 Part 4 and later): `CreditNote`, `Refund`,
+`ReconciliationBatch`, `ReconciliationItem`, `Expense`, `Budget`. The ledger, billing and payment
+tables above are in place (the planned `ChargeDefinition` and
 `ChargeSchedule` became `charge_types` and `recurring_charges`).
 
 ## 7. Identity vs person vs relationship

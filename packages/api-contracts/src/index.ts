@@ -892,6 +892,9 @@ export interface InvoiceDto {
   dueDate: string;
   issueDate: string | null;
   total: MoneyDto;
+  /** Paid so far (allocations not released). */
+  paid: MoneyDto;
+  outstanding: MoneyDto;
   createdAt: string;
   issuedAt: string | null;
 }
@@ -940,4 +943,77 @@ export interface CreateInvoiceRequest {
 export interface IssueInvoiceRequest {
   /** Replaces the due date (it may not be before the issue date). */
   dueDate?: string;
+}
+
+// Payments (Phase 6 Part 3).
+
+export type PaymentMethod = 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | 'GATEWAY';
+
+export interface PaymentAllocationDto {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  amount: MoneyDto;
+  createdAt: string;
+  /** Set when the allocation was taken back (the money returned to the payment's unused part). */
+  releasedAt: string | null;
+}
+
+/** A payment is also its receipt. */
+export interface PaymentDto {
+  id: string;
+  /** e.g. "RCT-000042". */
+  receiptNumber: string;
+  unitId: string;
+  unitNumber: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  method: PaymentMethod;
+  amount: MoneyDto;
+  /** Applied to invoices (allocations not released). */
+  allocated: MoneyDto;
+  /** Kept as the unit's credit for this party's later invoices. */
+  unallocated: MoneyDto;
+  receivedOn: string;
+  reference: string | null;
+  allocations: PaymentAllocationDto[];
+  createdAt: string;
+}
+
+/** Send with an Idempotency-Key header (a UUID); a retry with the same key returns the same payment. */
+export interface RecordPaymentRequest {
+  unitId: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  method: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE';
+  amount: string;
+  receivedOn: string;
+  reference?: string;
+}
+
+export interface AllocatePaymentRequest {
+  invoiceId: string;
+  amount: string;
+}
+
+export interface CreatePaymentIntentRequest {
+  unitId: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  amount: string;
+}
+
+export interface PaymentIntentDto {
+  id: string;
+  unitId: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  amount: MoneyDto;
+  provider: string;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED';
+  expiresAt: string;
+  completedAt: string | null;
+  paymentId: string | null;
+}
+
+export interface CreatePaymentIntentResponse {
+  intent: PaymentIntentDto;
+  /** Where the payer completes the payment with the provider. */
+  checkoutUrl: string;
 }

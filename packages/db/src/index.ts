@@ -12,6 +12,7 @@ export {
   type SqlExecutor,
   type TransactionRunner,
   withInvitationTokenTransaction,
+  withPaymentReferenceTransaction,
   withTenantTransaction,
   withUserTransaction,
 } from './tenant-transaction';

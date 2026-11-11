@@ -50,12 +50,16 @@ model User {
   walkInRequestsDecided     WalkInRequest[]     @relation("WalkInDecidedBy")
   visitsReviewed            Visit[]             @relation("VisitReviewedBy")
 
-  accountingPeriodsClosed AccountingPeriod[] @relation("PeriodClosedBy")
-  recurringChargesCreated RecurringCharge[]  @relation("RecurringChargeCreatedBy")
-  invoicesCreated         Invoice[]          @relation("InvoiceCreatedBy")
-  invoicesIssued          Invoice[]          @relation("InvoiceIssuedBy")
-  journalEntriesCreated   JournalEntry[]     @relation("JournalEntryCreatedBy")
-  journalEntriesPosted    JournalEntry[]     @relation("JournalEntryPostedBy")
+  accountingPeriodsClosed AccountingPeriod[]  @relation("PeriodClosedBy")
+  recurringChargesCreated RecurringCharge[]   @relation("RecurringChargeCreatedBy")
+  invoicesCreated         Invoice[]           @relation("InvoiceCreatedBy")
+  invoicesIssued          Invoice[]           @relation("InvoiceIssuedBy")
+  paymentsRecorded        Payment[]           @relation("PaymentRecordedBy")
+  allocationsMade         PaymentAllocation[] @relation("AllocationMadeBy")
+  allocationsReleased     PaymentAllocation[] @relation("AllocationReleasedBy")
+  paymentIntentsCreated   PaymentIntent[]     @relation("PaymentIntentCreatedBy")
+  journalEntriesCreated   JournalEntry[]      @relation("JournalEntryCreatedBy")
+  journalEntriesPosted    JournalEntry[]      @relation("JournalEntryPostedBy")
 
   @@map("users")
 }
@@ -339,6 +343,9 @@ model Property {
   chargeTypes       ChargeType[]
   recurringCharges  RecurringCharge[]
   invoices          Invoice[]
+  payments          Payment[]
+  paymentIntents    PaymentIntent[]
+  paymentEvents     PaymentProviderEvent[]
   accountingPeriods AccountingPeriod[]
   journalEntries    JournalEntry[]
 
@@ -429,6 +436,8 @@ model Unit {
   journalLines     JournalLine[]
   recurringCharges RecurringCharge[]
   invoices         Invoice[]
+  payments         Payment[]
+  paymentIntents   PaymentIntent[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -547,9 +556,11 @@ model Tenancy {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  unit      Unit              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  occupants TenancyOccupant[]
-  invoices  Invoice[]
+  unit           Unit              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  occupants      TenancyOccupant[]
+  invoices       Invoice[]
+  payments       Payment[]
+  paymentIntents PaymentIntent[]
 
   @@unique([organisationId, id])
   @@index([organisationId, unitId])
@@ -916,6 +927,8 @@ enum JournalSource {
   OPENING_BALANCE
   REVERSAL
   INVOICE
+  PAYMENT
+  ALLOCATION
 }
 
 /// An account in a property's chart of accounts. Accounts are archived, never deleted.
@@ -990,13 +1003,16 @@ model JournalEntry {
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property   Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  reverses   JournalEntry? @relation("Reversal", fields: [organisationId, propertyId, reversesEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  reversedBy JournalEntry? @relation("Reversal")
-  createdBy  User?         @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  postedBy   User?         @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  lines      JournalLine[]
-  invoice    Invoice?
+  property           Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  reverses           JournalEntry?       @relation("Reversal", fields: [organisationId, propertyId, reversesEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversedBy         JournalEntry?       @relation("Reversal")
+  createdBy          User?               @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  postedBy           User?               @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines              JournalLine[]
+  invoice            Invoice?
+  payment            Payment?
+  allocations        PaymentAllocation[] @relation("AllocationEntry")
+  allocationReleases PaymentAllocation[] @relation("AllocationReleaseEntry")
 
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, currency])
@@ -1162,19 +1178,21 @@ model Invoice {
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property     Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  unit         Unit               @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  tenancy      Tenancy?           @relation(fields: [organisationId, tenancyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  journalEntry JournalEntry?      @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  createdBy    User?              @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  issuedBy     User?              @relation("InvoiceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  lines        InvoiceLine[]      @relation("InvoiceLines")
-  billedLines  InvoiceLine[]      @relation("InvoiceLineBilledMonth")
+  property     Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit         Unit                @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  tenancy      Tenancy?            @relation(fields: [organisationId, tenancyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry?       @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User?               @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  issuedBy     User?               @relation("InvoiceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines        InvoiceLine[]       @relation("InvoiceLines")
+  billedLines  InvoiceLine[]       @relation("InvoiceLineBilledMonth")
   recipients   InvoiceRecipient[]
+  allocations  PaymentAllocation[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, unitId, billingMonth])
   @@unique([organisationId, propertyId, journalEntryId])
+  @@unique([organisationId, propertyId, id, unitId])
   @@unique([propertyId, invoiceNumber])
   @@index([organisationId, propertyId, createdAt])
   @@index([organisationId, unitId])
@@ -1228,4 +1246,157 @@ model InvoiceRecipient {
   @@unique([invoiceId, personId])
   @@index([organisationId, personId])
   @@map("invoice_recipients")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Payments (Phase 6 Part 3). A payment is money received for a unit from a party (its owners or
+// a tenancy). It posts to unit credit; allocations move credit to the party's invoices. Gateway
+// payments start as payment intents completed by signed, idempotent provider callbacks. Rules
+// are hand-written in migration 20261112150000_payments.
+// ---------------------------------------------------------------------------------------------
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  CHEQUE
+  /// Through a payment gateway (always from a payment intent).
+  GATEWAY
+}
+
+enum PaymentIntentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+}
+
+/// Money received. Never changes; corrections arrive with reversals (Phase 6 Part 4).
+model Payment {
+  id               String        @id @default(uuid(7)) @db.Uuid
+  organisationId   String        @map("organisation_id") @db.Uuid
+  propertyId       String        @map("property_id") @db.Uuid
+  unitId           String        @map("unit_id") @db.Uuid
+  /// Who paid: the owners, or the tenancy (tenancy_id).
+  paidBy           InvoiceBillTo @map("paid_by")
+  tenancyId        String?       @map("tenancy_id") @db.Uuid
+  method           PaymentMethod
+  /// Minor units, positive.
+  amountMinor      BigInt        @map("amount_minor")
+  currency         String        @db.Char(3)
+  /// Property-local date the money was received; also the ledger date.
+  receivedOn       DateTime      @map("received_on") @db.Date
+  /// Bank or cheque reference, or the provider's reference.
+  reference        String?
+  /// Sequential per property, assigned on insert (receipt number).
+  receiptNumber    BigInt?       @map("receipt_number")
+  journalEntryId   String        @map("journal_entry_id") @db.Uuid
+  /// The client's Idempotency-Key: the same key never records a second payment.
+  idempotencyKey   String?       @map("idempotency_key") @db.Uuid
+  paymentIntentId  String?       @map("payment_intent_id") @db.Uuid
+  recordedByUserId String?       @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property     Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit         Unit                @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  tenancy      Tenancy?            @relation(fields: [organisationId, tenancyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry        @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  intent       PaymentIntent?      @relation(fields: [organisationId, propertyId, paymentIntentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy   User?               @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  allocations  PaymentAllocation[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([organisationId, propertyId, id, unitId])
+  @@unique([organisationId, propertyId, journalEntryId])
+  @@unique([organisationId, propertyId, paymentIntentId])
+  @@unique([organisationId, idempotencyKey])
+  @@unique([propertyId, receiptNumber])
+  @@index([organisationId, unitId])
+  @@map("payments")
+}
+
+/// Part of a payment applied to an invoice of the same unit and party. Released (once) to
+/// reallocate; never edited or deleted.
+model PaymentAllocation {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  organisationId    String    @map("organisation_id") @db.Uuid
+  propertyId        String    @map("property_id") @db.Uuid
+  unitId            String    @map("unit_id") @db.Uuid
+  paymentId         String    @map("payment_id") @db.Uuid
+  invoiceId         String    @map("invoice_id") @db.Uuid
+  /// Minor units, positive.
+  amountMinor       BigInt    @map("amount_minor")
+  /// The ALLOCATION entry moving unit credit to receivables.
+  journalEntryId    String    @map("journal_entry_id") @db.Uuid
+  allocatedByUserId String?   @map("allocated_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  releasedAt        DateTime? @map("released_at") @db.Timestamptz(3)
+  releasedByUserId  String?   @map("released_by_user_id") @db.Uuid
+  /// The ALLOCATION entry moving the amount back to unit credit.
+  releaseEntryId    String?   @map("release_entry_id") @db.Uuid
+
+  payment      Payment       @relation(fields: [organisationId, propertyId, paymentId, unitId], references: [organisationId, propertyId, id, unitId], onDelete: Restrict, onUpdate: Restrict)
+  invoice      Invoice       @relation(fields: [organisationId, propertyId, invoiceId, unitId], references: [organisationId, propertyId, id, unitId], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry  @relation("AllocationEntry", fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  releaseEntry JournalEntry? @relation("AllocationReleaseEntry", fields: [organisationId, propertyId, releaseEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  allocatedBy  User?         @relation("AllocationMadeBy", fields: [allocatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  releasedBy   User?         @relation("AllocationReleasedBy", fields: [releasedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, paymentId])
+  @@index([organisationId, invoiceId])
+  @@map("payment_allocations")
+}
+
+/// An online payment in progress. A provider callback completes it once.
+model PaymentIntent {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  organisationId    String              @map("organisation_id") @db.Uuid
+  propertyId        String              @map("property_id") @db.Uuid
+  unitId            String              @map("unit_id") @db.Uuid
+  paidBy            InvoiceBillTo       @map("paid_by")
+  tenancyId         String?             @map("tenancy_id") @db.Uuid
+  amountMinor       BigInt              @map("amount_minor")
+  currency          String              @db.Char(3)
+  /// Adapter key, e.g. "sandbox".
+  provider          String
+  /// The provider's id for this payment; how callbacks find it.
+  providerReference String              @map("provider_reference")
+  status            PaymentIntentStatus @default(PENDING)
+  expiresAt         DateTime            @map("expires_at") @db.Timestamptz(3)
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(3)
+  createdByUserId   String?             @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property  Property               @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit      Unit                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  tenancy   Tenancy?               @relation(fields: [organisationId, tenancyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User?                  @relation("PaymentIntentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payment   Payment?
+  events    PaymentProviderEvent[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([provider, providerReference])
+  @@index([organisationId, propertyId, createdAt])
+  @@map("payment_intents")
+}
+
+/// Every provider callback processed, once per (provider, event id). Append-only.
+model PaymentProviderEvent {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  organisationId  String   @map("organisation_id") @db.Uuid
+  propertyId      String   @map("property_id") @db.Uuid
+  provider        String
+  providerEventId String   @map("provider_event_id")
+  type            String
+  intentId        String   @map("intent_id") @db.Uuid
+  /// What VEYRA did: RECORDED, FAILED, IGNORED_NOT_PENDING, AMOUNT_MISMATCH.
+  outcome         String
+  receivedAt      DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  property Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  intent   PaymentIntent @relation(fields: [organisationId, propertyId, intentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([provider, providerEventId])
+  @@index([organisationId, intentId])
+  @@map("payment_provider_events")
 }

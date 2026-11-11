@@ -5,21 +5,28 @@ import {
   type DbTransaction,
   databaseErrorCode,
   isUniqueViolation,
+  withPaymentReferenceTransaction,
   withTenantTransaction,
 } from '@veyra/db';
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
 import {
+  type AllocationRecord,
   AlreadyBilled,
   type ChargeTypeRecord,
   type FinanceAuditEvent,
   type FinanceRepository,
   type FinanceUnitOfWork,
+  IdempotencyConflict,
   type InvoiceDetailRecord,
   type InvoiceRecord,
   type LedgerAccountRecord,
   type NewInvoice,
   type NewLedgerLine,
+  type NewPayment,
+  type Party,
+  type PaymentIntentRecord,
+  type PaymentRecord,
   type PeriodState,
   type PropertyFinanceInfo,
   type RecurringChargeRecord,
@@ -107,12 +114,14 @@ const INVOICE_SELECT = {
   status: true,
   unitId: true,
   billTo: true,
+  tenancyId: true,
   billingMonth: true,
   billingDate: true,
   dueDate: true,
   issueDate: true,
   currency: true,
   totalMinor: true,
+  allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
   journalEntryId: true,
   createdAt: true,
   issuedAt: true,
@@ -134,12 +143,14 @@ type InvoiceRow = {
   status: InvoiceRecord['status'];
   unitId: string;
   billTo: InvoiceRecord['billTo'];
+  tenancyId: string | null;
   billingMonth: Date | null;
   billingDate: Date;
   dueDate: Date;
   issueDate: Date | null;
   currency: string;
   totalMinor: bigint;
+  allocations: { amountMinor: bigint }[];
   journalEntryId: string | null;
   createdAt: Date;
   issuedAt: Date | null;
@@ -159,6 +170,7 @@ const toInvoice = (row: InvoiceRow): InvoiceRecord => ({
   unitId: row.unitId,
   unitNumber: row.unit.number,
   billTo: row.billTo,
+  tenancyId: row.tenancyId,
   recipients: row.recipients.map((r) => ({
     personId: r.personId,
     fullName: r.person.fullName,
@@ -173,9 +185,66 @@ const toInvoice = (row: InvoiceRow): InvoiceRecord => ({
   issueDate: toIsoOrNull(row.issueDate),
   currency: row.currency,
   totalMinor: row.totalMinor,
+  paidMinor: row.allocations.reduce((sum, a) => sum + a.amountMinor, 0n),
   journalEntryId: row.journalEntryId,
   createdAt: row.createdAt,
   issuedAt: row.issuedAt,
+});
+
+const ALLOCATION_SELECT = {
+  id: true,
+  paymentId: true,
+  invoiceId: true,
+  unitId: true,
+  amountMinor: true,
+  createdAt: true,
+  releasedAt: true,
+  invoice: { select: { invoiceNumber: true } },
+} as const;
+
+type AllocationRow = Omit<AllocationRecord, 'invoiceNumber'> & {
+  invoice: { invoiceNumber: bigint | null };
+};
+
+const toAllocation = ({ invoice, ...row }: AllocationRow): AllocationRecord => ({
+  ...row,
+  invoiceNumber: invoice.invoiceNumber,
+});
+
+const PAYMENT_SELECT = {
+  id: true,
+  receiptNumber: true,
+  unitId: true,
+  paidBy: true,
+  tenancyId: true,
+  method: true,
+  amountMinor: true,
+  currency: true,
+  receivedOn: true,
+  reference: true,
+  idempotencyKey: true,
+  createdAt: true,
+  unit: { select: { number: true } },
+  allocations: { select: ALLOCATION_SELECT, orderBy: { createdAt: 'asc' as const } },
+} as const;
+
+type PaymentRow = Omit<
+  PaymentRecord,
+  'unitNumber' | 'receivedOn' | 'allocations' | 'receiptNumber'
+> & {
+  receiptNumber: bigint | null;
+  receivedOn: Date;
+  unit: { number: string };
+  allocations: AllocationRow[];
+};
+
+const toPayment = ({ unit, allocations, ...row }: PaymentRow): PaymentRecord => ({
+  ...row,
+  receiptNumber: row.receiptNumber ?? 0n,
+  currency: row.currency.trim(),
+  unitNumber: unit.number,
+  receivedOn: toIso(row.receivedOn),
+  allocations: allocations.map(toAllocation),
 });
 
 class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
@@ -185,7 +254,7 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
     private readonly tx: DbTransaction,
     private readonly organisationId: string,
     private readonly propertyId: string,
-    private readonly userId: string,
+    private readonly userId: string | null,
     private readonly meta: RequestMeta,
   ) {
     this.scope = { organisationId, propertyId };
@@ -553,7 +622,8 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
     return period?.status ?? 'NONE';
   }
 
-  async postInvoiceEntry(
+  async postEntry(
+    source: 'INVOICE' | 'PAYMENT' | 'ALLOCATION',
     description: string,
     entryDate: IsoDate,
     currency: string,
@@ -564,7 +634,7 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
         ...this.scope,
         entryDate: toDate(entryDate),
         description: description.slice(0, 500),
-        source: 'INVOICE',
+        source,
         currency,
         createdByUserId: this.userId,
       },
@@ -601,6 +671,235 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
     });
   }
 
+  async createPayment(payment: NewPayment): Promise<string> {
+    try {
+      const { id } = await this.tx.payment.create({
+        data: {
+          ...this.scope,
+          unitId: payment.unitId,
+          paidBy: payment.party.billTo,
+          tenancyId: payment.party.tenancyId,
+          method: payment.method,
+          amountMinor: payment.amountMinor,
+          currency: payment.currency,
+          receivedOn: toDate(payment.receivedOn),
+          reference: payment.reference,
+          journalEntryId: payment.journalEntryId,
+          idempotencyKey: payment.idempotencyKey,
+          paymentIntentId: payment.paymentIntentId,
+          recordedByUserId: this.userId,
+        },
+        select: { id: true },
+      });
+      return id;
+    } catch (error) {
+      if (isUniqueViolation(error, 'idempotency_key')) throw new IdempotencyConflict();
+      throw error;
+    }
+  }
+
+  async payment(id: string): Promise<PaymentRecord | null> {
+    const row = await this.tx.payment.findFirst({
+      where: { ...this.scope, id },
+      select: PAYMENT_SELECT,
+    });
+    return row && toPayment(row);
+  }
+
+  async paymentByIdempotencyKey(key: string): Promise<PaymentRecord | null> {
+    const row = await this.tx.payment.findFirst({
+      where: { organisationId: this.organisationId, idempotencyKey: key },
+      select: { ...PAYMENT_SELECT, propertyId: true },
+    });
+    if (!row) return null;
+    // A key reused at another property of the organisation is a conflict, not a match.
+    const { propertyId, ...rest } = row;
+    if (propertyId !== this.propertyId) throw new IdempotencyConflict();
+    return toPayment(rest);
+  }
+
+  async payments(filter: { unitId?: string }): Promise<PaymentRecord[]> {
+    const rows = await this.tx.payment.findMany({
+      where: { ...this.scope, ...(filter.unitId ? { unitId: filter.unitId } : {}) },
+      select: PAYMENT_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 200,
+    });
+    return rows.map(toPayment);
+  }
+
+  async creditSources(
+    unitId: string,
+    party: Party,
+  ): Promise<{ paymentId: string; remainingMinor: bigint }[]> {
+    const rows = await this.tx.payment.findMany({
+      where: { ...this.scope, unitId, paidBy: party.billTo, tenancyId: party.tenancyId },
+      select: {
+        id: true,
+        amountMinor: true,
+        allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
+      },
+      orderBy: [{ receivedOn: 'asc' }, { receiptNumber: 'asc' }],
+    });
+    return rows
+      .map((r) => ({
+        paymentId: r.id,
+        remainingMinor: r.amountMinor - r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n),
+      }))
+      .filter((r) => r.remainingMinor > 0n);
+  }
+
+  async openInvoices(
+    unitId: string,
+    party: Party,
+  ): Promise<{ invoiceId: string; outstandingMinor: bigint }[]> {
+    const rows = await this.tx.invoice.findMany({
+      where: {
+        ...this.scope,
+        unitId,
+        status: 'ISSUED',
+        billTo: party.billTo,
+        tenancyId: party.tenancyId,
+      },
+      select: {
+        id: true,
+        totalMinor: true,
+        allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
+      },
+      orderBy: [{ dueDate: 'asc' }, { invoiceNumber: 'asc' }],
+    });
+    return rows
+      .map((r) => ({
+        invoiceId: r.id,
+        outstandingMinor: r.totalMinor - r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n),
+      }))
+      .filter((r) => r.outstandingMinor > 0n);
+  }
+
+  async createAllocation(input: {
+    unitId: string;
+    paymentId: string;
+    invoiceId: string;
+    amountMinor: bigint;
+    journalEntryId: string;
+  }): Promise<string> {
+    const { id } = await this.tx.paymentAllocation.create({
+      data: { ...this.scope, ...input, allocatedByUserId: this.userId },
+      select: { id: true },
+    });
+    return id;
+  }
+
+  async allocation(id: string): Promise<AllocationRecord | null> {
+    const row = await this.tx.paymentAllocation.findFirst({
+      where: { ...this.scope, id },
+      select: ALLOCATION_SELECT,
+    });
+    return row && toAllocation(row);
+  }
+
+  async releaseAllocation(id: string, releaseEntryId: string): Promise<void> {
+    await this.tx.paymentAllocation.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: { releasedAt: new Date(), releasedByUserId: this.userId, releaseEntryId },
+    });
+  }
+
+  async createPaymentIntent(input: {
+    unitId: string;
+    party: Party;
+    amountMinor: bigint;
+    currency: string;
+    provider: string;
+    providerReference: string;
+    expiresAt: Date;
+  }): Promise<string> {
+    const { id } = await this.tx.paymentIntent.create({
+      data: {
+        ...this.scope,
+        unitId: input.unitId,
+        paidBy: input.party.billTo,
+        tenancyId: input.party.tenancyId,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        provider: input.provider,
+        providerReference: input.providerReference,
+        expiresAt: input.expiresAt,
+        createdByUserId: this.userId,
+      },
+      select: { id: true },
+    });
+    return id;
+  }
+
+  async paymentIntent(
+    id: string,
+    options: { lock?: boolean } = {},
+  ): Promise<PaymentIntentRecord | null> {
+    if (options.lock) {
+      await this.tx.$queryRaw`
+        SELECT 1 FROM "payment_intents"
+         WHERE "id" = ${id}::uuid AND "organisation_id" = ${this.organisationId}::uuid
+           AND "property_id" = ${this.propertyId}::uuid
+         FOR UPDATE`;
+    }
+    const row = await this.tx.paymentIntent.findFirst({
+      where: { ...this.scope, id },
+      select: {
+        id: true,
+        unitId: true,
+        paidBy: true,
+        tenancyId: true,
+        amountMinor: true,
+        currency: true,
+        provider: true,
+        providerReference: true,
+        status: true,
+        expiresAt: true,
+        completedAt: true,
+        createdAt: true,
+        payment: { select: { id: true } },
+      },
+    });
+    if (!row) return null;
+    const { payment, ...rest } = row;
+    return { ...rest, currency: rest.currency.trim(), paymentId: payment?.id ?? null };
+  }
+
+  async completePaymentIntent(id: string, status: 'SUCCEEDED' | 'FAILED'): Promise<void> {
+    await this.tx.paymentIntent.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: { status, completedAt: new Date() },
+    });
+  }
+
+  async providerEventSeen(provider: string, eventId: string): Promise<boolean> {
+    const row = await this.tx.paymentProviderEvent.findFirst({
+      where: { organisationId: this.organisationId, provider, providerEventId: eventId },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
+  async recordProviderEvent(input: {
+    provider: string;
+    eventId: string;
+    type: string;
+    intentId: string;
+    outcome: string;
+  }): Promise<void> {
+    await this.tx.paymentProviderEvent.create({
+      data: {
+        ...this.scope,
+        provider: input.provider,
+        providerEventId: input.eventId,
+        type: input.type.slice(0, 100),
+        intentId: input.intentId,
+        outcome: input.outcome,
+      },
+    });
+  }
+
   async audit(event: FinanceAuditEvent): Promise<void> {
     await this.tx.auditLog.createMany({
       data: [
@@ -626,7 +925,7 @@ export class PrismaFinanceRepository implements FinanceRepository {
   inProperty<T>(
     organisationId: string,
     propertyId: string,
-    userId: string,
+    userId: string | null,
     meta: RequestMeta,
     work: (uow: FinanceUnitOfWork) => Promise<T>,
   ): Promise<T> {
@@ -634,7 +933,19 @@ export class PrismaFinanceRepository implements FinanceRepository {
       this.db,
       { organisationId },
       (tx) => work(new PrismaFinanceUnitOfWork(tx, organisationId, propertyId, userId, meta)),
-      { userId },
+      userId === null ? {} : { userId },
+    );
+  }
+
+  intentByProviderReference(
+    provider: string,
+    providerReference: string,
+  ): Promise<{ id: string; organisationId: string; propertyId: string } | null> {
+    return withPaymentReferenceTransaction(this.db, provider, providerReference, (tx) =>
+      tx.paymentIntent.findFirst({
+        where: { provider, providerReference },
+        select: { id: true, organisationId: true, propertyId: true },
+      }),
     );
   }
 }

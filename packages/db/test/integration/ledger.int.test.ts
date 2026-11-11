@@ -613,7 +613,7 @@ describe('immutability', () => {
     // Everything that references the ledger is included, so only the triggers can refuse it.
     await expect(
       superuser.query(
-        'TRUNCATE invoice_lines, invoice_recipients, invoices, journal_lines, journal_entries',
+        'TRUNCATE payment_allocations, payment_provider_events, payments, payment_intents, invoice_lines, invoice_recipients, invoices, journal_lines, journal_entries',
       ),
     ).rejects.toMatchObject({
       code: '42501',

@@ -411,6 +411,33 @@ expiry, rehash on sign-in, idempotent sign-out).
   (`PERIOD_CLOSED`) and works once reopened; managers cannot issue. The property manager's
   permission list test now includes `property.finance.read`.
 
+### Part 3: payments
+
+- `packages/db` integration (14, `payments.int.test.ts`): no tenant context sees nothing in any
+  payment table; consecutive receipt numbers; a payment exists only with a posted payment entry
+  of its date crediting exactly its amount to the unit's credit; payments never change, not even
+  for the superuser; allocations stay within the payment and the invoice, go only to issued
+  invoices of the same unit and party (a tenancy's payment never pays the owners' invoice),
+  are released once and can then be allocated again, and never overpay an invoice under
+  concurrency; intents start pending, succeed only with their payment (of matching amount) and
+  complete once; a callback can see exactly its intent and nothing else without tenant context;
+  provider events are unique and append-only. The Part 1 TRUNCATE test now includes the payment
+  tables that reference the ledger.
+- `apps/api` unit (+6, `test/finance/payments.test.ts`): oldest-first allocation across several
+  payments and invoices; which account receives each method's money; sandbox signatures accepted
+  when correct and refused when missing, wrong, over a tampered body, stale (over 5 minutes) or
+  not an event; unguessable references.
+- `apps/api` integration (11, `payments.int.test.ts`): an Idempotency-Key and the manage
+  permission are required; a payment pays the oldest invoices first and is its own receipt; the
+  same key replays the same payment and refuses a different one; the same request twice at once
+  records once; a tenancy's payment pays only its invoices and keeps the rest as unit credit
+  (checked in the ledger); credit is applied when a new invoice is issued; future dates, a missing
+  tenancy and too many decimals are refused; an allocation is released once and reallocated within
+  limits and parties; managers read but cannot reallocate; the sandbox flow: wrong signature 401,
+  a signed success recorded once (duplicate event and a later event ignored), a mismatched amount
+  left pending, a failure recorded, unknown references answered and unknown providers 404. The
+  Part 2 set-up test now expects the gateway clearing account.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
