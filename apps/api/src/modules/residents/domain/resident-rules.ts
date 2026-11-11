@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { listQuerySchema } from '../../../platform/validation/common-schemas';
+import {
+  listQuerySchema,
+  phoneSchema,
+  plateSchema,
+} from '../../../platform/validation/common-schemas';
 
 /*
  * Input rules for residents (DATA_MODEL section 4). The database repeats the essential ones
@@ -30,11 +34,7 @@ const email = z
   .pipe(z.email({ message: 'Enter a valid email address' }))
   .transform((value) => value.toLowerCase());
 
-/** E.164: "+" then 7-15 digits. Spaces and dashes are removed first. */
-const phone = z
-  .string()
-  .transform((value) => value.replace(/[\s-]/g, ''))
-  .pipe(z.string().regex(/^\+[1-9]\d{6,14}$/, 'Use international format, e.g. +923001234567'));
+const phone = phoneSchema;
 
 const languageTag = z
   .string()
@@ -169,10 +169,7 @@ export type AddHouseholdMemberInput = z.infer<typeof addHouseholdMemberSchema>;
 export const addVehicleSchema = z
   .object({
     /** Normalised: upper case, spaces removed. */
-    plate: z
-      .string()
-      .transform((value) => value.toUpperCase().replace(/\s+/g, ''))
-      .pipe(z.string().regex(/^[A-Z0-9-]{2,15}$/, 'Use letters, digits and hyphens')),
+    plate: plateSchema,
     make: optionalTrimmed(60),
     model: optionalTrimmed(60),
     colour: optionalTrimmed(40),

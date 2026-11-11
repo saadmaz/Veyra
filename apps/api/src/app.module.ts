@@ -12,6 +12,7 @@ import { AuthGuard } from './modules/identity/presentation/auth.guard';
 import { OrganisationsModule } from './modules/organisations/organisations.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { ResidentsModule } from './modules/residents/residents.module';
+import { VisitorsModule } from './modules/visitors/visitors.module';
 import { ConfigModule } from './platform/config/config.module';
 import type { ApiEnv } from './platform/config/env';
 import { ApiExceptionFilter } from './platform/errors/api-exception.filter';
@@ -33,6 +34,7 @@ export class AppModule implements NestModule {
         OrganisationsModule,
         PropertiesModule,
         ResidentsModule,
+        VisitorsModule,
       ],
       controllers: [HealthController],
       providers: [

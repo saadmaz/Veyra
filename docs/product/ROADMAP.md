@@ -26,7 +26,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
-| 5     | Visitor and access management            | In progress: Part 1 (data foundation) done |
+| 5     | Visitor and access management            | In progress: Parts 1-2 done; Part 3 (walk-in approval) next |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
@@ -122,8 +122,8 @@ personal data; a pass is never proof of identity; guards see the minimum necessa
 | Part | Scope | Status |
 | ---- | ----- | ------ |
 | 1 | Data foundation: visitor invitations, passes (hashes only), visits, append-only access events; online admission backstop (window, revocation, entries, row lock against two gates); immutable visits; RLS | ✅ Done |
-| 2 | Security guard and supervisor roles; API: residents and staff create and revoke invitations, pass issue (QR token and reference code), guard validation with minimal data, check-in, check-out, denied entry, walk-in record; rate limits on pass lookups | Next |
-| 3 | In-app walk-in approval: request to the unit's residents, approve or deny, expiry; polling first, then WebSockets | |
+| 2 | Security guard and supervisor roles; API: residents and staff create and revoke invitations, pass issue (QR token and reference code), guard validation with minimal data, check-in, check-out, denied entry, walk-in record; rate limits on pass lookups | ✅ Done |
+| 3 | In-app walk-in approval: request to the unit's residents, approve or deny, expiry; polling first, then WebSockets. Until then walk-ins to a unit are refused (`WALK_IN_NEEDS_APPROVAL`) | Next |
 | 4 | Console: residents' visitor pages, the guard's gate screen (installable PWA), the supervisor's log; browser journeys per role | |
 | 5 | Offline: written paper procedure and late entry; offline gate mode with a cached day list, sync, conflict handling, and late records flagged when the invitation would not have allowed them | |
 

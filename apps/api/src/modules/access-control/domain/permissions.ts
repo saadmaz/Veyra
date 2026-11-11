@@ -37,6 +37,14 @@ export const PERMISSIONS = [
   'unit.profile.read',
   /** See who currently owns, rents and lives in a unit (names and roles, no contact details). */
   'unit.residents.read',
+  /** Register, list and revoke visitors for a unit (residents of the unit and property staff). */
+  'unit.visitor.invite',
+  /** Operate a gate: validate passes, admit, deny and record departures (security staff). */
+  'property.visitor.check_in',
+  /** View the property's visit log and visitor invitations. */
+  'property.visitor.read',
+  /** Revoke any visitor invitation of the property. */
+  'property.visitor.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
