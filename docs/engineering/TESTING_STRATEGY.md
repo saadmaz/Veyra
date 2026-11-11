@@ -381,6 +381,36 @@ expiry, rehash on sign-in, idempotent sign-out).
   once the posting commits.
 - The migration drift test confirms the migrated database matches `schema.prisma`.
 
+### Part 2: billing
+
+- `packages/db` integration (19, `billing.int.test.ts`): no tenant context sees nothing in any
+  billing table; invoices for another tenant's unit refused; charge types book only to income
+  accounts and keep their code; recurring charges cover whole months, never overlap for the same
+  unit (or the whole property) and type, and change only their end month; a recurring charge is
+  never billed twice for a unit and month; lines must match their invoice's unit and month and
+  their charge's type; issued invoices are numbered without gaps; issuing is refused when lines do
+  not add up, nobody is billed, or the ledger entry is not a posted invoice entry of the issue
+  date debiting exactly the total to that unit's receivables; one entry per invoice; invoices
+  cannot be inserted as issued or bill another unit's tenancy; issued invoices, lines and
+  recipients never change; drafts can be edited and discarded but not moved. The Part 1 TRUNCATE
+  test now includes the invoice tables that reference the ledger.
+- `apps/api` unit (7, `test/finance/finance-rules.test.ts`): amounts in each currency's minor
+  unit; per-sqm pricing exact and rounded half up (also above 2^53); a unit's own charge replaces
+  the property-wide one; who pays (owners, tenancy, owners while vacant, nobody); months, month
+  bounds (leap years), labels and invoice numbers.
+- `apps/api` integration (15, `finance.int.test.ts`): finance officers set up a property
+  (idempotent: 8 accounts, 2 charge types); property managers read but cannot run billing; guards
+  403, residents and another property's finance officer 404; duplicate codes 409, non-income
+  accounts 422; flat, per-sqm, property-wide and unit charges, overlaps 409, too many decimals
+  422; ending a charge earlier but never extending it; a billing run bills owners for service
+  charges and tenants (or owners while vacant) for utilities with exact totals, reports units with
+  no area or nobody to bill, never bills a month twice, bills again only what was discarded; two
+  concurrent runs bill each line once; runs can issue at once; issuing posts receivables and
+  income and freezes the invoice; one-off invoices bill the right party and refuse mixed parties,
+  past due dates and units with nobody to bill; issuing into a closed period is refused
+  (`PERIOD_CLOSED`) and works once reopened; managers cannot issue. The property manager's
+  permission list test now includes `property.finance.read`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

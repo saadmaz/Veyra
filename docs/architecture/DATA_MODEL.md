@@ -1,7 +1,7 @@
 # Data Model
 
-> Status: Phase 6. Sections 2-5 and the ledger tables in section 6 are implemented; the rest of
-> section 6 and section 8 are the plan.
+> Status: Phase 6. Sections 2-5 and the ledger and billing tables in section 6 are implemented;
+> the rest of section 6 and section 8 are the plan.
 > The Prisma schema in `packages/db/prisma/schema.prisma` is the executable source of truth;
 > this document explains intent and invariants.
 
@@ -174,6 +174,29 @@ reversal and, where needed, a new entry.
 
 **Currency lock:** a property's currency cannot change once it has any journal entry.
 
+### Billing (migration `20261112120000_billing`)
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `charge_types` | property, code, name, liable_party (`OWNERS`/`OCCUPANT`), income_account, status | Code unique per property, never changes; books to an INCOME account of the same property (composite key + trigger). Archived, never deleted. |
+| `recurring_charges` | property, unit? (null = every active unit), charge_type, basis (`FLAT`/`PER_SQM`), amount_minor, start_month, end_month?, created_by_user? | Whole months (first day); positive amount (FLAT: per month; PER_SQM: per square metre). No overlap for the same unit (or the whole property) and charge type (exclusion constraint). Only the end month ever changes. |
+| `invoices` | property, unit, invoice_number?, status (`DRAFT`/`ISSUED`), bill_to (`OWNERS`/`TENANTS`), tenancy?, billing_month?, billing_date, due_date, issue_date?, currency, total_minor, journal_entry?, created_by_user?, issued_at?, issued_by_user? | Created as drafts. A TENANTS invoice names a tenancy of its own unit. Issued invoices carry number, issue date, posting time and journal entry; drafts none. Due date not before the billing or issue date. One journal entry per invoice. |
+| `invoice_lines` | invoice, line_number, charge_type, description, amount_minor, recurring_charge?, unit?, billing_month? | Positive amounts. Lines of a billing run name their recurring charge, unit and month together; `(recurring_charge, unit, billing_month)` is unique, so a recurring charge is **never billed twice** for a unit and month; a composite key ties the unit and month to the invoice's own, and a trigger checks the charge type matches. |
+| `invoice_recipients` | invoice, person, share? | Who the invoice is addressed to, captured when it is created: owners with their ownership share, or the tenancy's occupants. |
+
+**Issuing** (`invoices_guard`, DRAFT to ISSUED) checks that the lines add up to the total, the
+invoice is addressed to someone, and its journal entry is a POSTED `INVOICE` entry of the issue
+date, in the invoice's currency, whose net debit to the `RECEIVABLES` account for the invoice's
+unit equals the total. It then assigns the next invoice number of the property (advisory lock)
+and stamps `issued_at`. Issued invoices, their lines and recipients never change and cannot be
+deleted (triggers; TRUNCATE refused); drafts may be edited and discarded. Corrections to issued
+invoices arrive with credit notes (Part 4).
+
+The API issues in one transaction: open the month's accounting period if no period covers today
+(`INSERT … ON CONFLICT DO NOTHING`, so concurrent requests and existing periods are safe), post
+the entry (debit the unit's receivables, credit each charge type's income account), then mark
+the invoice issued.
+
 Invariants:
 
 1. For a posted entry, sum(debits) = sum(credits) (posting trigger; the API checks first).
@@ -188,10 +211,10 @@ Invariants:
 6. Accounting policy is defined with qualified finance professionals before VEYRA claims
    statutory accounting support.
 
-Finance entities still to come (Phase 6 Parts 2-4 and later): `ChargeDefinition`,
-`ChargeSchedule`, `Invoice`, `InvoiceLine`, `CreditNote`, `Payment`, `PaymentAllocation`,
-`Refund`, `ReconciliationBatch`, `ReconciliationItem`, `Expense`, `Budget`. The ledger tables
-above (`LedgerAccount`, `AccountingPeriod`, `JournalEntry`, `JournalLine`) are in place.
+Finance entities still to come (Phase 6 Parts 3-4 and later): `CreditNote`, `Payment`,
+`PaymentAllocation`, `Refund`, `ReconciliationBatch`, `ReconciliationItem`, `Expense`, `Budget`.
+The ledger and billing tables above are in place (the planned `ChargeDefinition` and
+`ChargeSchedule` became `charge_types` and `recurring_charges`).
 
 ## 7. Identity vs person vs relationship
 

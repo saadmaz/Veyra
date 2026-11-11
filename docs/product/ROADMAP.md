@@ -27,7 +27,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
-| 6     | Finance and billing                      | In progress (Part 1 done) |
+| 6     | Finance and billing                      | In progress (Parts 1-2 done) |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
@@ -153,7 +153,7 @@ ledger lines; callbacks are idempotent; no card data is stored.
 | Part | Scope | Status |
 | ---- | ----- | ------ |
 | 1 | Ledger foundation: accounts per property, accounting periods, journal entries and lines; posting checks (balance, open period, active accounts, currency) with gap-free numbering; posted entries immutable for every role; mirrored reversals, at most once; property currency fixed once entries exist; RLS | ✅ Done |
-| 2 | Finance roles and billing: finance officer permissions, the default chart of accounts and monthly periods per property, charge types with their liable party, recurring (flat or per sqm) and one-off charges, invoice issue posting to the ledger; API | |
+| 2 | Finance roles and billing: finance officer permissions, the default chart of accounts and monthly periods per property, charge types with their liable party, recurring (flat or per sqm) and one-off charges, invoice issue posting to the ledger; API | ✅ Done |
 | 3 | Payments: manual payments and receipts, oldest-first allocation, unit credit and reallocation; payment-gateway port with signed idempotent callbacks and a sandbox adapter | |
 | 4 | Controls and reports: maker-checker for reversals, write-offs, refunds and period reopening; credit notes; statements, overdue status and ageing | |
 | 5 | Console: finance screens for staff; residents' invoices, receipts, statement and bank-transfer reference; browser journeys; Phase 6 exit review | |
@@ -167,6 +167,12 @@ readiness, user training and release communication, and known limitations docume
 
 ## Technical debt
 
+- Finance: invoice lists return the 200 most recent matching the filters (no paging yet);
+  creating a one-off invoice is not idempotent (no `Idempotency-Key` yet; payments in Part 3
+  will need it); the chart of accounts has no add, rename or archive endpoints yet (archiving must
+  refuse accounts with a balance); billing runs process a whole property in one transaction
+  (move to a worker job if properties grow to thousands of units); MFA is not yet required for
+  finance actions (ACCESS_CONTROL rule 7).
 - Resident console: the people picker (`GET …/properties/:id/persons`) returns at most 200
   people and the console does not use its `query` filter yet; add type-ahead search when a
   property has more.

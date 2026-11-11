@@ -51,6 +51,9 @@ model User {
   visitsReviewed            Visit[]             @relation("VisitReviewedBy")
 
   accountingPeriodsClosed AccountingPeriod[] @relation("PeriodClosedBy")
+  recurringChargesCreated RecurringCharge[]  @relation("RecurringChargeCreatedBy")
+  invoicesCreated         Invoice[]          @relation("InvoiceCreatedBy")
+  invoicesIssued          Invoice[]          @relation("InvoiceIssuedBy")
   journalEntriesCreated   JournalEntry[]     @relation("JournalEntryCreatedBy")
   journalEntriesPosted    JournalEntry[]     @relation("JournalEntryPostedBy")
 
@@ -333,6 +336,9 @@ model Property {
   walkInRequests     WalkInRequest[]
 
   ledgerAccounts    LedgerAccount[]
+  chargeTypes       ChargeType[]
+  recurringCharges  RecurringCharge[]
+  invoices          Invoice[]
   accountingPeriods AccountingPeriod[]
   journalEntries    JournalEntry[]
 
@@ -420,7 +426,9 @@ model Unit {
   visits             Visit[]
   walkInRequests     WalkInRequest[]
 
-  journalLines JournalLine[]
+  journalLines     JournalLine[]
+  recurringCharges RecurringCharge[]
+  invoices         Invoice[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -488,6 +496,7 @@ model Person {
   vehicles          Vehicle[]
   invitations       Invitation[]
   hostedVisitors    VisitorInvitation[]
+  invoicesBilled    InvoiceRecipient[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, userId])
@@ -540,6 +549,7 @@ model Tenancy {
 
   unit      Unit              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   occupants TenancyOccupant[]
+  invoices  Invoice[]
 
   @@unique([organisationId, id])
   @@index([organisationId, unitId])
@@ -905,6 +915,7 @@ enum JournalSource {
   MANUAL
   OPENING_BALANCE
   REVERSAL
+  INVOICE
 }
 
 /// An account in a property's chart of accounts. Accounts are archived, never deleted.
@@ -923,8 +934,9 @@ model LedgerAccount {
   createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  lines    JournalLine[]
+  property    Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines       JournalLine[]
+  chargeTypes ChargeType[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, code])
@@ -984,6 +996,7 @@ model JournalEntry {
   createdBy  User?         @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   postedBy   User?         @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines      JournalLine[]
+  invoice    Invoice?
 
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, currency])
@@ -1020,4 +1033,199 @@ model JournalLine {
   @@index([organisationId, accountId])
   @@index([organisationId, unitId])
   @@map("journal_lines")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Billing (Phase 6 Part 2). Charge types, recurring charges and invoices. Issuing an invoice
+// posts a journal entry in the same transaction. Integrity rules (issue checks, immutability of
+// issued invoices, no double billing of a recurring charge) are hand-written in migration
+// 20261112120000_billing.
+// ---------------------------------------------------------------------------------------------
+
+/// Who a charge type is billed to (owner decision, 2026-11-11).
+enum ChargeLiableParty {
+  /// The unit's owners (e.g. service charges).
+  OWNERS
+  /// The current tenants, or the owners while the unit has no tenancy (e.g. utilities).
+  OCCUPANT
+}
+
+enum ChargeTypeStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum RecurringChargeBasis {
+  /// The same amount every month.
+  FLAT
+  /// A rate per square metre of the unit's area, rounded half up to the minor unit.
+  PER_SQM
+}
+
+enum InvoiceStatus {
+  /// Being prepared: lines may change and the draft may be discarded. Nothing is in the ledger.
+  DRAFT
+  /// Numbered and posted to the ledger. Never changes.
+  ISSUED
+}
+
+/// Who an invoice is addressed to, resolved on its billing date.
+enum InvoiceBillTo {
+  OWNERS
+  TENANTS
+}
+
+/// A kind of charge a property bills, with the income account it books to.
+model ChargeType {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  organisationId  String            @map("organisation_id") @db.Uuid
+  propertyId      String            @map("property_id") @db.Uuid
+  /// Unique within the property, e.g. "SERVICE". Upper-case letters, digits and hyphens.
+  code            String
+  name            String
+  liableParty     ChargeLiableParty @map("liable_party")
+  /// An INCOME account of the same property.
+  incomeAccountId String            @map("income_account_id") @db.Uuid
+  status          ChargeTypeStatus  @default(ACTIVE)
+  archivedAt      DateTime?         @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property         Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  incomeAccount    LedgerAccount     @relation(fields: [organisationId, propertyId, incomeAccountId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  recurringCharges RecurringCharge[]
+  invoiceLines     InvoiceLine[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, code])
+  @@map("charge_types")
+}
+
+/// A monthly charge for one unit, or for every active unit of the property (unit null). A
+/// unit's own charge replaces the property-wide one of the same type for that unit.
+model RecurringCharge {
+  id              String               @id @default(uuid(7)) @db.Uuid
+  organisationId  String               @map("organisation_id") @db.Uuid
+  propertyId      String               @map("property_id") @db.Uuid
+  unitId          String?              @map("unit_id") @db.Uuid
+  chargeTypeId    String               @map("charge_type_id") @db.Uuid
+  basis           RecurringChargeBasis
+  /// FLAT: the monthly amount; PER_SQM: the rate per square metre. Minor units, positive.
+  amountMinor     BigInt               @map("amount_minor")
+  /// First month billed (always the first day of a month).
+  startMonth      DateTime             @map("start_month") @db.Date
+  /// Last month billed (first day of that month); null while open-ended.
+  endMonth        DateTime?            @map("end_month") @db.Date
+  createdByUserId String?              @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property     Property      @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit         Unit?         @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  chargeType   ChargeType    @relation(fields: [organisationId, propertyId, chargeTypeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User?         @relation("RecurringChargeCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  invoiceLines InvoiceLine[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, startMonth])
+  @@map("recurring_charges")
+}
+
+/// A bill for one unit, addressed to its owners or its tenants. Drafts are not in the ledger;
+/// issuing numbers the invoice and posts its journal entry.
+model Invoice {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  organisationId  String        @map("organisation_id") @db.Uuid
+  propertyId      String        @map("property_id") @db.Uuid
+  unitId          String        @map("unit_id") @db.Uuid
+  /// Sequential per property, assigned when issued.
+  invoiceNumber   BigInt?       @map("invoice_number")
+  status          InvoiceStatus @default(DRAFT)
+  billTo          InvoiceBillTo @map("bill_to")
+  /// The tenancy billed when bill_to is TENANTS.
+  tenancyId       String?       @map("tenancy_id") @db.Uuid
+  /// The month a billing run produced it for (first day); null for one-off invoices.
+  billingMonth    DateTime?     @map("billing_month") @db.Date
+  /// The property-local date on which the liable party was determined.
+  billingDate     DateTime      @map("billing_date") @db.Date
+  dueDate         DateTime      @map("due_date") @db.Date
+  /// Property-local date of issue; also the ledger entry date.
+  issueDate       DateTime?     @map("issue_date") @db.Date
+  /// ISO 4217; the property's currency.
+  currency        String        @db.Char(3)
+  /// Sum of the lines, minor units.
+  totalMinor      BigInt        @default(0) @map("total_minor")
+  journalEntryId  String?       @map("journal_entry_id") @db.Uuid
+  createdByUserId String?       @map("created_by_user_id") @db.Uuid
+  issuedAt        DateTime?     @map("issued_at") @db.Timestamptz(3)
+  issuedByUserId  String?       @map("issued_by_user_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property     Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit         Unit               @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  tenancy      Tenancy?           @relation(fields: [organisationId, tenancyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry?      @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User?              @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  issuedBy     User?              @relation("InvoiceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines        InvoiceLine[]      @relation("InvoiceLines")
+  billedLines  InvoiceLine[]      @relation("InvoiceLineBilledMonth")
+  recipients   InvoiceRecipient[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([organisationId, propertyId, id, unitId, billingMonth])
+  @@unique([organisationId, propertyId, journalEntryId])
+  @@unique([propertyId, invoiceNumber])
+  @@index([organisationId, propertyId, createdAt])
+  @@index([organisationId, unitId])
+  @@map("invoices")
+}
+
+/// One charge on an invoice. Lines from a billing run name their recurring charge, unit and
+/// month, which are unique together: a recurring charge is never billed twice for a month.
+model InvoiceLine {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  organisationId    String    @map("organisation_id") @db.Uuid
+  propertyId        String    @map("property_id") @db.Uuid
+  invoiceId         String    @map("invoice_id") @db.Uuid
+  lineNumber        Int       @map("line_number")
+  chargeTypeId      String    @map("charge_type_id") @db.Uuid
+  description       String
+  /// Minor units, positive.
+  amountMinor       BigInt    @map("amount_minor")
+  recurringChargeId String?   @map("recurring_charge_id") @db.Uuid
+  unitId            String?   @map("unit_id") @db.Uuid
+  billingMonth      DateTime? @map("billing_month") @db.Date
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice         Invoice          @relation("InvoiceLines", fields: [organisationId, propertyId, invoiceId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  billedInvoice   Invoice?         @relation("InvoiceLineBilledMonth", fields: [organisationId, propertyId, invoiceId, unitId, billingMonth], references: [organisationId, propertyId, id, unitId, billingMonth], onDelete: Restrict, onUpdate: Restrict)
+  chargeType      ChargeType       @relation(fields: [organisationId, propertyId, chargeTypeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  recurringCharge RecurringCharge? @relation(fields: [organisationId, propertyId, recurringChargeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([invoiceId, lineNumber])
+  @@unique([recurringChargeId, unitId, billingMonth])
+  @@index([organisationId, chargeTypeId])
+  @@map("invoice_lines")
+}
+
+/// Who an invoice is addressed to, captured when it is created: the owners (with their shares)
+/// or the tenants of the tenancy.
+model InvoiceRecipient {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  organisationId   String   @map("organisation_id") @db.Uuid
+  propertyId       String   @map("property_id") @db.Uuid
+  invoiceId        String   @map("invoice_id") @db.Uuid
+  personId         String   @map("person_id") @db.Uuid
+  /// Ownership share for owners; null for tenants.
+  shareNumerator   Int?     @map("share_numerator")
+  shareDenominator Int?     @map("share_denominator")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice Invoice @relation(fields: [organisationId, propertyId, invoiceId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  person  Person  @relation(fields: [organisationId, personId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([invoiceId, personId])
+  @@index([organisationId, personId])
+  @@map("invoice_recipients")
 }

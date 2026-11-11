@@ -1,7 +1,8 @@
 # Access Control
 
-> Status: Phase 3. Organisation- and property-level authorisation are implemented (section 6).
-> Building and unit scopes and derived (owner/tenant) grants arrive with later parts and Phase 4.
+> Status: Phase 6. Organisation-, property- and unit-level authorisation and derived resident
+> grants are implemented (section 6). Building scope, custom roles and MFA for privileged roles
+> are not yet.
 
 ## 1. Model: RBAC + resource scope + time
 
@@ -109,7 +110,7 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   `property.profile.read`, `property.settings.manage`, `property.lifecycle.manage`,
   `property.structure.read` and `property.structure.manage`, the resident permissions below,
   and for visitors (Phase 5) `property.visitor.check_in` (operate a gate), `property.visitor.read`
-  (visit log and invitations) and `property.visitor.manage` (revoke any invitation). Each module
+  (visit log and invitations) and `property.visitor.manage` (revoke any invitation), and for finance (Phase 6) `property.finance.read` (chart of accounts, charge types, recurring charges, invoices) and `property.finance.manage` (set-up, charge types, recurring charges, billing runs, issuing and discarding invoices). Each module
   adds its permissions with its first endpoint.
 - **Three evaluation scopes.** `unit.*` permissions are evaluated against the route's `:unitId`,
   `property.*` against `:propertyId`, all others against the organisation. Unit permissions
@@ -120,8 +121,8 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | Role | Grantable at | Permissions today |
   | ---- | ------------ | ----------------- |
   | `ORGANISATION_ADMIN` | Organisation | Every registered permission |
-  | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins) |
-  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read` (finance arrives in Phase 6) |
+  | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins), and `property.finance.read` (reads billing; does not run it) |
+  | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read`, `unit.profile.read`, `property.finance.read`, `property.finance.manage` (Phase 6). Sees the names of the people an invoice is addressed to through finance views, not the resident directory or contact details |
   | `SECURITY_SUPERVISOR` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in`, `property.visitor.read`, `property.visitor.manage` |
   | `SECURITY_GUARD` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in` (no resident data, no visit log) |
 

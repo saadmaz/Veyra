@@ -796,3 +796,148 @@ export interface LateEntryResult {
 export interface SyncLateEntriesResponse {
   results: LateEntryResult[];
 }
+
+// ------------------------------------------------------------------------------------------
+// Finance (Phase 6). Amounts are MoneyDto (minor units as strings) in the property's currency;
+// amounts sent by clients are decimal strings such as "1500.50" in that currency. Months are
+// "YYYY-MM"; dates are property-local "YYYY-MM-DD".
+// ------------------------------------------------------------------------------------------
+
+export type LedgerAccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'INCOME' | 'EXPENSE';
+
+export interface LedgerAccountDto {
+  id: string;
+  code: string;
+  name: string;
+  type: LedgerAccountType;
+  /** Set on accounts the system posts to, e.g. RECEIVABLES. */
+  systemKey: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+}
+
+/** OWNERS: the unit's owners. OCCUPANT: the current tenants, or the owners while vacant. */
+export type ChargeLiableParty = 'OWNERS' | 'OCCUPANT';
+
+export interface ChargeTypeDto {
+  id: string;
+  code: string;
+  name: string;
+  liableParty: ChargeLiableParty;
+  incomeAccountId: string;
+  status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export interface FinanceSetupResponse {
+  accounts: LedgerAccountDto[];
+  chargeTypes: ChargeTypeDto[];
+}
+
+export interface CreateChargeTypeRequest {
+  code: string;
+  name: string;
+  liableParty: ChargeLiableParty;
+  incomeAccountId: string;
+}
+
+export type RecurringChargeBasis = 'FLAT' | 'PER_SQM';
+
+export interface RecurringChargeDto {
+  id: string;
+  /** Null: every active unit of the property (a unit's own charge of the same type replaces it). */
+  unitId: string | null;
+  unitNumber: string | null;
+  chargeTypeId: string;
+  chargeTypeCode: string;
+  basis: RecurringChargeBasis;
+  /** FLAT: the monthly amount. PER_SQM: the rate per square metre. */
+  amount: MoneyDto;
+  startMonth: string;
+  endMonth: string | null;
+}
+
+export interface CreateRecurringChargeRequest {
+  unitId?: string;
+  chargeTypeId: string;
+  basis: RecurringChargeBasis;
+  amount: string;
+  startMonth: string;
+  endMonth?: string;
+}
+
+export interface EndRecurringChargeRequest {
+  /** Last month billed. */
+  endMonth: string;
+}
+
+export type InvoiceStatus = 'DRAFT' | 'ISSUED';
+
+export interface InvoiceRecipientDto {
+  personId: string;
+  fullName: string;
+  /** Ownership share for owners; null for tenants. */
+  share: { numerator: number; denominator: number } | null;
+}
+
+export interface InvoiceDto {
+  id: string;
+  /** e.g. "INV-000042"; null while a draft. */
+  number: string | null;
+  status: InvoiceStatus;
+  unitId: string;
+  unitNumber: string;
+  billTo: 'OWNERS' | 'TENANTS';
+  recipients: InvoiceRecipientDto[];
+  billingMonth: string | null;
+  billingDate: string;
+  dueDate: string;
+  issueDate: string | null;
+  total: MoneyDto;
+  createdAt: string;
+  issuedAt: string | null;
+}
+
+export interface InvoiceLineDto {
+  lineNumber: number;
+  chargeTypeId: string;
+  chargeTypeCode: string;
+  description: string;
+  amount: MoneyDto;
+  billingMonth: string | null;
+}
+
+export interface InvoiceDetailDto extends InvoiceDto {
+  lines: InvoiceLineDto[];
+  journalEntryId: string | null;
+}
+
+export interface BillingRunRequest {
+  month: string;
+  dueDate: string;
+  /** Issue the new invoices at once (default: leave them as drafts to review). */
+  issue?: boolean;
+}
+
+export interface BillingRunSkip {
+  unitId: string;
+  unitNumber: string;
+  chargeTypeCode: string;
+  /** NO_AREA: a per-sqm charge on a unit without an area. NO_OWNER: nobody to bill. */
+  reason: 'NO_AREA' | 'NO_OWNER';
+}
+
+export interface BillingRunResponse {
+  month: string;
+  invoices: InvoiceDto[];
+  skipped: BillingRunSkip[];
+}
+
+export interface CreateInvoiceRequest {
+  unitId: string;
+  dueDate: string;
+  lines: { chargeTypeId: string; description?: string; amount: string }[];
+}
+
+export interface IssueInvoiceRequest {
+  /** Replaces the due date (it may not be before the issue date). */
+  dueDate?: string;
+}

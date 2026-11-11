@@ -48,6 +48,8 @@ export const ROLES = {
       'property.visitor.check_in',
       'property.visitor.read',
       'property.visitor.manage',
+      'property.finance.read',
+      'property.finance.manage',
     ],
   },
   PROPERTY_MANAGER: {
@@ -67,6 +69,8 @@ export const ROLES = {
       'property.visitor.check_in',
       'property.visitor.read',
       'property.visitor.manage',
+      // Reads the property's billing; finance officers run it (ACCESS_CONTROL section 4).
+      'property.finance.read',
     ],
   },
   SECURITY_SUPERVISOR: {
@@ -91,13 +95,15 @@ export const ROLES = {
   FINANCE_OFFICER: {
     name: 'Finance officer',
     grantableAt: ['ORGANISATION', 'PROPERTY'],
-    // Finance permissions are added with the finance module (Phase 6). Resident names are not
-    // needed until billing exists (data minimisation).
+    // Runs billing. Sees the names of the people an invoice is addressed to through finance
+    // views only, not the resident directory or contact details (data minimisation).
     permissions: [
       'organisation.profile.read',
       'property.profile.read',
       'property.structure.read',
       'unit.profile.read',
+      'property.finance.read',
+      'property.finance.manage',
     ],
   },
   // ------------------------------------------------------------------ derived resident roles

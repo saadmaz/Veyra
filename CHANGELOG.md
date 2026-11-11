@@ -23,6 +23,15 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 6 billing** (migration `20261112120000_billing`): finance permissions
+  (`property.finance.read` for property managers, `property.finance.manage` for finance officers
+  and organisation admins); per-property finance set-up with a default chart of accounts and the
+  `SERVICE` (owners) and `UTILITIES` (occupant) charge types; charge types; recurring charges
+  (flat or per square metre, for one unit or every unit, by month); billing runs that create one
+  invoice per unit and party, report what they cannot bill and never bill a recurring charge twice
+  for a month; one-off invoices; issuing posts the invoice to the ledger (receivables and income)
+  in the same transaction and numbers it; drafts can be discarded; issued invoices never change.
+  19 database, 7 unit and 15 API integration tests.
 - **Phase 6 ledger foundation** (migration `20261112090000_ledger`): a double-entry ledger per
   property in the property's currency, with amounts as integer minor units. Ledger accounts
   (archived, never deleted; optional system keys), accounting periods (no overlaps, at most a

@@ -149,6 +149,32 @@ window and entries left: no phone, no resident names. Rejection reasons: `NOT_FO
 registered the visitor no longer lives there). Every check, admission, denial and departure is
 written to the append-only access log.
 
+## Finance and billing (Phase 6)
+
+All under `/organisations/{organisationId}/properties/{propertyId}/finance`. Amounts in
+responses are `{ amountMinor, currency }` (minor units as a string, the property's currency);
+amounts in requests are decimal strings such as `"1500.50"`, refused if they have more decimals
+than the currency. Months are `YYYY-MM`; dates are property-local `YYYY-MM-DD`.
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| POST | `setup` | `property.finance.manage`; creates the default chart of accounts and the `SERVICE` (owners) and `UTILITIES` (occupant) charge types that are missing; safe to repeat |
+| GET | `accounts` | `property.finance.read` |
+| GET / POST | `charge-types`; POST `charge-types/{id}/archive` | read / manage; a charge type books to an active income account; codes unique (409 `CODE_TAKEN`) |
+| GET / POST | `recurring-charges` | read / manage; `{ unitId?, chargeTypeId, basis: FLAT \| PER_SQM, amount, startMonth, endMonth? }`; no unitId = every active unit; overlapping months for the same unit (or the whole property) and type: 409 `OVERLAPPING_CHARGE` |
+| POST | `recurring-charges/{id}/end` | manage; `{ endMonth }`; only earlier, never extended |
+| POST | `billing-runs` | manage; `{ month, dueDate, issue? }`; bills each active unit once per recurring charge and month: one invoice per unit and party; reports units it cannot bill (`NO_AREA`, `NO_OWNER`); a concurrent run billing the same lines gets 409 `ALREADY_BILLED` |
+| GET | `invoices?status=&unitId=&billingMonth=` | read; the 200 most recent |
+| POST | `invoices` | manage; a one-off draft `{ unitId, dueDate, lines: [{ chargeTypeId, description?, amount }] }`; all lines must bill the same party (422) |
+| GET | `invoices/{id}` | read; with lines and the ledger entry id once issued |
+| POST | `invoices/{id}/issue` | manage; `{ dueDate? }`; numbers the invoice (`INV-000042`) and posts it to the ledger today (property-local); 409 `ALREADY_ISSUED`, `PERIOD_CLOSED`, `FINANCE_NOT_SET_UP` |
+| POST | `invoices/{id}/discard` | manage; drafts only (409 `ALREADY_ISSUED`); a discarded run line can be billed again |
+
+Who pays (owner decision): `OWNERS` charge types bill the unit's owners on the billing date (the
+first day of the month for runs, today for one-off invoices); `OCCUPANT` types bill the current
+tenancy, or the owners while the unit has none. Issuing opens the month's accounting period if
+no period covers today.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.
