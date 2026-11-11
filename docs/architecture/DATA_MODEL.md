@@ -107,7 +107,32 @@ local today. Archiving units and properties uses it; resident changes lock the u
 History is kept by effective dating (`effective_from/to`) rather than overwriting, so "who
 owned unit 12B on 2027-03-01" is always answerable.
 
-## 5. Finance ledger approach (Phase 6)
+## 5. Visitors and access (Phase 5, data foundation implemented)
+
+Migration `20261111120000_visitors`. All tables are tenant-owned with RLS (FORCE) and composite
+tenant foreign keys; the application has no DELETE grant on any of them. Times are instants
+(`timestamptz`); the API converts the property's local times. Visitor personal data is limited
+to name, optional phone (E.164) and optional vehicle plate (owner decision, 2026-11-11); ID
+numbers and photos are out of scope until a separate legal and privacy assessment.
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `visitor_invitations` | property, unit, host_person?, created_by_user, category, visitor_name, visitor_phone?, vehicle_plate?, valid_from, valid_until, max_entries, status | Window ends after it starts and lasts at most 31 days; 1-50 entries. Expiry is not stored: an ACTIVE invitation outside its window is not valid. Revocation (`revoked_at`, optional `revoked_by_user_id`) is final; an invitation never moves to another property, unit or creator (trigger). |
+| `visitor_passes` | invitation, token_hash, code_hash, revoked_at? | Only SHA-256 hashes of the QR token and the reference code. Token hash unique; at most one live pass per invitation; a live code is unique per property. The only change allowed is revoking, once (trigger). A pass is never proof of identity. |
+| `visits` | property, unit?, invitation?, pass?, category, visitor details, decision, denial_reason?, gate?, arrived_at, departed_at?, recorded_by_user, source | ADMITTED or DENIED; a denial needs a reason and never departs. A pass implies an invitation, an invitation implies the unit (composite key to the invitation's property and unit). Immutable except recording the departure, once (trigger). `source` is ONLINE, PAPER or OFFLINE_SYNC. |
+| `access_events` | property, type, occurred_at, actor_user?, invitation?, visit?, gate? | Append-only for every role, including the superuser (UPDATE, DELETE and TRUNCATE rejected by trigger). No personal data. |
+
+**Online admission backstop** (`visits_admission_check`, before insert, ONLINE admissions with an
+invitation only): the arrival is recorded now (within 5 minutes), the invitation is ACTIVE, the
+arrival falls inside its window, the invitation still has entries left, and the pass, if used, is
+live. The invitation row is locked (`FOR UPDATE`), so two gates cannot both use the last entry.
+PAPER and OFFLINE_SYNC records describe what already happened and are stored as they are; the
+API flags those the invitation would not have allowed, so a stale offline copy never silently
+counts as a valid admission.
+
+Retention of visit records and access events is per jurisdiction and still to be set (section 9).
+
+## 6. Finance ledger approach (Phase 6)
 
 Double-entry, append-only:
 
@@ -137,14 +162,14 @@ Finance entities (Phase 6): `ChargeDefinition`, `ChargeSchedule`, `Invoice`, `In
 `JournalEntry` (ledger transaction), `JournalLine` (ledger entry), `ReconciliationBatch`,
 `ReconciliationItem`, `Expense`, `Budget`.
 
-## 6. Identity vs person vs relationship
+## 7. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
 holds the personal fields the product needs and may exist without a login. Relationships to
 units (ownership, tenancy, household membership) are separate, effective-dated records. One
 person may relate to many units and properties, and hold many roles.
 
-## 7. Conceptual entity catalogue (later phases)
+## 8. Conceptual entity catalogue (later phases)
 
 Starting point for discovery, not a final schema. Validate entities and cardinalities when the
 owning module is built.
@@ -152,7 +177,7 @@ owning module is built.
 | Area | Entities |
 | ---- | -------- |
 | Property inventory | `CommonArea`, `Facility`, `ParkingSpace` |
-| Visitors and access | `VisitorInvitation`, `VisitorPass`, `VisitorVisit`, `VehicleUnitAssignment`, `AccessEvent` |
+| Visitors and access (beyond section 5) | `VehicleUnitAssignment`, walk-in approval requests (Phase 5 Part 3) |
 | Maintenance and operations | `MaintenanceRequest`, `WorkOrder`, `WorkOrderAssignment`, `Inspection`, `Task`, `Shift`, `Incident` |
 | Assets and vendors | `Asset`, `AssetMaintenancePlan`, `AssetServiceRecord`, `Vendor`, `VendorContract` |
 | Facilities | `FacilitySchedule`, `Reservation`, `ReservationPolicy`, `FacilityClosure` |
@@ -163,7 +188,7 @@ File bytes live in object storage. The database stores metadata, ownership, acce
 checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
 server-side authorisation check.
 
-## 8. Data lifecycle
+## 9. Data lifecycle
 
 - Retention is defined per data category and jurisdiction.
 - Correction and deletion are supported where legally required.

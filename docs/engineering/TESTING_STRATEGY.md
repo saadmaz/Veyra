@@ -253,6 +253,27 @@ expiry, rehash on sign-in, idempotent sign-out).
   shapes were checked once against the real API (local PostgreSQL and Redis, 2026-11-11); an
   automated full-stack smoke test is still outstanding.
 
+## Phase 5 tests
+
+### Part 1: visitor data (`packages/db` integration, 20)
+
+- No tenant context sees nothing in any visitor table; one tenant cannot see another's
+  invitations; invitations for another tenant's unit, passes filed under another property and
+  visits claiming another unit's invitation are rejected by composite keys; an invitation link
+  without a unit is refused.
+- Invitations: window order and 31-day limit, 1-50 entries, E.164 phone, trimmed name;
+  revocation is final; an invitation cannot move to another unit.
+- Passes: only SHA-256 hex hashes; one live pass per invitation and one live code per property
+  (both freed by revoking); a pass can only be revoked, once.
+- Online admission backstop: entries counted (denials do not count); outside the window,
+  revoked invitations and revoked passes refused; backdated online admissions refused while
+  PAPER and OFFLINE_SYNC records are stored as they happened; two concurrent admissions for the
+  last entry: exactly one succeeds.
+- Visits: denial needs a reason and never departs; the departure is recorded once and nothing
+  else changes; the application cannot delete visits.
+- Access events: UPDATE and DELETE refused for the application and for the superuser.
+- The migration drift test confirms the migrated database matches `schema.prisma`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

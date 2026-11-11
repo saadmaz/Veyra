@@ -41,6 +41,12 @@ model User {
   memberships        Membership[]
   persons            Person[]
 
+  visitorInvitationsCreated VisitorInvitation[] @relation("InvitationCreatedBy")
+  visitorInvitationsRevoked VisitorInvitation[] @relation("InvitationRevokedBy")
+  visitsRecorded            Visit[]             @relation("VisitRecordedBy")
+  visitDeparturesRecorded   Visit[]             @relation("VisitDepartureRecordedBy")
+  accessEvents              AccessEvent[]
+
   @@map("users")
 }
 
@@ -313,6 +319,11 @@ model Property {
   commonAreas  CommonArea[]
   vehicles     Vehicle[]
 
+  visitorInvitations VisitorInvitation[]
+  visitorPasses      VisitorPass[]
+  visits             Visit[]
+  accessEvents       AccessEvent[]
+
   @@unique([organisationId, id])
   @@unique([organisationId, code])
   @@map("properties")
@@ -393,6 +404,9 @@ model Unit {
   householdMembers HouseholdMember[]
   vehicles         Vehicle[]
 
+  visitorInvitations VisitorInvitation[]
+  visits             Visit[]
+
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
   @@index([buildingId])
@@ -450,14 +464,15 @@ model Person {
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation      Organisation       @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  user              User?              @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  organisation      Organisation        @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user              User?               @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   ownerships        Ownership[]
   tenancyOccupants  TenancyOccupant[]
   householdMembers  HouseholdMember[]
   emergencyContacts EmergencyContact[]
   vehicles          Vehicle[]
   invitations       Invitation[]
+  hostedVisitors    VisitorInvitation[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, userId])
@@ -610,4 +625,173 @@ model Vehicle {
 
   @@index([organisationId, propertyId])
   @@map("vehicles")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Visitors and access (Phase 5). Integrity rules, the admission backstop, append-only access
+// events and row-level security are hand-written in migration 20261111120000_visitors.
+// Visitor personal data is limited to name, optional phone and optional vehicle plate.
+// ---------------------------------------------------------------------------------------------
+
+enum VisitorCategory {
+  GUEST
+  DELIVERY
+  CONTRACTOR
+  SERVICE_PROVIDER
+}
+
+/// Expiry is not a status: an ACTIVE invitation outside its window is simply not valid.
+enum VisitorInvitationStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum VisitDecision {
+  ADMITTED
+  DENIED
+}
+
+/// How the record reached VEYRA: live at the gate, typed in from the paper log, or synced from
+/// the offline gate app. Only ONLINE admissions are checked against the invitation at insert.
+enum VisitSource {
+  ONLINE
+  PAPER
+  OFFLINE_SYNC
+}
+
+enum AccessEventType {
+  PASS_ACCEPTED
+  PASS_REJECTED
+  VISIT_ADMITTED
+  VISIT_DENIED
+  VISIT_DEPARTED
+}
+
+/// A resident's or staff member's pre-registration of a visitor for one unit and time window.
+model VisitorInvitation {
+  id              String                  @id @default(uuid(7)) @db.Uuid
+  organisationId  String                  @map("organisation_id") @db.Uuid
+  propertyId      String                  @map("property_id") @db.Uuid
+  unitId          String                  @map("unit_id") @db.Uuid
+  /// The resident being visited; null when staff register a visitor without naming one.
+  hostPersonId    String?                 @map("host_person_id") @db.Uuid
+  createdByUserId String                  @map("created_by_user_id") @db.Uuid
+  category        VisitorCategory
+  visitorName     String                  @map("visitor_name")
+  /// E.164 (CHECK).
+  visitorPhone    String?                 @map("visitor_phone")
+  /// Upper case, A-Z 0-9 and hyphens (CHECK), like vehicles.plate.
+  vehiclePlate    String?                 @map("vehicle_plate")
+  validFrom       DateTime                @map("valid_from") @db.Timestamptz(3)
+  validUntil      DateTime                @map("valid_until") @db.Timestamptz(3)
+  /// How many admissions the invitation allows (1 for a single visit).
+  maxEntries      Int                     @default(1) @map("max_entries")
+  status          VisitorInvitationStatus @default(ACTIVE)
+  revokedAt       DateTime?               @map("revoked_at") @db.Timestamptz(3)
+  /// Null when revoked by the system (e.g. the host moved out).
+  revokedByUserId String?                 @map("revoked_by_user_id") @db.Uuid
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property  Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit      Unit     @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  host      Person?  @relation(fields: [organisationId, hostPersonId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User     @relation("InvitationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revokedBy User?    @relation("InvitationRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  passes       VisitorPass[]
+  visits       Visit[]
+  accessEvents AccessEvent[]
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, propertyId, id])
+  @@unique([organisationId, propertyId, unitId, id])
+  @@index([organisationId, unitId, validUntil])
+  @@index([organisationId, propertyId, validFrom])
+  @@map("visitor_invitations")
+}
+
+/// The credential shown at the gate: a QR token and a short reference code. Only SHA-256 hashes
+/// are stored. A pass is never proof of identity; the guard still checks the visitor.
+model VisitorPass {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  propertyId     String    @map("property_id") @db.Uuid
+  invitationId   String    @map("invitation_id") @db.Uuid
+  /// SHA-256 (hex) of the random QR token.
+  tokenHash      String    @unique @map("token_hash")
+  /// SHA-256 (hex) of the reference code typed by a guard.
+  codeHash       String    @map("code_hash")
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property   Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  invitation VisitorInvitation @relation(fields: [organisationId, propertyId, invitationId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  visits     Visit[]
+
+  @@unique([organisationId, invitationId, id])
+  @@index([organisationId, invitationId])
+  @@map("visitor_passes")
+}
+
+/// One decision at the gate: a visitor admitted (and later departed) or denied entry.
+/// Pre-registered visits link their invitation and pass; walk-ins have neither.
+model Visit {
+  id                        String          @id @default(uuid(7)) @db.Uuid
+  organisationId            String          @map("organisation_id") @db.Uuid
+  propertyId                String          @map("property_id") @db.Uuid
+  /// The unit visited; null for visits to the property itself (e.g. the management office).
+  unitId                    String?         @map("unit_id") @db.Uuid
+  invitationId              String?         @map("invitation_id") @db.Uuid
+  passId                    String?         @map("pass_id") @db.Uuid
+  category                  VisitorCategory
+  visitorName               String          @map("visitor_name")
+  visitorPhone              String?         @map("visitor_phone")
+  vehiclePlate              String?         @map("vehicle_plate")
+  decision                  VisitDecision
+  denialReason              String?         @map("denial_reason")
+  gate                      String?
+  /// When the decision happened (for paper and offline records, earlier than created_at).
+  arrivedAt                 DateTime        @map("arrived_at") @db.Timestamptz(3)
+  departedAt                DateTime?       @map("departed_at") @db.Timestamptz(3)
+  recordedByUserId          String          @map("recorded_by_user_id") @db.Uuid
+  departureRecordedByUserId String?         @map("departure_recorded_by_user_id") @db.Uuid
+  source                    VisitSource     @default(ONLINE)
+  createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property            Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit                Unit?              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  invitation          VisitorInvitation? @relation(fields: [organisationId, propertyId, unitId, invitationId], references: [organisationId, propertyId, unitId, id], onDelete: Restrict, onUpdate: Restrict)
+  pass                VisitorPass?       @relation(fields: [organisationId, invitationId, passId], references: [organisationId, invitationId, id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy          User               @relation("VisitRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  departureRecordedBy User?              @relation("VisitDepartureRecordedBy", fields: [departureRecordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  accessEvents        AccessEvent[]
+
+  @@unique([organisationId, id])
+  @@index([organisationId, propertyId, arrivedAt])
+  @@index([organisationId, invitationId])
+  @@map("visits")
+}
+
+/// Append-only gate log (no personal data): what was scanned or decided, where and by whom.
+model AccessEvent {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organisationId String          @map("organisation_id") @db.Uuid
+  propertyId     String          @map("property_id") @db.Uuid
+  type           AccessEventType
+  occurredAt     DateTime        @map("occurred_at") @db.Timestamptz(3)
+  actorUserId    String?         @map("actor_user_id") @db.Uuid
+  invitationId   String?         @map("invitation_id") @db.Uuid
+  visitId        String?         @map("visit_id") @db.Uuid
+  gate           String?
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property   Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor      User?              @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  invitation VisitorInvitation? @relation(fields: [organisationId, invitationId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  visit      Visit?             @relation(fields: [organisationId, visitId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, propertyId, occurredAt])
+  @@map("access_events")
 }

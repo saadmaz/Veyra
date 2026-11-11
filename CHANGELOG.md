@@ -21,6 +21,12 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 5 visitor data foundation** (migration `20261111120000_visitors`): visitor
+  invitations (unit, category, name, optional phone and plate, time window, entries), passes
+  stored as SHA-256 hashes of a QR token and a reference code, visits (admitted or denied, gate,
+  departure, source ONLINE / PAPER / OFFLINE_SYNC) and append-only access events; online
+  admission backstop with a row lock so two gates cannot both use the last entry; immutable
+  visits; revocation final; row-level security and no DELETE grants.
 - **Phase 4 resident console**: unit page (details for every staff role; owners with exact
   fractional shares and transfers, tenancies with move-in and move-out, household members,
   vehicles, voiding with a reason); property resident list; resident page (profile editing,

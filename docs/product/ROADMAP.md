@@ -26,7 +26,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
-| 5     | Visitor and access management            | |
+| 5     | Visitor and access management            | In progress: Part 1 (data foundation) done |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
@@ -103,6 +103,29 @@ ownership shares as exact fractions; the resident mobile app comes after Phase 4
 | 2 | Derived owner/tenant/household access (unit scope, today in the property's time zone); resident invitations linking a profile to a login; my units, unit detail, current residents | ✅ Done |
 | 3 | Staff API: people (property-scoped visibility, organisation directory), set owners from a date (first owner and transfer), void, tenancies (move-in/out, void), household, vehicles, emergency contacts; archiving refused while occupied; per-unit locking | ✅ Done |
 | 4 | Console: unit page with owners, tenancies, household and vehicles; property resident list; resident page with profile, records, emergency contacts and app invitation; browser journeys per role | ✅ Done |
+
+## Phase 5 plan (Visitor and access management)
+
+Decisions (owner, 2026-11-11):
+
+- **Who registers visitors:** owners, tenants and household members of the unit, and staff from
+  the console.
+- **Visitor personal data:** name, optional phone and optional vehicle plate, with a category
+  (guest, delivery, contractor, service provider). No ID numbers or photos without a separate
+  legal and privacy assessment.
+- **Walk-ins:** the resident approves in the app (in-app approval with expiry).
+- **Gate offline:** both a documented paper procedure and an offline mode in the gate app.
+
+Fixed by the PRD and threat model: a pass is random, time-limited, revocable and reveals no
+personal data; a pass is never proof of identity; guards see the minimum necessary.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Data foundation: visitor invitations, passes (hashes only), visits, append-only access events; online admission backstop (window, revocation, entries, row lock against two gates); immutable visits; RLS | ✅ Done |
+| 2 | Security guard and supervisor roles; API: residents and staff create and revoke invitations, pass issue (QR token and reference code), guard validation with minimal data, check-in, check-out, denied entry, walk-in record; rate limits on pass lookups | Next |
+| 3 | In-app walk-in approval: request to the unit's residents, approve or deny, expiry; polling first, then WebSockets | |
+| 4 | Console: residents' visitor pages, the guard's gate screen (installable PWA), the supervisor's log; browser journeys per role | |
+| 5 | Offline: written paper procedure and late entry; offline gate mode with a cached day list, sync, conflict handling, and late records flagged when the invitation would not have allowed them | |
 
 ## Release gates
 
