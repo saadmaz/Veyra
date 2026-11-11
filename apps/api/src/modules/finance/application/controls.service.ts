@@ -7,10 +7,7 @@ import {
   type AgeBucket,
   type ApprovalRequestInput,
   ageBucket,
-  buildStatement,
   type CreditNoteInput,
-  formatCreditNumber,
-  type StatementEvent,
 } from '../domain/control-rules';
 import {
   cashAccountKey,
@@ -29,6 +26,7 @@ import {
   type Party,
   type PropertyFinanceInfo,
 } from './finance-ports';
+import { partyStatement } from './statement';
 
 const notFound = (what: string) => new ApiError(404, 'NOT_FOUND', `${what} not found`);
 const conflict = (code: string, message: string) => new ApiError(409, code, message);
@@ -426,58 +424,13 @@ export class ControlsService {
         if (!tenancyId) throw invalid('This unit has no current tenancy; give a tenancyId');
         party = { billTo: 'TENANTS', tenancyId };
       }
-      const data = await uow.statementData(unitId, party);
-      const events: StatementEvent[] = [
-        ...data.invoices.map((i) => ({
-          date: i.issueDate,
-          at: i.issuedAt,
-          kind: 'INVOICE' as const,
-          reference: formatInvoiceNumber(i.invoiceNumber),
-          debitMinor: i.totalMinor,
-          creditMinor: 0n,
-        })),
-        ...data.credits.map((c) => ({
-          date: c.creditedOn,
-          at: c.createdAt,
-          kind: c.kind,
-          reference:
-            c.kind === 'CREDIT_NOTE' && c.creditNumber !== null
-              ? formatCreditNumber(c.creditNumber)
-              : `Write-off ${formatInvoiceNumber(c.invoiceNumber ?? 0n)}`,
-          debitMinor: 0n,
-          creditMinor: c.amountMinor,
-        })),
-        ...data.payments.map((p) => ({
-          date: p.receivedOn,
-          at: p.createdAt,
-          kind: 'PAYMENT' as const,
-          reference: formatReceiptNumber(p.receiptNumber),
-          debitMinor: 0n,
-          creditMinor: p.amountMinor,
-        })),
-        ...data.refunds.map((r) => ({
-          date: r.refundedOn,
-          at: r.createdAt,
-          kind: 'REFUND' as const,
-          reference: `Refund ${formatReceiptNumber(r.receiptNumber)}`,
-          debitMinor: r.amountMinor,
-          creditMinor: 0n,
-        })),
-        ...data.reversals.map((r) => ({
-          date: r.reversedOn,
-          at: r.createdAt,
-          kind: 'PAYMENT_REVERSAL' as const,
-          reference: `Reversal ${formatReceiptNumber(r.receiptNumber)}`,
-          debitMinor: r.amountMinor,
-          creditMinor: 0n,
-        })),
-      ];
+      const statement = await partyStatement(uow, unitId, party);
       return {
         unit,
         party,
         currency: property.currency,
         today: property.today,
-        ...buildStatement(events),
+        ...statement,
       };
     });
   }

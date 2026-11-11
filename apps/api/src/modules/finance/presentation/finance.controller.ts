@@ -68,7 +68,7 @@ const toRecurring = (r: RecurringChargeRecord): RecurringChargeDto => ({
   endMonth: r.endMonth === null ? null : toMonth(r.endMonth),
 });
 
-const toInvoice = (i: InvoiceRecord): InvoiceDto => ({
+export const toInvoice = (i: InvoiceRecord): InvoiceDto => ({
   id: i.id,
   number: i.invoiceNumber === null ? null : formatInvoiceNumber(i.invoiceNumber),
   status: i.status,

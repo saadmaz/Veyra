@@ -61,11 +61,13 @@ model User {
   journalEntriesCreated   JournalEntry[]      @relation("JournalEntryCreatedBy")
   journalEntriesPosted    JournalEntry[]      @relation("JournalEntryPostedBy")
 
-  approvalsRequested      FinanceApproval[] @relation("ApprovalRequestedBy")
-  approvalsDecided        FinanceApproval[] @relation("ApprovalDecidedBy")
-  invoiceCreditsCreated   InvoiceCredit[]   @relation("InvoiceCreditCreatedBy")
-  paymentRefundsCreated   PaymentRefund[]   @relation("PaymentRefundCreatedBy")
-  paymentReversalsCreated PaymentReversal[] @relation("PaymentReversalCreatedBy")
+  approvalsRequested      FinanceApproval[]        @relation("ApprovalRequestedBy")
+  approvalsDecided        FinanceApproval[]        @relation("ApprovalDecidedBy")
+  invoiceCreditsCreated   InvoiceCredit[]          @relation("InvoiceCreditCreatedBy")
+  paymentRefundsCreated   PaymentRefund[]          @relation("PaymentRefundCreatedBy")
+  paymentReversalsCreated PaymentReversal[]        @relation("PaymentReversalCreatedBy")
+  bankTransfersSubmitted  BankTransferSubmission[] @relation("BankTransferSubmittedBy")
+  bankTransfersDecided    BankTransferSubmission[] @relation("BankTransferDecidedBy")
 
   @@map("users")
 }
@@ -356,6 +358,7 @@ model Property {
   journalEntries    JournalEntry[]
 
   financeApprovals FinanceApproval[]
+  bankTransfers    BankTransferSubmission[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, code])
@@ -446,6 +449,7 @@ model Unit {
   invoices         Invoice[]
   payments         Payment[]
   paymentIntents   PaymentIntent[]
+  bankTransfers    BankTransferSubmission[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -564,11 +568,12 @@ model Tenancy {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  unit           Unit              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit           Unit                     @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   occupants      TenancyOccupant[]
   invoices       Invoice[]
   payments       Payment[]
   paymentIntents PaymentIntent[]
+  bankTransfers  BankTransferSubmission[]
 
   @@unique([organisationId, id])
   @@index([organisationId, unitId])
@@ -1328,6 +1333,8 @@ model Payment {
   reversal  PaymentReversal?
   approvals FinanceApproval[]
 
+  bankTransfer BankTransferSubmission?
+
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, unitId])
   @@unique([organisationId, propertyId, journalEntryId])
@@ -1574,4 +1581,65 @@ model PaymentReversal {
   @@unique([organisationId, propertyId, journalEntryId])
   @@unique([organisationId, propertyId, approvalId])
   @@map("payment_reversals")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Residents' finance (Phase 6 Part 6). An owner or current tenant tells finance about a bank
+// transfer they made; finance confirms it (recording a BANK_TRANSFER payment) or rejects it.
+// Rules are hand-written in migration 20261113090000_bank_transfers.
+// ---------------------------------------------------------------------------------------------
+
+enum BankTransferStatus {
+  /// Waiting for finance to find the money in the bank account.
+  PENDING
+  /// Found: a BANK_TRANSFER payment was recorded for it.
+  CONFIRMED
+  /// Not found or not matching; the reason is shown to the resident.
+  REJECTED
+}
+
+/// A resident's report of a bank transfer for their own party of a unit. Never deleted; decided
+/// once by someone other than the submitter.
+model BankTransferSubmission {
+  id                String             @id @default(uuid(7)) @db.Uuid
+  organisationId    String             @map("organisation_id") @db.Uuid
+  propertyId        String             @map("property_id") @db.Uuid
+  unitId            String             @map("unit_id") @db.Uuid
+  /// Whose account it pays: the owners, or the tenancy (tenancy_id).
+  paidBy            InvoiceBillTo      @map("paid_by")
+  tenancyId         String?            @map("tenancy_id") @db.Uuid
+  /// Minor units, positive.
+  amountMinor       BigInt             @map("amount_minor")
+  /// The property's currency.
+  currency          String             @db.Char(3)
+  /// Property-local date the resident says the money was sent.
+  transferredOn     DateTime           @map("transferred_on") @db.Date
+  /// The bank's reference for the transfer, as the resident sees it.
+  reference         String
+  note              String?
+  status            BankTransferStatus @default(PENDING)
+  submittedByUserId String             @map("submitted_by_user_id") @db.Uuid
+  /// The client's Idempotency-Key: the same key never submits twice.
+  idempotencyKey    String             @map("idempotency_key") @db.Uuid
+  decidedByUserId   String?            @map("decided_by_user_id") @db.Uuid
+  decidedAt         DateTime?          @map("decided_at") @db.Timestamptz(3)
+  rejectionReason   String?            @map("rejection_reason")
+  /// CONFIRMED: the payment recorded for it.
+  paymentId         String?            @map("payment_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit        Unit     @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  tenancy     Tenancy? @relation(fields: [organisationId, tenancyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  payment     Payment? @relation(fields: [organisationId, propertyId, paymentId, unitId], references: [organisationId, propertyId, id, unitId], onDelete: Restrict, onUpdate: Restrict)
+  submittedBy User     @relation("BankTransferSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decidedBy   User?    @relation("BankTransferDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([organisationId, propertyId, paymentId, unitId])
+  @@unique([organisationId, idempotencyKey])
+  @@index([organisationId, propertyId, status, createdAt])
+  @@index([organisationId, unitId])
+  @@map("bank_transfer_submissions")
 }

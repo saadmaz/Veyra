@@ -115,7 +115,14 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
 - **Three evaluation scopes.** `unit.*` permissions are evaluated against the route's `:unitId`,
   `property.*` against `:propertyId`, all others against the organisation. Unit permissions
   today: `unit.profile.read`, `unit.residents.read` (names and roles only, no contact details),
-  `unit.visitor.invite` (register, list and revoke the unit's visitors).
+  `unit.visitor.invite` (register, list and revoke the unit's visitors), and for residents'
+  finance (Phase 6 Part 6) `unit.finance.read` (your own account's invoices, receipts,
+  statement and reported transfers) and `unit.finance.pay` (report a bank transfer for your own
+  account). These are "your own account" permissions: the API resolves the account from the
+  caller's own records on every request (an owner: the owners' account; a tenant: their current
+  tenancy's), so holding the permission shows nothing without such a record. Organisation
+  admins hold them too (every registered permission) and see nothing unless they own or rent
+  the unit.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
@@ -125,9 +132,8 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read`, `unit.profile.read`, `property.finance.read`, `property.finance.manage`, `property.finance.approve` (Phase 6). Sees the names of the people an invoice is addressed to through finance views, not the resident directory or contact details |
   | `SECURITY_SUPERVISOR` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in`, `property.visitor.read`, `property.visitor.manage` |
   | `SECURITY_GUARD` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in` (no resident data, no visit log) |
-
-  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read`, `unit.visitor.invite` |
-  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read`, `unit.visitor.invite` (owner decision, 2026-11-11) |
+  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read`, `unit.visitor.invite`, `unit.finance.read`, `unit.finance.pay` (owner decision, 2026-11-11: their own account only; a tenant never sees the owners' account, an owner never a tenancy's) |
+  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read`, `unit.visitor.invite` (owner decision, 2026-11-11); no finance |
 
   Organisation admins and property managers also hold `unit.profile.read`,
   `unit.residents.read`, `property.resident.read` and `property.resident.manage` (admins also

@@ -13,6 +13,7 @@ export type FinanceSection =
   | 'overview'
   | 'invoices'
   | 'payments'
+  | 'transfers'
   | 'approvals'
   | 'billing'
   | 'reports';
@@ -21,6 +22,7 @@ const SECTIONS: { key: FinanceSection; label: string; path: string }[] = [
   { key: 'overview', label: 'Overview', path: '' },
   { key: 'invoices', label: 'Invoices', path: '/invoices' },
   { key: 'payments', label: 'Payments', path: '/payments' },
+  { key: 'transfers', label: 'Bank transfers', path: '/transfers' },
   { key: 'approvals', label: 'Approvals', path: '/approvals' },
   { key: 'billing', label: 'Billing setup', path: '/billing' },
   { key: 'reports', label: 'Reports', path: '/reports' },

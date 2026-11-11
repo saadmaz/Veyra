@@ -463,6 +463,40 @@ expiry, rehash on sign-in, idempotent sign-out).
   with `asOf`, everything is current today and overdue later. The Part 2 finance test now closes
   and reopens periods through the API and expects the bad debts account.
 
+### Part 5: finance console for staff
+
+- `apps/console-web` unit (`test/finance.test.ts`) and browser journeys (`e2e/finance.spec.ts`,
+  backed by `e2e/fake-finance.ts`): set-up, billing, invoices, payments, approvals, reports and
+  periods per role, with axe WCAG 2.2 AA checks on desktop and phone.
+
+### Part 6: residents' finance
+
+- `packages/db` integration (15, `bank-transfers.int.test.ts`): only a current owner submits for
+  the owners and only a tenant of the current tenancy for it (not a tenant for the owners, an
+  owner for the tenancy, someone with no records, or another unit's owner); future dates, other
+  currencies, zero amounts and untrimmed text are refused; at most 10 wait per account; a
+  submission is decided once, never by its submitter, a rejection needs a reason and a
+  confirmation a BANK_TRANSFER payment of the same unit, account and amount; it starts pending,
+  is invisible to other organisations and cannot be deleted. The Part 1 TRUNCATE test now
+  includes the submissions table.
+- `apps/api` unit (+10, `test/finance/resident-finance-rules.test.ts`): accounts from a
+  resident's standing (owner, tenant, both, neither), refusing another account, matching by
+  tenancy, submission input, and which roles hold the two resident finance permissions; the
+  policy tests list the new owner and tenant permissions (read only on an archived property).
+- `apps/api` integration (10, `resident-finance.int.test.ts`): an owner sees only the owners'
+  account and a tenant only theirs (summary, invoices, invoice detail, statement, receipts);
+  drafts are 404; asking for the other account is 404; a household member gets 403, another
+  unit's owner 404, a manager 403 and an admin with no account 404; submissions need an
+  Idempotency-Key, refuse a future date, replay with the same key and refuse it for a different
+  request; a manager reads the queue but cannot decide; confirming records a receipt that pays the
+  invoice and zeroes the statement, once; rejecting shows the reason to the tenant only; a finance
+  officer cannot confirm or reject their own submission; the 11th waiting submission is refused.
+- `apps/console-web` unit (+2) and browser journeys (3 × desktop and phone,
+  `e2e/resident-finance.spec.ts`): an owner reports a transfer, finance confirms it and the owner
+  sees the receipt and a settled invoice; a tenant sees only their account, gets a rejection
+  reason and "not found" for the owners' invoice; an owner reads an invoice. axe WCAG 2.2 AA and
+  no horizontal scroll on phones.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

@@ -726,8 +726,28 @@ export class FakeApi {
       if (own && unit && roles.length > 0) {
         const permissions = ['unit.profile.read', 'unit.visitor.invite'];
         if (roles.includes('OWNER') || roles.includes('TENANT'))
-          permissions.push('unit.residents.read');
+          permissions.push('unit.residents.read', 'unit.finance.read', 'unit.finance.pay');
         const usub = own[2] ?? '';
+        if (usub === '/my-finance' || usub.startsWith('/my-finance/')) {
+          if (!permissions.includes('unit.finance.read'))
+            return this.error(route, 403, 'FORBIDDEN');
+          const reply = this.finance.handleResident({
+            method,
+            sub: usub.slice('/my-finance'.length),
+            body,
+            url,
+            idempotencyKey: request.headers()['idempotency-key'],
+            property,
+            user,
+            units: this.units.filter((u) => u.propertyId === property.id),
+            ownerships: this.ownerships,
+            tenancies: this.tenancies,
+            today: todayIn(property.timeZone),
+            unit,
+            roles,
+          });
+          return this.reply(route, reply.status, reply.body);
+        }
         if (usub === '' && method === 'GET')
           return this.reply(route, 200, this.unitDetail(unit, property, permissions.sort(), roles));
         if (usub === '/residents' && method === 'GET') {

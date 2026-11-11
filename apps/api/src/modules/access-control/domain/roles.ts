@@ -51,6 +51,10 @@ export const ROLES = {
       'property.finance.read',
       'property.finance.manage',
       'property.finance.approve',
+      // Unit-scoped "your own account" permissions: they show nothing unless the admin is also
+      // an owner or tenant of the unit (the account is resolved from their own records).
+      'unit.finance.read',
+      'unit.finance.pay',
     ],
   },
   PROPERTY_MANAGER: {
@@ -113,13 +117,27 @@ export const ROLES = {
     name: 'Owner',
     grantableAt: ['UNIT'],
     derived: true,
-    permissions: ['unit.profile.read', 'unit.residents.read', 'unit.visitor.invite'],
+    // Finance: the owners' account of the unit only (owner decision, 2026-11-11).
+    permissions: [
+      'unit.profile.read',
+      'unit.residents.read',
+      'unit.visitor.invite',
+      'unit.finance.read',
+      'unit.finance.pay',
+    ],
   },
   TENANT: {
     name: 'Tenant',
     grantableAt: ['UNIT'],
     derived: true,
-    permissions: ['unit.profile.read', 'unit.residents.read', 'unit.visitor.invite'],
+    // Finance: their current tenancy's account only, never the owners'.
+    permissions: [
+      'unit.profile.read',
+      'unit.residents.read',
+      'unit.visitor.invite',
+      'unit.finance.read',
+      'unit.finance.pay',
+    ],
   },
   HOUSEHOLD_MEMBER: {
     name: 'Household member',

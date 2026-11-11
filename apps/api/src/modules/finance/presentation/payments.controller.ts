@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
+  BankTransferDto,
   CreatePaymentIntentResponse,
   MoneyDto,
   PaymentDto,
@@ -40,6 +41,13 @@ import {
   type RecordPaymentInput,
   recordPaymentSchema,
 } from '../domain/finance-rules';
+import {
+  type ConfirmTransferInput,
+  confirmTransferSchema,
+  rejectTransferSchema,
+  transferListQuerySchema,
+} from '../domain/resident-finance-rules';
+import { toTransfer } from './resident-finance.controller';
 
 const uuid = new ParseUUIDPipe();
 
@@ -145,6 +153,56 @@ export class PaymentsController {
   ): Promise<{ data: PaymentDto[] }> {
     const rows = await this.payments.payments(access, query, requestMeta(req));
     return { data: rows.map(toPayment) };
+  }
+
+  // ------------------------------------------------------------------ residents' bank transfers
+
+  @Get(`${FINANCE}/bank-transfers`)
+  @RequirePermission('property.finance.read')
+  @ApiOperation({ summary: 'Bank transfers residents reported, newest first (at most 200).' })
+  async transfers(
+    @CurrentAccess() access: OrganisationAccess,
+    @Query(new ZodValidationPipe(transferListQuerySchema))
+    query: z.infer<typeof transferListQuerySchema>,
+    @Req() req: Request,
+  ): Promise<{ data: BankTransferDto[] }> {
+    const rows = await this.payments.transfers(access, query, requestMeta(req));
+    return { data: rows.map(toTransfer) };
+  }
+
+  @Post(`${FINANCE}/bank-transfers/:transferId/confirm`)
+  @HttpCode(200)
+  @RequirePermission('property.finance.manage')
+  @ApiOperation({
+    summary:
+      'The money arrived: record it as a bank-transfer payment for that account (never by the person who reported it).',
+  })
+  async confirmTransfer(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('transferId', uuid) transferId: string,
+    @Body(new ZodValidationPipe(confirmTransferSchema)) body: ConfirmTransferInput,
+    @Req() req: Request,
+  ): Promise<BankTransferDto> {
+    return toTransfer(
+      await this.payments.confirmTransfer(access, transferId, body, requestMeta(req)),
+    );
+  }
+
+  @Post(`${FINANCE}/bank-transfers/:transferId/reject`)
+  @HttpCode(200)
+  @RequirePermission('property.finance.manage')
+  @ApiOperation({
+    summary: 'The money was not found or does not match; the reason is shown to the resident.',
+  })
+  async rejectTransfer(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('transferId', uuid) transferId: string,
+    @Body(new ZodValidationPipe(rejectTransferSchema)) body: z.infer<typeof rejectTransferSchema>,
+    @Req() req: Request,
+  ): Promise<BankTransferDto> {
+    return toTransfer(
+      await this.payments.rejectTransfer(access, transferId, body.reason, requestMeta(req)),
+    );
   }
 
   @Get(`${FINANCE}/payments/:paymentId`)

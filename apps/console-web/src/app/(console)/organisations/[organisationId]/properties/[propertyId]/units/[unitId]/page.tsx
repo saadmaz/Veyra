@@ -10,7 +10,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { NewPersonForm } from '@/components/residents';
-import { Alert, Card, EmptyState, ErrorState, LoadingState, StatusBadge } from '@/components/ui';
+import {
+  Alert,
+  ButtonLink,
+  Card,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  StatusBadge,
+} from '@/components/ui';
 import {
   HouseholdCard,
   OwnersCard,
@@ -120,6 +128,18 @@ export default function UnitPage() {
           ) : null}
         </dl>
       </Card>
+
+      {u.permissions.includes('unit.finance.read') &&
+      u.myRoles.some((role) => role === 'OWNER' || role === 'TENANT') ? (
+        <Card
+          title="Billing"
+          actions={<ButtonLink href={`${unitPath}/billing`}>Open billing</ButtonLink>}
+        >
+          <p className="muted">
+            Your invoices, receipts and statement, and bank transfers you have told finance about.
+          </p>
+        </Card>
+      ) : null}
 
       {u.permissions.includes('unit.visitor.invite') ? (
         <>

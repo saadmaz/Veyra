@@ -12,8 +12,10 @@ import {
   parsePositiveAmount,
   type RecordPaymentInput,
 } from '../domain/finance-rules';
+import type { ConfirmTransferInput } from '../domain/resident-finance-rules';
 import { applyCredit, postAllocationEntry, requireOpenPeriod, systemAccount } from './credit';
 import {
+  type BankTransferRecord,
   FINANCE_REPOSITORY,
   type FinanceRepository,
   type FinanceUnitOfWork,
@@ -129,6 +131,71 @@ export class PaymentsService {
       const payment = await uow.payment(id);
       if (!payment) throw notFound('Payment');
       return payment;
+    });
+  }
+
+  // ------------------------------------------------------------------ residents' bank transfers
+
+  /** Residents' bank-transfer submissions, newest first (at most 200). */
+  transfers(
+    access: OrganisationAccess,
+    filter: { status?: BankTransferRecord['status'] },
+    meta: RequestMeta,
+  ) {
+    return this.inProperty(access, meta, (uow) => uow.transfers(filter));
+  }
+
+  /**
+   * Confirms a resident's bank transfer once the money is found in the bank account: records a
+   * BANK_TRANSFER payment for the same unit, account and amount (applied to that account's unpaid
+   * invoices, oldest first) and links it. Never by the person who submitted it.
+   */
+  confirmTransfer(
+    access: OrganisationAccess,
+    id: string,
+    input: ConfirmTransferInput,
+    meta: RequestMeta,
+  ): Promise<BankTransferRecord> {
+    return this.inProperty(access, meta, async (uow) => {
+      const property = await uow.property();
+      const transfer = await this.pendingTransfer(uow, id, access.userId);
+      const receivedOn = input.receivedOn ?? transfer.transferredOn;
+      if (receivedOn > property.today) {
+        throw invalid('A payment cannot be received in the future');
+      }
+      const paymentId = await this.receive(uow, property, {
+        unitId: transfer.unitId,
+        unitNumber: transfer.unitNumber,
+        party: { billTo: transfer.paidBy, tenancyId: transfer.tenancyId },
+        method: 'BANK_TRANSFER',
+        amountMinor: transfer.amountMinor,
+        receivedOn,
+        reference: transfer.reference,
+        idempotencyKey: null,
+        paymentIntentId: null,
+      });
+      await uow.confirmTransfer(id, paymentId);
+      await uow.audit({
+        action: 'bank_transfer.confirmed',
+        resourceType: 'bank_transfer_submission',
+        resourceId: id,
+        metadata: { paymentId, amountMinor: transfer.amountMinor.toString() },
+      });
+      return this.mustFindTransfer(uow, id);
+    });
+  }
+
+  /** Rejects a resident's bank transfer; the reason is shown to them. */
+  rejectTransfer(access: OrganisationAccess, id: string, reason: string, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => {
+      await this.pendingTransfer(uow, id, access.userId);
+      await uow.rejectTransfer(id, reason);
+      await uow.audit({
+        action: 'bank_transfer.rejected',
+        resourceType: 'bank_transfer_submission',
+        resourceId: id,
+      });
+      return this.mustFindTransfer(uow, id);
     });
   }
 
@@ -415,6 +482,33 @@ export class PaymentsService {
     const tenancy = (await uow.parties([unitId], date)).get(unitId)?.tenancy;
     if (!tenancy) throw invalid('This unit had no tenancy on that date');
     return { billTo: 'TENANTS', tenancyId: tenancy.id };
+  }
+
+  private async pendingTransfer(
+    uow: FinanceUnitOfWork,
+    id: string,
+    userId: string,
+  ): Promise<BankTransferRecord> {
+    const transfer = await uow.transfer(id, { lock: true });
+    if (!transfer) throw notFound('Bank transfer');
+    if (transfer.status !== 'PENDING') {
+      throw new ApiError(409, 'ALREADY_DECIDED', 'This transfer has already been checked');
+    }
+    // Maker-checker: whoever reported the money never confirms it (the database repeats this).
+    if (transfer.submittedByUserId === userId) {
+      throw new ApiError(
+        403,
+        'SAME_PERSON',
+        'Someone other than the person who submitted this transfer must check it',
+      );
+    }
+    return transfer;
+  }
+
+  private async mustFindTransfer(uow: FinanceUnitOfWork, id: string): Promise<BankTransferRecord> {
+    const transfer = await uow.transfer(id);
+    if (!transfer) throw new Error('Transfer vanished inside its own transaction');
+    return transfer;
   }
 
   private gateway(): PaymentGateway {

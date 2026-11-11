@@ -51,6 +51,10 @@ export const PERMISSIONS = [
   'property.finance.manage',
   /** Approve or reject someone else's request for a reversal, refund, write-off or period reopening. */
   'property.finance.approve',
+  /** See your own account on a unit: its invoices, receipts and statement (owners and current tenants). */
+  'unit.finance.read',
+  /** Tell finance about a bank transfer you made for your own account on a unit. */
+  'unit.finance.pay',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
