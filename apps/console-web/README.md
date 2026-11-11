@@ -21,6 +21,15 @@ bun run --cwd apps/console-web dev   # http://localhost:3000 (needs the API on :
 | `/organisations/[id]/properties/new` | Add a property (organisation admins) |
 | `/organisations/[id]/properties/[pid]` | Property overview, activate/archive (admins), buildings, units, common areas, invite a property manager |
 | `/organisations/[id]/properties/[pid]/buildings/[bid]` | A building's floors and units |
+| `/organisations/[id]/properties/[pid]/units/[uid]` | A unit: details for every staff role; for admins and property managers its owners (exact shares, transfers), tenancies (move-in, move-out), household, vehicles; voiding mistakes with a reason |
+| `/organisations/[id]/properties/[pid]/residents` | Current residents of the property with their units and roles; add a person |
+| `/organisations/[id]/properties/[pid]/residents/[personId]` | A resident's profile (edit), records at this property, emergency contacts, app invitation link |
+
+Resident records are never edited in place: periods are ended, and mistakes are voided (kept
+and shown as voided). Dates are calendar dates in the property's time zone. Ownership shares are
+typed as fractions ("1/2") and checked exactly, never as floating point. Roles without resident
+permissions (finance officers) see unit details only; the console does not request resident
+data for them.
 
 The organisation page lists the properties the user may see (the API filters them). Controls
 appear only when the API reports the matching permission (`permissions` on organisation and
@@ -39,8 +48,10 @@ read at build time. The API's `API_CORS_ORIGINS` must include the console's orig
 
 - `src/app/` routes: `(auth)` sign-in/up layout, `(console)` signed-in layout, invitation page.
 - `src/components/` shared UI (`ui.tsx`: buttons, fields, alerts, loading/empty/error states;
-  `app-shell.tsx`).
-- `src/lib/` API client, session context, data hook, error messages, safe redirects.
+  `app-shell.tsx`; `residents.tsx`: person picker, new-person form, period badges;
+  `unit-records.tsx`: the unit page's owner, tenancy, household and vehicle cards).
+- `src/lib/` API client, session context, data hook, error messages, safe redirects,
+  `residents.ts` (exact shares, property-local dates, period status).
 - Styling: `src/app/globals.css`, values from `@veyra/design-tokens` only.
 
 ## Tests
@@ -49,3 +60,6 @@ read at build time. The API's `API_CORS_ORIGINS` must include the console's orig
 - `bun run test:e2e`: Playwright journeys in Chromium at desktop and phone sizes, with axe
   WCAG 2.2 AA checks (`e2e/`). Needs a production build (`bun run build`) and, once,
   `bunx playwright install chromium`. API calls are answered by `e2e/fake-api.ts`.
+  The suite starts `next start` on port 3000, or reuses a server already there; a `next dev`
+  server on 3000 makes journeys time out, so stop it first. On a busy machine use
+  `--workers=1`.

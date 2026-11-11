@@ -30,7 +30,7 @@ export class ApiRequestError extends Error {
 /** Status 0: the API could not be reached (offline, DNS, CORS, server down). */
 export const NETWORK_ERROR = 'NETWORK_ERROR';
 
-type Method = 'GET' | 'POST' | 'PATCH';
+type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 export interface RequestOptions {
   body?: unknown;
@@ -86,4 +86,5 @@ export const api = {
     apiRequest<T>('POST', path, { ...options, body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>('PATCH', path, { ...options, body }),
+  delete: <T>(path: string, options?: RequestOptions) => apiRequest<T>('DELETE', path, options),
 };

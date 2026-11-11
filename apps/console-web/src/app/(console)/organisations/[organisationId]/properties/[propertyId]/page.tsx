@@ -15,6 +15,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
+  ButtonLink,
   Card,
   EmptyState,
   ErrorState,
@@ -152,6 +153,19 @@ export default function PropertyPage() {
         </dl>
       </Card>
 
+      {can('property.resident.read') ? (
+        <Card title="Residents">
+          <p className="muted">
+            Owners, tenants and household members. Open a unit below to record who owns it or lives
+            there.
+          </p>
+          <div className="form__actions">
+            <ButtonLink href={`${base}/residents`} variant="secondary">
+              View residents
+            </ButtonLink>
+          </div>
+        </Card>
+      ) : null}
       {can('property.structure.read') ? (
         <>
           <Buildings base={base} canManage={canManage} />
@@ -322,7 +336,11 @@ function Units({ base, canManage }: { base: string; canManage: boolean }) {
             <tbody>
               {units.data.data.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.number}</td>
+                  <td>
+                    <Link href={`${base}/units/${u.id}`} aria-label={`Unit ${u.number}`}>
+                      {u.number}
+                    </Link>
+                  </td>
                   <td>{enumLabel(u.type)}</td>
                   <td>{buildingName(u.buildingId)}</td>
                   <td>{u.areaSqm ?? '—'}</td>
