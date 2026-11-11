@@ -23,6 +23,13 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
 
 ### Added
 
+- **Phase 5 visitor console**: on the unit page residents and staff register visitors and get
+  the pass once (QR code and reference code), list and cancel them; residents answer walk-in
+  requests (checked every 5 seconds). Gate screen for security staff: check a pass by code or
+  camera scan, admit or refuse, walk-in requests with approval, departures. Visit log and
+  expected visitors for supervisors. Installable web app manifest; camera allowed on the gate
+  route only. Unit detail now includes `propertyTimeZone`. New dependency `qrcode-generator`
+  (MIT, no dependencies) to draw QR codes.
 - **Phase 5 walk-in approval** (migration `20261111150000_walk_in_requests`): guards request
   entry for someone without a pass; a resident of the unit (not staff) approves or denies in the
   app within 10 minutes; an approval admits once within 15 minutes; at most five open requests

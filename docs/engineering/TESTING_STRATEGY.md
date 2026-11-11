@@ -309,6 +309,23 @@ expiry, rehash on sign-in, idempotent sign-out).
 - `apps/api` unit (+2): expiry after exactly 10 minutes; admission problems (not approved,
   lapsed after 15 minutes, already used).
 
+### Part 4: visitor console
+
+- `apps/console-web` unit (+6, `test/visitors.test.ts`): property-local wall-clock time to
+  instant and back (Karachi, Kolkata half-hour offset, London across the daylight-saving
+  change), malformed input, formatting in the property zone, countdowns. The config test checks
+  that the camera is allowed on the gate route only.
+- `apps/console-web` browser journeys (+7, desktop and phone, axe WCAG 2.2 AA, no horizontal
+  scroll), `e2e/visitors.spec.ts`: an owner registers a visitor, sees the QR code and reference
+  code once, and cancels; a guard checks a code typed in any case and spacing, sees no phone
+  number, admits, is refused a used pass and records the departure; a guard refuses with a
+  reason and is told a code is unknown; a walk-in waits for the resident, who lets them in from
+  the unit page, and the guard admits once; staff see a unit's walk-in requests but cannot
+  answer; a supervisor reads the day's visits and cancels an expected visitor; a guard has the
+  gate but not the log, a finance officer neither, and the console never requests visitor data
+  for them. These caught three label-in-name failures (WCAG 2.5.3) and an "Inside now" list that
+  did not refresh after an admission.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

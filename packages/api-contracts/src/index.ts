@@ -394,6 +394,8 @@ export interface UnitDetailResponse {
   areaSqm: string | null;
   propertyId: string;
   propertyName: string;
+  /** IANA time zone of the property, e.g. "Asia/Karachi". */
+  propertyTimeZone: string;
   buildingName: string | null;
   floorName: string | null;
   /** The caller's own resident roles on this unit today; empty for staff. */

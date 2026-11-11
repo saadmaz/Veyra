@@ -21,6 +21,8 @@ export interface UnitDetailRecord {
   areaSqm: string | null;
   propertyId: string;
   propertyName: string;
+  /** IANA time zone: residents enter and read visit times in it. */
+  propertyTimeZone: string;
   buildingName: string | null;
   floorName: string | null;
   /** The caller's own resident roles on this unit today (empty for staff). */

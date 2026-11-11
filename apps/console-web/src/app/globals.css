@@ -544,3 +544,41 @@ a {
   color: var(--color-text-muted);
   font-weight: 600;
 }
+
+/* ------------------------------------------------------------------ visitors (Phase 5) */
+
+/* A visitor pass: QR code and reference code. The QR is always dark on white for scanners. */
+.pass {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-block: var(--space-3);
+}
+
+.qr {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+
+.pass__code strong {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-lg, 1.25rem);
+  letter-spacing: 0.08em;
+}
+
+.scanner {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.scanner__video {
+  width: 100%;
+  max-width: 28rem;
+  border-radius: var(--radius-md);
+  background: #000000;
+}
+
+.gate__name {
+  max-width: 24rem;
+}

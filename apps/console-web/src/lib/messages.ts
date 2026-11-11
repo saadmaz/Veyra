@@ -49,6 +49,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   VOIDED: 'This record was voided and can no longer be changed.',
   RESIDENCY_RULE_VIOLATED:
     'This change would leave the records inconsistent: owner shares must add up to one, and periods cannot overlap.',
+  PASS_NOT_VALID: 'This pass can no longer be used. Check it again.',
+  WALK_IN_NEEDS_APPROVAL: 'A visitor without a pass needs a resident to approve them first.',
+  WALK_IN_NOT_APPROVED:
+    'This visitor has not been approved, or the approval has already been used or has lapsed.',
+  WALK_IN_NOT_PENDING: 'This request has already been answered.',
+  WALK_IN_EXPIRED: 'This request expired before it was answered.',
+  TOO_MANY_WALK_IN_REQUESTS:
+    'This unit already has several requests waiting. Wait for an answer or cancel one first.',
+  VISIT_ALREADY_DEPARTED: 'This departure has already been recorded.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';
