@@ -4,6 +4,7 @@ import type {
   CreateInvitationResponse,
   InvitationDto,
   MembershipDto,
+  MyUnitDto,
   OrganisationDetailResponse,
   Paginated,
   PropertyDto,
@@ -24,7 +25,13 @@ import {
   TextField,
 } from '@/components/ui';
 import { ApiRequestError, api } from '@/lib/api-client';
-import { errorMessage, fieldErrors, ORGANISATION_ROLES, roleLabel } from '@/lib/messages';
+import {
+  errorMessage,
+  fieldErrors,
+  ORGANISATION_ROLES,
+  residentRoleLabel,
+  roleLabel,
+} from '@/lib/messages';
 import { invitationLink } from '@/lib/navigation';
 import { useApiQuery } from '@/lib/use-api';
 
@@ -89,10 +96,41 @@ export default function OrganisationPage() {
         </dl>
       </Card>
 
+      <YourHomes organisationId={org.id} />
       <Properties organisationId={org.id} canCreate={can('organisation.property.create')} />
       {can('organisation.member.read') ? <Members organisationId={org.id} /> : null}
       {can('organisation.member.invite') ? <Invitations organisationId={org.id} /> : null}
     </>
+  );
+}
+
+/** Units the caller owns, rents or lives in today. Shown only when there are any. */
+function YourHomes({ organisationId }: { organisationId: string }) {
+  const homes = useApiQuery<{ data: MyUnitDto[] }>(`/organisations/${organisationId}/my-units`);
+  if (homes.status === 'loading') return null;
+  if (homes.status === 'error') return <ErrorState error={homes.error} onRetry={homes.reload} />;
+  if (homes.data.data.length === 0) return null;
+  return (
+    <Card title="Your homes">
+      <ul className="list" aria-label="Your homes">
+        {homes.data.data.map((home) => (
+          <li key={home.unitId} className="list__item">
+            <div>
+              <Link
+                href={`/organisations/${organisationId}/properties/${home.propertyId}/units/${home.unitId}`}
+                className="list__link"
+              >
+                Unit {home.unitNumber}
+              </Link>
+              <p className="list__meta">
+                {[home.propertyName, home.buildingName].filter(Boolean).join(' · ')} ·{' '}
+                {home.roles.map(residentRoleLabel).join(', ')}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
@@ -101,6 +139,10 @@ function Properties({ organisationId, canCreate }: { organisationId: string; can
   const properties = useApiQuery<Paginated<PropertyDto>>(
     `/organisations/${organisationId}/properties?limit=200`,
   );
+  // Residents without staff roles have no properties to list: no empty card for them.
+  if (!canCreate && properties.status === 'success' && properties.data.data.length === 0) {
+    return null;
+  }
   const addLink = canCreate ? (
     <ButtonLink href={`/organisations/${organisationId}/properties/new`}>Add property</ButtonLink>
   ) : undefined;

@@ -3,12 +3,18 @@ import type { Page, Route } from '@playwright/test';
 import type {
   BuildingDto,
   CommonAreaDto,
+  EmergencyContactDto,
   FloorDto,
+  HouseholdMemberDto,
   InvitationDto,
   MembershipDto,
   OrganisationDto,
+  OwnershipDto,
+  PersonDto,
   PropertyDto,
+  TenancyDto,
   UnitDto,
+  VehicleDto,
 } from '@veyra/api-contracts';
 
 /**
@@ -58,30 +64,64 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'organisation.member.read',
       'organisation.profile.read',
       'organisation.property.create',
+      'organisation.resident.read',
       'organisation.settings.manage',
     ],
     property: [
       'property.lifecycle.manage',
       'property.profile.read',
+      'property.resident.manage',
+      'property.resident.read',
       'property.settings.manage',
       'property.structure.manage',
       'property.structure.read',
+      'unit.profile.read',
+      'unit.residents.read',
     ],
   },
   FINANCE_OFFICER: {
     organisation: ['organisation.profile.read'],
-    property: ['property.profile.read', 'property.structure.read'],
+    // No resident permissions until billing needs them (data minimisation).
+    property: ['property.profile.read', 'property.structure.read', 'unit.profile.read'],
   },
   PROPERTY_MANAGER: {
     organisation: [],
     property: [
       'property.profile.read',
+      'property.resident.manage',
+      'property.resident.read',
       'property.settings.manage',
       'property.structure.manage',
       'property.structure.read',
+      'unit.profile.read',
+      'unit.residents.read',
     ],
   },
 };
+
+/** Today in the property's time zone, as the API computes it. */
+const todayIn = (timeZone: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+
+/** Inclusive date periods; null end means open-ended. */
+const overlaps = (aFrom: string, aTo: string | null, bFrom: string, bTo: string | null) =>
+  aFrom <= (bTo ?? '9999-12-31') && bFrom <= (aTo ?? '9999-12-31');
+
+const covers = (from: string, to: string | null, day: string) =>
+  from <= day && (to === null || to >= day);
+
+const dayBefore = (date: string) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+
+function sumIsOne(parts: { shareNumerator: number; shareDenominator: number }[]): boolean {
+  let n = 0n;
+  let d = 1n;
+  for (const p of parts) {
+    n = n * BigInt(p.shareDenominator) + BigInt(p.shareNumerator) * d;
+    d *= BigInt(p.shareDenominator);
+  }
+  return parts.length > 0 && n === d;
+}
 
 type Status = 'ACTIVE' | 'ARCHIVED';
 const now = () => new Date().toISOString();
@@ -96,6 +136,13 @@ export class FakeApi {
   floors: FloorDto[] = [];
   units: UnitDto[] = [];
   commonAreas: CommonAreaDto[] = [];
+  /** userId: the login linked by an accepted resident invitation. */
+  persons: (PersonDto & { organisationId: string; userId: string | null })[] = [];
+  ownerships: OwnershipDto[] = [];
+  tenancies: TenancyDto[] = [];
+  household: HouseholdMemberDto[] = [];
+  vehicles: (VehicleDto & { propertyId: string })[] = [];
+  emergencyContacts: (EmergencyContactDto & { personId: string })[] = [];
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -158,6 +205,73 @@ export class FakeApi {
     return property;
   }
 
+  addUnit(propertyId: string, number: string): UnitDto {
+    const unit: UnitDto = {
+      id: randomUUID(),
+      propertyId,
+      buildingId: null,
+      floorId: null,
+      number,
+      type: 'APARTMENT',
+      areaSqm: '85.50',
+      shareRatio: null,
+      status: 'ACTIVE',
+      archivedAt: null,
+      createdAt: now(),
+    };
+    this.units.push(unit);
+    return unit;
+  }
+
+  addPerson(organisationId: string, fullName: string, email: string | null = null): PersonDto {
+    const person = {
+      id: randomUUID(),
+      organisationId,
+      fullName,
+      email,
+      phone: null,
+      preferredLanguage: null,
+      status: 'ACTIVE' as const,
+      linked: false,
+      createdAt: now(),
+      userId: null,
+    };
+    this.persons.push(person);
+    const { organisationId: _o, userId: _u, ...dto } = person;
+    return dto;
+  }
+
+  addOwnership(unitId: string, person: PersonDto, effectiveFrom: string, share = [1, 1]) {
+    const ownership: OwnershipDto = {
+      id: randomUUID(),
+      unitId,
+      personId: person.id,
+      fullName: person.fullName,
+      shareNumerator: share[0] ?? 1,
+      shareDenominator: share[1] ?? 1,
+      effectiveFrom,
+      effectiveTo: null,
+      voidedAt: null,
+      voidReason: null,
+    };
+    this.ownerships.push(ownership);
+    return ownership;
+  }
+
+  addTenancy(unitId: string, person: PersonDto, startDate: string): TenancyDto {
+    const tenancy: TenancyDto = {
+      id: randomUUID(),
+      unitId,
+      startDate,
+      endDate: null,
+      voidedAt: null,
+      voidReason: null,
+      occupants: [{ personId: person.id, fullName: person.fullName, isPrimary: true }],
+    };
+    this.tenancies.push(tenancy);
+    return tenancy;
+  }
+
   async install(page: Page): Promise<void> {
     await page.route(`${API}/**`, (route) => this.handle(route));
   }
@@ -172,9 +286,124 @@ export class FakeApi {
     );
   }
 
+  /** Links a resident profile to a login, as accepting a resident invitation does. */
+  linkPerson(personId: string, userId: string) {
+    const person = this.persons.find((p) => p.id === personId);
+    if (person) {
+      person.userId = userId;
+      person.linked = true;
+    }
+  }
+
+  /** Derived resident roles of a login on a unit today (property time zone), like the API. */
+  private residentRoles(userId: string, unitId: string): string[] {
+    const unit = this.units.find((u) => u.id === unitId);
+    const property = this.properties.find((p) => p.id === unit?.propertyId);
+    if (!unit || !property) return [];
+    const today = todayIn(property.timeZone);
+    const mine = new Set(this.persons.filter((p) => p.userId === userId).map((p) => p.id));
+    const roles = new Set<string>();
+    for (const o of this.ownerships)
+      if (
+        o.unitId === unitId &&
+        mine.has(o.personId) &&
+        !o.voidedAt &&
+        covers(o.effectiveFrom, o.effectiveTo, today)
+      )
+        roles.add('OWNER');
+    for (const t of this.tenancies)
+      if (
+        t.unitId === unitId &&
+        !t.voidedAt &&
+        covers(t.startDate, t.endDate, today) &&
+        t.occupants.some((o) => mine.has(o.personId))
+      )
+        roles.add('TENANT');
+    for (const h of this.household)
+      if (
+        h.unitId === unitId &&
+        mine.has(h.personId) &&
+        !h.voidedAt &&
+        covers(h.validFrom, h.validTo, today)
+      )
+        roles.add('HOUSEHOLD_MEMBER');
+    return [...roles].sort();
+  }
+
+  private residentUnitIds(organisationId: string, userId: string): string[] {
+    const propertyIds = new Set(
+      this.properties.filter((p) => p.organisationId === organisationId).map((p) => p.id),
+    );
+    return this.units
+      .filter((u) => propertyIds.has(u.propertyId) && this.residentRoles(userId, u.id).length > 0)
+      .map((u) => u.id);
+  }
+
+  /** Current residents of a unit, names only (GET …/units/:id/residents). */
+  private unitResidents(unitId: string, today: string) {
+    const live = <T extends { voidedAt: string | null }>(rows: T[]) =>
+      rows.filter((r) => !r.voidedAt);
+    return {
+      owners: live(this.ownerships)
+        .filter((o) => o.unitId === unitId && covers(o.effectiveFrom, o.effectiveTo, today))
+        .map((o) => ({
+          personId: o.personId,
+          fullName: o.fullName,
+          shareNumerator: o.shareNumerator,
+          shareDenominator: o.shareDenominator,
+          since: o.effectiveFrom,
+        })),
+      tenants: live(this.tenancies)
+        .filter((t) => t.unitId === unitId && covers(t.startDate, t.endDate, today))
+        .flatMap((t) =>
+          t.occupants.map((o) => ({
+            personId: o.personId,
+            fullName: o.fullName,
+            isPrimary: o.isPrimary,
+            since: t.startDate,
+            until: t.endDate,
+          })),
+        ),
+      household: live(this.household)
+        .filter((h) => h.unitId === unitId && covers(h.validFrom, h.validTo, today))
+        .map((h) => ({
+          personId: h.personId,
+          fullName: h.fullName,
+          relationship: h.relationship,
+          since: h.validFrom,
+        })),
+    };
+  }
+
+  private unitDetail(
+    unit: UnitDto,
+    property: PropertyDto,
+    permissions: string[],
+    myRoles: string[],
+  ) {
+    return {
+      unitId: unit.id,
+      unitNumber: unit.number,
+      unitType: unit.type,
+      status: unit.status,
+      areaSqm: unit.areaSqm,
+      propertyId: property.id,
+      propertyName: property.name,
+      buildingName: this.buildings.find((b) => b.id === unit.buildingId)?.name ?? null,
+      floorName: this.floors.find((f) => f.id === unit.floorId)?.name ?? null,
+      myRoles,
+      permissions,
+    };
+  }
+
   private organisationPermissions(organisationId: string, userId: string): string[] {
     const grants = this.grants(organisationId, userId);
-    if (grants.length === 0) return [];
+    if (grants.length === 0) {
+      // Residents are members through their records: the baseline permission only.
+      return this.residentUnitIds(organisationId, userId).length > 0
+        ? ['organisation.profile.read']
+        : [];
+    }
     const permissions = new Set(['organisation.profile.read']); // member baseline
     for (const g of grants) {
       if (g.scopeType === 'ORGANISATION')
@@ -357,6 +586,48 @@ export class FakeApi {
       return this.reply(route, 204);
     }
 
+    if (rest === '/my-units' && method === 'GET') {
+      const data = this.residentUnitIds(organisation.id, user.id).map((unitId) => {
+        const unit = this.units.find((u) => u.id === unitId) as UnitDto;
+        const property = this.properties.find((p) => p.id === unit.propertyId) as PropertyDto;
+        return {
+          unitId,
+          unitNumber: unit.number,
+          unitType: unit.type,
+          propertyId: property.id,
+          propertyName: property.name,
+          buildingName: this.buildings.find((b) => b.id === unit.buildingId)?.name ?? null,
+          roles: this.residentRoles(user.id, unitId),
+        };
+      });
+      return this.reply(route, 200, { data });
+    }
+    const personInvite = /^\/persons\/([^/]+)\/invitations$/.exec(rest);
+    if (personInvite && method === 'POST') {
+      if (!can('organisation.member.invite')) return this.error(route, 403, 'FORBIDDEN');
+      const person = this.persons.find(
+        (p) => p.id === personInvite[1] && p.organisationId === organisation.id,
+      );
+      if (!person) return this.error(route, 404, 'NOT_FOUND');
+      if (person.linked) return this.error(route, 409, 'PERSON_ALREADY_LINKED');
+      if (!person.email) return this.error(route, 422, 'PERSON_HAS_NO_EMAIL');
+      const invitation: FakeInvitation = {
+        id: randomUUID(),
+        organisationId: organisation.id,
+        email: person.email,
+        role: 'RESIDENT',
+        token: Buffer.from(randomUUID() + randomUUID())
+          .toString('base64url')
+          .slice(0, 43),
+        status: 'PENDING',
+      };
+      this.invitations.push(invitation);
+      return this.reply(route, 201, {
+        invitation: this.invitationDto(invitation),
+        token: invitation.token,
+      });
+    }
+
     // ------------------------------------------------------------- properties
     if (rest === '/properties') {
       if (method === 'GET') {
@@ -382,6 +653,24 @@ export class FakeApi {
       (p) => p.id === propertyMatch[1] && p.organisationId === organisation.id,
     );
     const pp = property ? this.propertyPermissions(organisation.id, property.id, user.id) : null;
+    if (property && !pp && method === 'GET') {
+      // Residents reach only their own unit (derived roles), never the property itself.
+      const own = /^\/units\/([^/]+)(\/residents)?$/.exec(propertyMatch[2] ?? '');
+      const unit = own
+        ? this.units.find((u) => u.id === own[1] && u.propertyId === property.id)
+        : undefined;
+      const roles = unit ? this.residentRoles(user.id, unit.id) : [];
+      if (own && unit && roles.length > 0) {
+        const permissions = ['unit.profile.read'];
+        if (roles.includes('OWNER') || roles.includes('TENANT'))
+          permissions.push('unit.residents.read');
+        if (!own[2])
+          return this.reply(route, 200, this.unitDetail(unit, property, permissions, roles));
+        if (!permissions.includes('unit.residents.read'))
+          return this.error(route, 403, 'FORBIDDEN');
+        return this.reply(route, 200, this.unitResidents(unit.id, todayIn(property.timeZone)));
+      }
+    }
     if (!property || !pp) return this.error(route, 404, 'NOT_FOUND');
     const sub = propertyMatch[2] ?? '';
     const need = (permission: string) =>
@@ -416,6 +705,18 @@ export class FakeApi {
       }
       return this.reply(route, 200, property);
     }
+
+    const residentRoute = this.residentRoute(
+      route,
+      method,
+      sub,
+      body,
+      organisation.id,
+      property,
+      pp,
+      user.id,
+    );
+    if (residentRoute) return residentRoute;
 
     const readOrManage = method === 'GET' ? 'property.structure.read' : 'property.structure.manage';
     if (need(readOrManage)) return;
@@ -545,6 +846,390 @@ export class FakeApi {
     return this.error(route, 404, 'NOT_FOUND');
   }
 
+  /**
+   * Residents (Phase 4): unit detail, people, ownership, tenancies, household, vehicles and
+   * emergency contacts. Mirrors the API's permissions, conflict codes and residency rules.
+   * Returns null when the path is not a resident route.
+   */
+  private residentRoute(
+    route: Route,
+    method: string,
+    sub: string,
+    body: Record<string, unknown>,
+    organisationId: string,
+    property: PropertyDto,
+    pp: string[],
+    userId: string,
+  ): Promise<void> | null {
+    const today = todayIn(property.timeZone);
+    const str = (key: string) =>
+      typeof body[key] === 'string' ? (body[key] as string) : undefined;
+    const need = (permission: string) =>
+      pp.includes(permission) ? null : this.error(route, 403, 'FORBIDDEN');
+    const READ = 'property.resident.read';
+    const MANAGE = 'property.resident.manage';
+    const units = this.units.filter((u) => u.propertyId === property.id);
+    const unitIds = new Set(units.map((u) => u.id));
+    const person = (id: string | undefined) =>
+      this.persons.find((p) => p.id === id && p.organisationId === organisationId);
+    const toPerson = ({
+      organisationId: _o,
+      userId: _u,
+      ...p
+    }: (typeof this.persons)[number]): PersonDto => p;
+
+    // ---------------------------------------------------------------- people
+    if (sub === '/residents' && method === 'GET') {
+      {
+        const denied = need(READ);
+        if (denied) return denied;
+      }
+      const rows = new Map<string, { unitId: string; unitNumber: string; roles: string[] }[]>();
+      const addRole = (personId: string, unitId: string, role: string) => {
+        const unit = units.find((u) => u.id === unitId);
+        if (!unit) return;
+        const list = rows.get(personId) ?? [];
+        const entry = list.find((e) => e.unitId === unitId);
+        if (entry) {
+          if (!entry.roles.includes(role)) entry.roles.push(role);
+        } else list.push({ unitId, unitNumber: unit.number, roles: [role] });
+        rows.set(personId, list);
+      };
+      for (const o of this.ownerships)
+        if (unitIds.has(o.unitId) && !o.voidedAt && covers(o.effectiveFrom, o.effectiveTo, today))
+          addRole(o.personId, o.unitId, 'OWNER');
+      for (const t of this.tenancies)
+        if (unitIds.has(t.unitId) && !t.voidedAt && covers(t.startDate, t.endDate, today))
+          for (const occupant of t.occupants) addRole(occupant.personId, t.unitId, 'TENANT');
+      for (const h of this.household)
+        if (unitIds.has(h.unitId) && !h.voidedAt && covers(h.validFrom, h.validTo, today))
+          addRole(h.personId, h.unitId, 'HOUSEHOLD_MEMBER');
+      const data = [...rows.entries()].map(([personId, list]) => ({
+        person: toPerson(person(personId) as (typeof this.persons)[number]),
+        units: list,
+      }));
+      return this.reply(route, 200, { data });
+    }
+    if (sub === '/persons' && method === 'GET') {
+      // People staff may pick: related to this property by any record, or not attached anywhere.
+      const denied = need(READ);
+      if (denied) return denied;
+      const related = (personId: string, inProperty: boolean) => {
+        const unitOk = (unitId: string | null) =>
+          !inProperty || (unitId !== null && unitIds.has(unitId));
+        return (
+          this.ownerships.some((o) => o.personId === personId && unitOk(o.unitId)) ||
+          this.household.some((h) => h.personId === personId && unitOk(h.unitId)) ||
+          this.tenancies.some(
+            (t) => unitOk(t.unitId) && t.occupants.some((o) => o.personId === personId),
+          ) ||
+          this.vehicles.some(
+            (v) => v.personId === personId && (!inProperty || v.propertyId === property.id),
+          )
+        );
+      };
+      const data = this.persons
+        .filter(
+          (p) =>
+            p.organisationId === organisationId &&
+            p.status === 'ACTIVE' &&
+            (related(p.id, true) || !related(p.id, false)),
+        )
+        .sort((a, b) => a.fullName.localeCompare(b.fullName))
+        .map(toPerson);
+      return this.reply(route, 200, { data });
+    }
+    if (sub === '/persons' && method === 'POST') {
+      {
+        const denied = need(MANAGE);
+        if (denied) return denied;
+      }
+      const email = str('email')?.toLowerCase() ?? null;
+      if (
+        email &&
+        this.persons.some((p) => p.organisationId === organisationId && p.email === email)
+      )
+        return this.error(route, 409, 'PERSON_EMAIL_TAKEN');
+      const phone = str('phone')?.replace(/[\s-]/g, '') ?? null;
+      if (phone && !/^\+[1-9]\d{6,14}$/.test(phone))
+        return this.error(route, 400, 'VALIDATION_FAILED', [
+          { path: 'phone', message: 'Use international format, e.g. +923001234567' },
+        ]);
+      const created = this.addPerson(organisationId, str('fullName') ?? '', email);
+      const stored = this.persons.find((p) => p.id === created.id);
+      if (stored) {
+        stored.phone = phone;
+        stored.preferredLanguage = str('preferredLanguage') ?? null;
+      }
+      return this.reply(route, 201, toPerson(stored as (typeof this.persons)[number]));
+    }
+    const personMatch = /^\/persons\/([^/]+)(\/.*)?$/.exec(sub);
+    if (personMatch) {
+      {
+        const denied = need(method === 'GET' ? READ : MANAGE);
+        if (denied) return denied;
+      }
+      const p = person(personMatch[1]);
+      if (!p) return this.error(route, 404, 'NOT_FOUND');
+      const psub = personMatch[2] ?? '';
+      if (psub === '' && method === 'GET') {
+        const mineOnly = <T extends { unitId: string }>(rows: T[]) =>
+          rows.filter((r) => unitIds.has(r.unitId));
+        return this.reply(route, 200, {
+          person: toPerson(p),
+          ownerships: mineOnly(this.ownerships).filter((o) => o.personId === p.id),
+          tenancies: mineOnly(this.tenancies).filter((t) =>
+            t.occupants.some((o) => o.personId === p.id),
+          ),
+          household: mineOnly(this.household).filter((h) => h.personId === p.id),
+          emergencyContacts: this.emergencyContacts
+            .filter((c) => c.personId === p.id)
+            .map(({ personId: _p, ...c }) => c),
+        });
+      }
+      if (psub === '' && method === 'PATCH') {
+        for (const key of ['fullName', 'email', 'phone', 'preferredLanguage'] as const) {
+          if (key in body) Object.assign(p, { [key]: body[key] });
+        }
+        return this.reply(route, 200, toPerson(p));
+      }
+      if (psub === '/emergency-contacts' && method === 'POST') {
+        const contact = {
+          id: randomUUID(),
+          personId: p.id,
+          name: str('name') ?? '',
+          phone: (str('phone') ?? '').replace(/[\s-]/g, ''),
+          relationship: str('relationship') ?? null,
+        };
+        this.emergencyContacts.push(contact);
+        const { personId: _p, ...dto } = contact;
+        return this.reply(route, 201, dto);
+      }
+      const contactMatch = /^\/emergency-contacts\/([^/]+)$/.exec(psub);
+      if (contactMatch && method === 'DELETE') {
+        const index = this.emergencyContacts.findIndex(
+          (c) => c.id === contactMatch[1] && c.personId === p.id,
+        );
+        if (index < 0) return this.error(route, 404, 'NOT_FOUND');
+        this.emergencyContacts.splice(index, 1);
+        return this.reply(route, 204);
+      }
+      return this.error(route, 404, 'NOT_FOUND');
+    }
+
+    // ---------------------------------------------------------------- vehicles
+    if (sub === '/vehicles') {
+      {
+        const denied = need(method === 'GET' ? READ : MANAGE);
+        if (denied) return denied;
+      }
+      if (method === 'GET') {
+        const data = this.vehicles
+          .filter((v) => v.propertyId === property.id && v.status === 'ACTIVE')
+          .map(({ propertyId: _p, ...v }) => v);
+        return this.reply(route, 200, { data });
+      }
+      const plate = (str('plate') ?? '').toUpperCase().replace(/\s+/g, '');
+      if (
+        this.vehicles.some(
+          (v) => v.propertyId === property.id && v.status === 'ACTIVE' && v.plate === plate,
+        )
+      )
+        return this.error(route, 409, 'PLATE_TAKEN');
+      const vehicle = {
+        id: randomUUID(),
+        propertyId: property.id,
+        plate,
+        make: str('make') ?? null,
+        model: str('model') ?? null,
+        colour: str('colour') ?? null,
+        unitId: str('unitId') ?? null,
+        personId: str('personId') ?? null,
+        status: 'ACTIVE' as const,
+      };
+      this.vehicles.push(vehicle);
+      const { propertyId: _p, ...dto } = vehicle;
+      return this.reply(route, 201, dto);
+    }
+    const vehicleArchive = /^\/vehicles\/([^/]+)\/archive$/.exec(sub);
+    if (vehicleArchive) {
+      {
+        const denied = need(MANAGE);
+        if (denied) return denied;
+      }
+      const vehicle = this.vehicles.find(
+        (v) => v.id === vehicleArchive[1] && v.propertyId === property.id,
+      );
+      if (!vehicle) return this.error(route, 404, 'NOT_FOUND');
+      vehicle.status = 'ARCHIVED';
+      const { propertyId: _p, ...dto } = vehicle;
+      return this.reply(route, 200, dto);
+    }
+
+    // ---------------------------------------------------------------- one unit
+    const unitMatch = /^\/units\/([^/]+)(\/.*)?$/.exec(sub);
+    if (!unitMatch || /^\/archive$/.test(unitMatch[2] ?? '')) return null;
+    const unit = units.find((u) => u.id === unitMatch[1]);
+    if (!unit) return this.error(route, 404, 'NOT_FOUND');
+    const usub = unitMatch[2] ?? '';
+    const writable = () => (unit.status === 'ARCHIVED' ? this.error(route, 409, 'ARCHIVED') : null);
+
+    if (usub === '' && method === 'GET') {
+      {
+        const denied = need('unit.profile.read');
+        if (denied) return denied;
+      }
+      return this.reply(
+        route,
+        200,
+        this.unitDetail(unit, property, pp, this.residentRoles(userId, unit.id)),
+      );
+    }
+    {
+      const denied = need(method === 'GET' ? READ : MANAGE);
+      if (denied) return denied;
+    }
+    if (usub === '/residents' && method === 'GET') {
+      const denied = need('unit.residents.read');
+      if (denied) return denied;
+      return this.reply(route, 200, this.unitResidents(unit.id, today));
+    }
+    const ownerships = this.ownerships.filter((o) => o.unitId === unit.id);
+    const tenancies = this.tenancies.filter((t) => t.unitId === unit.id);
+    const household = this.household.filter((h) => h.unitId === unit.id);
+
+    if (usub === '/ownerships' && method === 'GET')
+      return this.reply(route, 200, { data: ownerships });
+    if (usub === '/owners' && method === 'POST') {
+      if (writable()) return writable();
+      const effectiveFrom = str('effectiveFrom') ?? '';
+      const owners = (body.owners ?? []) as {
+        personId: string;
+        shareNumerator: number;
+        shareDenominator: number;
+      }[];
+      if (!sumIsOne(owners))
+        return this.error(route, 400, 'VALIDATION_FAILED', [
+          { path: 'owners', message: 'Shares must add up to exactly one' },
+        ]);
+      const live = ownerships.filter((o) => !o.voidedAt);
+      if (live.some((o) => o.effectiveFrom >= effectiveFrom))
+        return this.error(route, 409, 'OWNERSHIP_CONFLICT');
+      for (const o of live)
+        if (o.effectiveTo === null || o.effectiveTo >= effectiveFrom)
+          o.effectiveTo = dayBefore(effectiveFrom);
+      for (const owner of owners) {
+        const p = person(owner.personId);
+        if (!p) return this.error(route, 404, 'NOT_FOUND');
+        this.addOwnership(unit.id, p, effectiveFrom, [
+          owner.shareNumerator,
+          owner.shareDenominator,
+        ]);
+      }
+      return this.reply(route, 200, { data: this.ownerships.filter((o) => o.unitId === unit.id) });
+    }
+    if (usub === '/ownerships/void' && method === 'POST') {
+      const ids = (body.ownershipIds ?? []) as string[];
+      const voiding = ownerships.filter((o) => ids.includes(o.id) && !o.voidedAt);
+      // Like the database check: owners recorded together must be voided together.
+      const partial = voiding.some((v) =>
+        ownerships.some(
+          (o) => !o.voidedAt && o.effectiveFrom === v.effectiveFrom && !ids.includes(o.id),
+        ),
+      );
+      if (partial) return this.error(route, 409, 'RESIDENCY_RULE_VIOLATED');
+      for (const o of voiding) {
+        o.voidedAt = now();
+        o.voidReason = str('reason') ?? null;
+      }
+      return this.reply(route, 200, { data: ownerships });
+    }
+
+    if (usub === '/tenancies') {
+      if (method === 'GET') return this.reply(route, 200, { data: tenancies });
+      if (writable()) return writable();
+      const startDate = str('startDate') ?? '';
+      const endDate = str('endDate') ?? null;
+      if (
+        tenancies.some((t) => !t.voidedAt && overlaps(t.startDate, t.endDate, startDate, endDate))
+      )
+        return this.error(route, 409, 'TENANCY_OVERLAP');
+      const occupants = (body.occupants ?? []) as { personId: string; isPrimary: boolean }[];
+      const tenancy: TenancyDto = {
+        id: randomUUID(),
+        unitId: unit.id,
+        startDate,
+        endDate,
+        voidedAt: null,
+        voidReason: null,
+        occupants: occupants.map((o) => ({
+          personId: o.personId,
+          fullName: person(o.personId)?.fullName ?? '',
+          isPrimary: o.isPrimary,
+        })),
+      };
+      this.tenancies.push(tenancy);
+      return this.reply(route, 201, tenancy);
+    }
+    const tenancyMatch = /^\/tenancies\/([^/]+)\/(end|void)$/.exec(usub);
+    if (tenancyMatch) {
+      const tenancy = tenancies.find((t) => t.id === tenancyMatch[1]);
+      if (!tenancy) return this.error(route, 404, 'NOT_FOUND');
+      if (tenancy.voidedAt) return this.error(route, 409, 'VOIDED');
+      if (tenancyMatch[2] === 'end') {
+        const endDate = str('endDate') ?? '';
+        if (endDate < tenancy.startDate) return this.error(route, 422, 'INVALID_PERIOD');
+        tenancy.endDate = endDate;
+      } else {
+        tenancy.voidedAt = now();
+        tenancy.voidReason = str('reason') ?? null;
+      }
+      return this.reply(route, 200, tenancy);
+    }
+
+    if (usub === '/household') {
+      if (method === 'GET') return this.reply(route, 200, { data: household });
+      if (writable()) return writable();
+      const personId = str('personId') ?? '';
+      const validFrom = str('validFrom') ?? '';
+      const validTo = str('validTo') ?? null;
+      if (
+        household.some(
+          (h) =>
+            !h.voidedAt &&
+            h.personId === personId &&
+            overlaps(h.validFrom, h.validTo, validFrom, validTo),
+        )
+      )
+        return this.error(route, 409, 'HOUSEHOLD_OVERLAP');
+      const member: HouseholdMemberDto = {
+        id: randomUUID(),
+        unitId: unit.id,
+        personId,
+        fullName: person(personId)?.fullName ?? '',
+        relationship: str('relationship') ?? 'OTHER',
+        validFrom,
+        validTo,
+        voidedAt: null,
+      };
+      this.household.push(member);
+      return this.reply(route, 201, member);
+    }
+    const memberMatch = /^\/household\/([^/]+)\/(end|void)$/.exec(usub);
+    if (memberMatch) {
+      const member = household.find((h) => h.id === memberMatch[1]);
+      if (!member) return this.error(route, 404, 'NOT_FOUND');
+      if (member.voidedAt) return this.error(route, 409, 'VOIDED');
+      if (memberMatch[2] === 'end') {
+        const endDate = str('endDate') ?? '';
+        if (endDate < member.validFrom) return this.error(route, 422, 'INVALID_PERIOD');
+        member.validTo = endDate;
+      } else member.voidedAt = now();
+      return this.reply(route, 200, member);
+    }
+    return null;
+  }
+
   private invitationDto(i: FakeInvitation): InvitationDto {
     return {
       id: i.id,
@@ -570,13 +1255,17 @@ export class FakeApi {
   }
 
   private reply(route: Route, status: number, body?: unknown) {
+    // Echo a local console origin, so the suite also runs on another port (e.g. while a dev
+    // server holds 3000); anything else gets the default and fails CORS, like the real API.
+    const origin = route.request().headers().origin;
     return route.fulfill({
       status,
       headers: {
-        'Access-Control-Allow-Origin': ORIGIN,
+        'Access-Control-Allow-Origin':
+          origin && /^http:\/\/localhost:\d+$/.test(origin) ? origin : ORIGIN,
         'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Allow-Headers': 'Content-Type, Accept',
-        'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       body: body === undefined ? '' : JSON.stringify(body),

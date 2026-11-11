@@ -175,6 +175,35 @@ class PrismaResidentsUnitOfWork implements ResidentsUnitOfWork {
     }
   }
 
+  async listSelectablePersons(query: string | undefined): Promise<PersonRecord[]> {
+    const pattern = query ? `%${query.replace(/[%_\\]/g, '\\$&')}%` : null;
+    const ids = await this.tx.$queryRaw<{ id: string }[]>`
+      SELECT p."id" FROM "persons" p
+       WHERE p."organisation_id" = ${this.organisationId}::uuid AND p."status" = 'ACTIVE'
+         AND (${pattern}::text IS NULL OR p."full_name" ILIKE ${pattern} OR p."email" ILIKE ${pattern})
+         AND (
+              EXISTS (SELECT 1 FROM "ownerships" o WHERE o."person_id" = p."id" AND o."property_id" = ${this.property}::uuid)
+           OR EXISTS (SELECT 1 FROM "household_members" h WHERE h."person_id" = p."id" AND h."property_id" = ${this.property}::uuid)
+           OR EXISTS (SELECT 1 FROM "tenancy_occupants" oc JOIN "tenancies" t ON t."id" = oc."tenancy_id"
+                       WHERE oc."person_id" = p."id" AND t."property_id" = ${this.property}::uuid)
+           OR EXISTS (SELECT 1 FROM "vehicles" v WHERE v."person_id" = p."id" AND v."property_id" = ${this.property}::uuid)
+           OR NOT (
+                EXISTS (SELECT 1 FROM "ownerships" WHERE "person_id" = p."id")
+             OR EXISTS (SELECT 1 FROM "household_members" WHERE "person_id" = p."id")
+             OR EXISTS (SELECT 1 FROM "tenancy_occupants" WHERE "person_id" = p."id")
+             OR EXISTS (SELECT 1 FROM "vehicles" WHERE "person_id" = p."id")
+           )
+         )
+       ORDER BY p."full_name"
+       LIMIT 200`;
+    const rows = await this.tx.person.findMany({
+      where: { organisationId: this.organisationId, id: { in: ids.map((r) => r.id) } },
+      select: PERSON_SELECT,
+      orderBy: { fullName: 'asc' },
+    });
+    return rows.map(toPerson);
+  }
+
   async listPropertyResidents(today: IsoDate): Promise<PropertyResidentRecord[]> {
     const rows = await this.tx.$queryRaw<
       { person_id: string; unit_id: string; unit_number: string; role: string }[]

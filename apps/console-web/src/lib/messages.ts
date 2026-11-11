@@ -37,6 +37,18 @@ const ERROR_MESSAGES: Record<string, string> = {
   PROPERTY_FINANCIALS_LOCKED:
     'Country and currency can only change while the property is being set up.',
   INVALID_STATE_TRANSITION: 'This change is not possible in the current state.',
+  PERSON_EMAIL_TAKEN: 'Another resident in this organisation already uses this email address.',
+  PERSON_ALREADY_LINKED: 'This resident has already linked their profile to an account.',
+  PERSON_HAS_NO_EMAIL: 'Add an email address to this resident before inviting them.',
+  PLATE_TAKEN: 'A vehicle with this plate is already registered at this property.',
+  OWNERSHIP_CONFLICT:
+    'Owners are already recorded from this date or later. Void that change first if it was a mistake.',
+  TENANCY_OVERLAP: 'This unit already has a tenancy during that period.',
+  HOUSEHOLD_OVERLAP: 'This person is already in the household during that period.',
+  INVALID_PERIOD: 'The end date cannot be before the start date.',
+  VOIDED: 'This record was voided and can no longer be changed.',
+  RESIDENCY_RULE_VIOLATED:
+    'This change would leave the records inconsistent: owner shares must add up to one, and periods cannot overlap.',
 };
 
 const GENERIC = 'Something went wrong. Try again, and contact support if it keeps happening.';
@@ -92,6 +104,23 @@ export const UNIT_TYPES = [
   'STORAGE',
   'OTHER',
 ] as const;
+export const HOUSEHOLD_RELATIONSHIPS = [
+  'SPOUSE_OR_PARTNER',
+  'CHILD',
+  'PARENT',
+  'OTHER_RELATIVE',
+  'DOMESTIC_STAFF',
+  'OTHER',
+] as const;
+
+const RESIDENT_ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Owner',
+  TENANT: 'Tenant',
+  HOUSEHOLD_MEMBER: 'Household member',
+};
+
+export const residentRoleLabel = (role: string) => RESIDENT_ROLE_LABELS[role] ?? enumLabel(role);
+
 export const COMMON_AREA_TYPES = [
   'LOBBY',
   'POOL',

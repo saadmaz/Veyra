@@ -239,6 +239,36 @@ a {
   align-items: end;
 }
 
+/* Small one-field forms inside a list item (e.g. record a move-out date). */
+.form--compact {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 14rem));
+}
+
+.list__item > .form {
+  flex-basis: 100%;
+}
+
+/* Spans every column of an inline form (groups of rows, notes). */
+.form__full {
+  grid-column: 1 / -1;
+}
+
+.fieldset {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.fieldset legend {
+  padding: 0 var(--space-1);
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
 .form__row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));

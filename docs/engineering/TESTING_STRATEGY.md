@@ -224,6 +224,35 @@ expiry, rehash on sign-in, idempotent sign-out).
   calendar dates, day-before across month/year/leap boundaries, inclusive overlap, primary
   tenant rule, phone/email/plate normalisation.
 
+### Part 4: resident console
+
+- `apps/console-web` unit (+9, `test/residents.test.ts`): share parsing ("1", "1/2", rejects
+  decimals, percentages and shares above the whole), exact share sums with BigInt (thirds,
+  millionths), today in the property's time zone across a year boundary (Karachi vs New York),
+  calendar dates formatted without time-zone shifts, inclusive period status (current, ended,
+  upcoming, voided), ownership changes grouped by start date.
+- `apps/api` integration (+1): the people picker offers the property's own and unattached
+  profiles, not another property's residents, and filters by name or email.
+- `apps/console-web` browser journeys (+9, desktop and phone, axe WCAG 2.2 AA, no horizontal
+  scroll), `e2e/residents.spec.ts`:
+  - Admin records two owners (a 1/2 + 1/3 split is refused in the browser before any request),
+    a tenant, a household member and a vehicle; the property's resident list shows each role.
+  - Admin edits a profile, adds and removes an emergency contact (DELETE), and creates an app
+    invitation link.
+  - Admin records a move-out (inclusive end date), voids a tenancy and an ownership change with a
+    reason, and sees the API's refusal of a backdated transfer (`OWNERSHIP_CONFLICT`).
+  - A property manager manages residents of their property and gets "not found" for another
+    property's unit.
+  - A finance officer sees unit details but no resident data, and the console never requests
+    resident endpoints for them (asserted on the request log, not only on what is shown).
+  - An archived unit shows its records with no change controls.
+  - The people picker offers an unattached profile but not another property's resident.
+  - An owner finds their unit under "Your homes", sees who lives there and no staff controls; a
+    household member sees the unit but not the list of residents.
+- `e2e/fake-api.ts` mirrors the resident endpoints, permissions and conflict codes. Its request
+  shapes were checked once against the real API (local PostgreSQL and Redis, 2026-11-11); an
+  automated full-stack smoke test is still outstanding.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

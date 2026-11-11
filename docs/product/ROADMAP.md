@@ -22,10 +22,10 @@ Stages are the product view; phases are the engineering increments that deliver 
 | Phase | Deliverable                              | Status |
 | ----- | ---------------------------------------- | ------ |
 | 0     | Repository audit and discovery           | Architecture docs done; product discovery (Stage 0) outstanding |
-| 1     | Monorepo and engineering foundation      | Done locally (lint, typecheck, 65 tests, build pass); CI and Docker pending (see below) |
+| 1     | Monorepo and engineering foundation      | Done (CI green; Docker Compose verified locally 2026-11-11) |
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
-| 4     | Resident and unit management             | In progress: Parts 1-3 done; Part 4 (console) next |
+| 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
@@ -64,7 +64,7 @@ Verified locally on 2026-11-08 (Windows 11, Bun 1.4.4, Node 26, TypeScript 7.0, 
 | 7 | Web apps (`console-web`, `marketing-web`, `admin-web`) | ✅ 4 tests; all three `next build` successfully |
 | 8 | Mobile app (`resident-mobile`, Expo SDK 58 / React Native 0.88) | ✅ 3 tests; typecheck clean. Not yet run on a device |
 | 9 | Shared packages: `api-contracts`, `design-tokens`, `emails`, `web-config` | ✅ 11 tests |
-| 10 | Docker Compose for PostgreSQL + Redis | ⏳ Not run (Docker not installed on the dev machine) |
+| 10 | Docker Compose for PostgreSQL + Redis | ✅ Verified 2026-11-11 (Docker Desktop, Node 24): both healthy, roles bootstrapped, migrations applied as `veyra_owner`, API readiness reports database and Redis up, worker ready |
 | 11 | CI workflow with isolated Postgres/Redis | ✅ Green on every PR since #4; required to merge |
 
 ## Phase 2 plan (Identity and multi-tenancy)
@@ -102,7 +102,7 @@ ownership shares as exact fractions; the resident mobile app comes after Phase 4
 | 1 | Data foundation: persons, ownerships (exact shares summing to 1, deferred check), tenancies with occupants, household members, emergency contacts, vehicles; effective dating, voiding, exclusion constraints, RLS | ✅ Done |
 | 2 | Derived owner/tenant/household access (unit scope, today in the property's time zone); resident invitations linking a profile to a login; my units, unit detail, current residents | ✅ Done |
 | 3 | Staff API: people (property-scoped visibility, organisation directory), set owners from a date (first owner and transfer), void, tenancies (move-in/out, void), household, vehicles, emergency contacts; archiving refused while occupied; per-unit locking | ✅ Done |
-| 4 | Console: unit page with residents, property resident list | Next |
+| 4 | Console: unit page with owners, tenancies, household and vehicles; property resident list; resident page with profile, records, emergency contacts and app invitation; browser journeys per role | ✅ Done |
 
 ## Release gates
 
@@ -113,7 +113,15 @@ readiness, user training and release communication, and known limitations docume
 
 ## Technical debt
 
-- Docker Compose and the API's real database/Redis readiness path not yet exercised locally.
+- Resident console: the people picker (`GET …/properties/:id/persons`) returns at most 200
+  people and the console does not use its `query` filter yet; add type-ahead search when a
+  property has more.
+- Resident console: no UI for vehicles linked to a person (not a unit), archived vehicles,
+  archiving a resident profile, or the full ownership/tenancy history of archived units' numbers
+  (shown as "Archived unit"). The resident list has no paging or search (the API returns all
+  current residents).
+- Void reasons use the browser's native prompt (accessible, but plain); replace with the design
+  system's dialog when one exists.
 - Mobile app not yet launched on a device or emulator.
 - `bunfig.toml` uses the hoisted linker for React Native; revisit if Bun's isolated linker gains Metro support.
 - Structured logging (pino + OpenTelemetry) not yet added; Nest's default logger is in use.
@@ -147,6 +155,9 @@ readiness, user training and release communication, and known limitations docume
   The console now knows its sources (self + the API origin); add its CSP next.
 - Console: no membership actions (suspend/revoke) or organisation settings form in the UI yet
   (the API supports both); no localisation framework yet (error texts are centralised in
-  `src/lib/messages.ts`); browser tests use a fake API, so a full-stack smoke test (console +
-  API + database + Redis) is still missing.
+  `src/lib/messages.ts`); browser tests use a fake API, so an automated full-stack smoke test
+  (console + API + database + Redis) is still missing. The Phase 4 console's requests were
+  checked once by hand against the real API (2026-11-11).
+- One intermittent failure of an `organisations.int.test.ts` case was seen once on a heavily
+  loaded machine (2026-11-11) and not reproduced in three reruns; watch CI for repeats.
 - Dependency and secret scanning not yet in CI.
