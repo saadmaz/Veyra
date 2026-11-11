@@ -195,6 +195,28 @@ pending for finance) or `UNKNOWN_REFERENCE`. Only the signed callback records an
 never a browser redirect. The sandbox gateway (no money moves) is enabled by
 `PAYMENT_SANDBOX_SECRET` and refused in production.
 
+### Controls and reports (Phase 6 Part 4)
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| GET | `periods` | read |
+| POST | `periods/{id}/close` | manage; nothing posts into a closed period (409 `PERIOD_CLOSED`); 409 `ALREADY_CLOSED` |
+| POST | `approvals` | manage; one of `{ action: REVERSE_PAYMENT, paymentId }`, `{ action: REFUND, paymentId, amount, method }`, `{ action: WRITE_OFF, invoiceId, amount }`, `{ action: REOPEN_PERIOD, periodId }`, each with a `reason`; checked now (422/409) and again when approved |
+| GET | `approvals?status=`, `approvals/{id}` | read |
+| POST | `approvals/{id}/approve` | `property.finance.approve`, never the requester (403 `SAME_PERSON`); `{ note? }`; carries the action out in the same transaction; 409 `ALREADY_DECIDED`, or a 409 when the action is no longer possible (e.g. the payment was meanwhile allocated) |
+| POST | `approvals/{id}/reject` | `property.finance.approve`, never the requester |
+| POST | `approvals/{id}/cancel` | manage; the requester only (403 `NOT_REQUESTER`) |
+| POST | `invoices/{id}/credit-notes` | manage; `{ lineNumber, amount, reason }`; within the line and what the invoice still owes (release payments first); numbered `CRN-000042`; no approval needed |
+| GET | `units/{unitId}/statement?paidBy=OWNERS\|TENANTS&tenancyId=` | read; invoices, credit notes, write-offs, payments, refunds and reversals with a running balance (positive: owed) |
+| GET | `ageing?asOf=` | read; what each unit and party owes now, bucketed by days past due on `asOf` (default today): `current`, `days1to30`, `days31to60`, `days61to90`, `over90` |
+
+What each approved action does: a **refund** pays back unused payment money (debit unit credit,
+credit bank or cash); a **write-off** gives up on what an invoice owes (debit bad debts, credit
+receivables); a **payment reversal** releases the payment's allocations and reverses its ledger
+entry (a bounced cheque), after which the payment is ignored; **reopening** a period lets
+postings into it again. Invoices show `credited` and `overdue`; payments show `refunded` and
+`reversedOn`.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

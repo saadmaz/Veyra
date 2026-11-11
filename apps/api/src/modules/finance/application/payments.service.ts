@@ -152,9 +152,11 @@ export class PaymentsService {
       if (invoice.billTo !== payment.paidBy || invoice.tenancyId !== payment.tenancyId) {
         throw invalid('This invoice is addressed to someone else than whoever made this payment');
       }
-      const unused = payment.amountMinor - activeTotal(payment.allocations);
+      if (payment.reversedOn)
+        throw new ApiError(409, 'PAYMENT_REVERSED', 'This payment was reversed');
+      const unused = payment.amountMinor - activeTotal(payment.allocations) - payment.refundedMinor;
       if (amountMinor > unused) throw invalid('That is more than what is left of this payment');
-      if (amountMinor > invoice.totalMinor - invoice.paidMinor) {
+      if (amountMinor > invoice.totalMinor - invoice.paidMinor - invoice.creditedMinor) {
         throw invalid('That is more than what is left to pay on this invoice');
       }
       const entryId = await postAllocationEntry(uow, {

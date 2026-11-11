@@ -49,6 +49,8 @@ export const PERMISSIONS = [
   'property.finance.read',
   /** Set up the property's finance, manage charge types and recurring charges, run billing, issue and discard invoices. */
   'property.finance.manage',
+  /** Approve or reject someone else's request for a reversal, refund, write-off or period reopening. */
+  'property.finance.approve',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

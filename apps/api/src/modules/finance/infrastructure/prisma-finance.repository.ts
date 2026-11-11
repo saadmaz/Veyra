@@ -11,8 +11,11 @@ import {
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
 import {
+  type AccountingPeriodRecord,
   type AllocationRecord,
   AlreadyBilled,
+  type ApprovalRecord,
+  type ApprovalStatus,
   type ChargeTypeRecord,
   type FinanceAuditEvent,
   type FinanceRepository,
@@ -24,12 +27,14 @@ import {
   type NewInvoice,
   type NewLedgerLine,
   type NewPayment,
+  type OutstandingInvoice,
   type Party,
   type PaymentIntentRecord,
   type PaymentRecord,
   type PeriodState,
   type PropertyFinanceInfo,
   type RecurringChargeRecord,
+  type StatementData,
   type UnitForBilling,
 } from '../application/finance-ports';
 import {
@@ -122,10 +127,12 @@ const INVOICE_SELECT = {
   currency: true,
   totalMinor: true,
   allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
+  credits: { select: { amountMinor: true } },
   journalEntryId: true,
   createdAt: true,
   issuedAt: true,
   unit: { select: { number: true } },
+  property: { select: { timeZone: true } },
   recipients: {
     select: {
       personId: true,
@@ -151,6 +158,8 @@ type InvoiceRow = {
   currency: string;
   totalMinor: bigint;
   allocations: { amountMinor: bigint }[];
+  credits: { amountMinor: bigint }[];
+  property: { timeZone: string };
   journalEntryId: string | null;
   createdAt: Date;
   issuedAt: Date | null;
@@ -163,7 +172,18 @@ type InvoiceRow = {
   }[];
 };
 
+/** Today's calendar date in an IANA time zone. */
+const todayIn = (timeZone: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+
 const toInvoice = (row: InvoiceRow): InvoiceRecord => ({
+  overdue:
+    row.status === 'ISSUED' &&
+    toIso(row.dueDate) < todayIn(row.property.timeZone) &&
+    row.totalMinor -
+      row.allocations.reduce((sum, a) => sum + a.amountMinor, 0n) -
+      row.credits.reduce((sum, c) => sum + c.amountMinor, 0n) >
+      0n,
   id: row.id,
   invoiceNumber: row.invoiceNumber,
   status: row.status,
@@ -186,6 +206,7 @@ const toInvoice = (row: InvoiceRow): InvoiceRecord => ({
   currency: row.currency,
   totalMinor: row.totalMinor,
   paidMinor: row.allocations.reduce((sum, a) => sum + a.amountMinor, 0n),
+  creditedMinor: row.credits.reduce((sum, c) => sum + c.amountMinor, 0n),
   journalEntryId: row.journalEntryId,
   createdAt: row.createdAt,
   issuedAt: row.issuedAt,
@@ -226,25 +247,96 @@ const PAYMENT_SELECT = {
   createdAt: true,
   unit: { select: { number: true } },
   allocations: { select: ALLOCATION_SELECT, orderBy: { createdAt: 'asc' as const } },
+  refunds: { select: { amountMinor: true } },
+  reversal: { select: { reversedOn: true } },
 } as const;
 
 type PaymentRow = Omit<
   PaymentRecord,
-  'unitNumber' | 'receivedOn' | 'allocations' | 'receiptNumber'
+  'unitNumber' | 'receivedOn' | 'allocations' | 'receiptNumber' | 'refundedMinor' | 'reversedOn'
 > & {
+  refunds: { amountMinor: bigint }[];
+  reversal: { reversedOn: Date } | null;
   receiptNumber: bigint | null;
   receivedOn: Date;
   unit: { number: string };
   allocations: AllocationRow[];
 };
 
-const toPayment = ({ unit, allocations, ...row }: PaymentRow): PaymentRecord => ({
+const toPayment = ({
+  unit,
+  allocations,
+  refunds,
+  reversal,
+  ...row
+}: PaymentRow): PaymentRecord => ({
+  refundedMinor: refunds.reduce((sum, r) => sum + r.amountMinor, 0n),
+  reversedOn: reversal ? toIso(reversal.reversedOn) : null,
   ...row,
   receiptNumber: row.receiptNumber ?? 0n,
   currency: row.currency.trim(),
   unitNumber: unit.number,
   receivedOn: toIso(row.receivedOn),
   allocations: allocations.map(toAllocation),
+});
+
+const PERIOD_SELECT = {
+  id: true,
+  startDate: true,
+  endDate: true,
+  status: true,
+  closedAt: true,
+} as const;
+
+const toPeriod = (row: {
+  id: string;
+  startDate: Date;
+  endDate: Date;
+  status: AccountingPeriodRecord['status'];
+  closedAt: Date | null;
+}): AccountingPeriodRecord => ({
+  ...row,
+  startDate: toIso(row.startDate),
+  endDate: toIso(row.endDate),
+});
+
+const APPROVAL_SELECT = {
+  id: true,
+  action: true,
+  status: true,
+  paymentId: true,
+  invoiceId: true,
+  periodId: true,
+  amountMinor: true,
+  refundMethod: true,
+  reason: true,
+  requestedByUserId: true,
+  decidedByUserId: true,
+  decidedAt: true,
+  decisionNote: true,
+  executedAt: true,
+  createdAt: true,
+  requestedBy: { select: { displayName: true } },
+  decidedBy: { select: { displayName: true } },
+  property: { select: { currency: true } },
+} as const;
+
+type ApprovalRow = Omit<
+  ApprovalRecord,
+  'requestedByName' | 'decidedByName' | 'refundMethod' | 'currency'
+> & {
+  property: { currency: string };
+  refundMethod: string | null;
+  requestedBy: { displayName: string };
+  decidedBy: { displayName: string } | null;
+};
+
+const toApproval = ({ requestedBy, decidedBy, property, ...row }: ApprovalRow): ApprovalRecord => ({
+  ...row,
+  currency: property.currency.trim(),
+  refundMethod: row.refundMethod as ApprovalRecord['refundMethod'],
+  requestedByName: requestedBy.displayName,
+  decidedByName: decidedBy?.displayName ?? null,
 });
 
 class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
@@ -562,9 +654,24 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
       },
     });
     if (!row) return null;
+    const creditRows = await this.tx.invoiceCredit.findMany({
+      where: { ...this.scope, invoiceId: id },
+      select: {
+        id: true,
+        kind: true,
+        creditNumber: true,
+        lineNumber: true,
+        amountMinor: true,
+        reason: true,
+        creditedOn: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
     const { lines, ...rest } = row;
     return {
       ...toInvoice(rest),
+      credits: creditRows.map((c) => ({ ...c, creditedOn: toIso(c.creditedOn) })),
       lines: lines.map((line) => ({
         lineNumber: line.lineNumber,
         chargeTypeId: line.chargeTypeId,
@@ -623,7 +730,7 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
   }
 
   async postEntry(
-    source: 'INVOICE' | 'PAYMENT' | 'ALLOCATION',
+    source: 'INVOICE' | 'PAYMENT' | 'ALLOCATION' | 'CREDIT_NOTE' | 'WRITE_OFF' | 'REFUND',
     description: string,
     entryDate: IsoDate,
     currency: string,
@@ -733,18 +840,28 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
     party: Party,
   ): Promise<{ paymentId: string; remainingMinor: bigint }[]> {
     const rows = await this.tx.payment.findMany({
-      where: { ...this.scope, unitId, paidBy: party.billTo, tenancyId: party.tenancyId },
+      where: {
+        ...this.scope,
+        unitId,
+        paidBy: party.billTo,
+        tenancyId: party.tenancyId,
+        reversal: null,
+      },
       select: {
         id: true,
         amountMinor: true,
         allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
+        refunds: { select: { amountMinor: true } },
       },
       orderBy: [{ receivedOn: 'asc' }, { receiptNumber: 'asc' }],
     });
     return rows
       .map((r) => ({
         paymentId: r.id,
-        remainingMinor: r.amountMinor - r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n),
+        remainingMinor:
+          r.amountMinor -
+          r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n) -
+          r.refunds.reduce((sum, f) => sum + f.amountMinor, 0n),
       }))
       .filter((r) => r.remainingMinor > 0n);
   }
@@ -765,13 +882,17 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
         id: true,
         totalMinor: true,
         allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
+        credits: { select: { amountMinor: true } },
       },
       orderBy: [{ dueDate: 'asc' }, { invoiceNumber: 'asc' }],
     });
     return rows
       .map((r) => ({
         invoiceId: r.id,
-        outstandingMinor: r.totalMinor - r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n),
+        outstandingMinor:
+          r.totalMinor -
+          r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n) -
+          r.credits.reduce((sum, c) => sum + c.amountMinor, 0n),
       }))
       .filter((r) => r.outstandingMinor > 0n);
   }
@@ -898,6 +1019,315 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
         outcome: input.outcome,
       },
     });
+  }
+
+  async paymentEntryId(paymentId: string): Promise<string> {
+    const row = await this.tx.payment.findFirst({
+      where: { ...this.scope, id: paymentId },
+      select: { journalEntryId: true },
+    });
+    if (!row) throw new Error('Payment not found');
+    return row.journalEntryId;
+  }
+
+  async postReversal(entryId: string, date: IsoDate, description: string): Promise<string> {
+    const original = await this.tx.journalEntry.findFirst({
+      where: { ...this.scope, id: entryId },
+      select: {
+        currency: true,
+        lines: {
+          select: { accountId: true, unitId: true, debitMinor: true, creditMinor: true },
+          orderBy: { lineNumber: 'asc' },
+        },
+      },
+    });
+    if (!original) throw new Error('Entry to reverse not found');
+    const currency = original.currency.trim();
+    const { id } = await this.tx.journalEntry.create({
+      data: {
+        ...this.scope,
+        entryDate: toDate(date),
+        description: description.slice(0, 500),
+        source: 'REVERSAL',
+        reversesEntryId: entryId,
+        currency,
+        createdByUserId: this.userId,
+      },
+      select: { id: true },
+    });
+    await this.tx.journalLine.createMany({
+      data: original.lines.map((line, index) => ({
+        ...this.scope,
+        entryId: id,
+        lineNumber: index + 1,
+        accountId: line.accountId,
+        unitId: line.unitId,
+        debitMinor: line.creditMinor,
+        creditMinor: line.debitMinor,
+        currency,
+      })),
+    });
+    await this.tx.journalEntry.update({
+      where: { id },
+      data: { status: 'POSTED', postedByUserId: this.userId },
+    });
+    return id;
+  }
+
+  async periods(): Promise<AccountingPeriodRecord[]> {
+    const rows = await this.tx.accountingPeriod.findMany({
+      where: this.scope,
+      select: PERIOD_SELECT,
+      orderBy: { startDate: 'desc' },
+      take: 120,
+    });
+    return rows.map(toPeriod);
+  }
+
+  async period(id: string): Promise<AccountingPeriodRecord | null> {
+    const row = await this.tx.accountingPeriod.findFirst({
+      where: { ...this.scope, id },
+      select: PERIOD_SELECT,
+    });
+    return row && toPeriod(row);
+  }
+
+  async setPeriodStatus(id: string, status: 'OPEN' | 'CLOSED'): Promise<void> {
+    await this.tx.accountingPeriod.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data:
+        status === 'CLOSED'
+          ? { status, closedAt: new Date(), closedByUserId: this.userId }
+          : { status, closedAt: null, closedByUserId: null },
+    });
+  }
+
+  async createApproval(input: {
+    action: ApprovalRecord['action'];
+    paymentId: string | null;
+    invoiceId: string | null;
+    periodId: string | null;
+    amountMinor: bigint | null;
+    refundMethod: ApprovalRecord['refundMethod'];
+    reason: string;
+  }): Promise<string> {
+    if (!this.userId) throw new Error('Approval requests need a signed-in user');
+    const { id } = await this.tx.financeApproval.create({
+      data: { ...this.scope, ...input, requestedByUserId: this.userId },
+      select: { id: true },
+    });
+    return id;
+  }
+
+  async approval(id: string, options: { lock?: boolean } = {}): Promise<ApprovalRecord | null> {
+    if (options.lock) {
+      await this.tx.$queryRaw`
+        SELECT 1 FROM "finance_approvals"
+         WHERE "id" = ${id}::uuid AND "organisation_id" = ${this.organisationId}::uuid
+           AND "property_id" = ${this.propertyId}::uuid
+         FOR UPDATE`;
+    }
+    const row = await this.tx.financeApproval.findFirst({
+      where: { ...this.scope, id },
+      select: APPROVAL_SELECT,
+    });
+    return row && toApproval(row);
+  }
+
+  async approvals(filter: { status?: ApprovalStatus }): Promise<ApprovalRecord[]> {
+    const rows = await this.tx.financeApproval.findMany({
+      where: { ...this.scope, ...(filter.status ? { status: filter.status } : {}) },
+      select: APPROVAL_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 200,
+    });
+    return rows.map(toApproval);
+  }
+
+  async decideApproval(
+    id: string,
+    status: Exclude<ApprovalStatus, 'PENDING'>,
+    note: string | null,
+  ): Promise<void> {
+    const now = new Date();
+    await this.tx.financeApproval.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: {
+        status,
+        decidedByUserId: this.userId,
+        decidedAt: now,
+        decisionNote: note,
+        executedAt: status === 'APPROVED' ? now : null,
+      },
+    });
+  }
+
+  async createInvoiceCredit(input: {
+    unitId: string;
+    invoiceId: string;
+    kind: 'CREDIT_NOTE' | 'WRITE_OFF';
+    lineNumber: number | null;
+    amountMinor: bigint;
+    reason: string;
+    creditedOn: IsoDate;
+    journalEntryId: string;
+    approvalId: string | null;
+  }): Promise<string> {
+    const { id } = await this.tx.invoiceCredit.create({
+      data: {
+        ...this.scope,
+        ...input,
+        creditedOn: toDate(input.creditedOn),
+        createdByUserId: this.userId,
+      },
+      select: { id: true },
+    });
+    return id;
+  }
+
+  async createRefund(input: {
+    unitId: string;
+    paymentId: string;
+    amountMinor: bigint;
+    method: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE';
+    refundedOn: IsoDate;
+    journalEntryId: string;
+    approvalId: string;
+  }): Promise<void> {
+    await this.tx.paymentRefund.create({
+      data: {
+        ...this.scope,
+        ...input,
+        refundedOn: toDate(input.refundedOn),
+        createdByUserId: this.userId,
+      },
+    });
+  }
+
+  async createReversal(input: {
+    paymentId: string;
+    reversedOn: IsoDate;
+    journalEntryId: string;
+    approvalId: string;
+  }): Promise<void> {
+    await this.tx.paymentReversal.create({
+      data: {
+        ...this.scope,
+        ...input,
+        reversedOn: toDate(input.reversedOn),
+        createdByUserId: this.userId,
+      },
+    });
+  }
+
+  async statementData(unitId: string, party: Party): Promise<StatementData> {
+    const partyWhere = { unitId, tenancyId: party.tenancyId };
+    const [invoices, credits, payments] = await Promise.all([
+      this.tx.invoice.findMany({
+        where: { ...this.scope, ...partyWhere, billTo: party.billTo, status: 'ISSUED' },
+        select: { invoiceNumber: true, issueDate: true, totalMinor: true, issuedAt: true },
+      }),
+      this.tx.invoiceCredit.findMany({
+        where: {
+          ...this.scope,
+          unitId,
+          invoice: { billTo: party.billTo, tenancyId: party.tenancyId },
+        },
+        select: {
+          kind: true,
+          creditNumber: true,
+          creditedOn: true,
+          amountMinor: true,
+          createdAt: true,
+          invoice: { select: { invoiceNumber: true } },
+        },
+      }),
+      this.tx.payment.findMany({
+        where: { ...this.scope, ...partyWhere, paidBy: party.billTo },
+        select: {
+          receiptNumber: true,
+          receivedOn: true,
+          amountMinor: true,
+          createdAt: true,
+          refunds: { select: { refundedOn: true, amountMinor: true, createdAt: true } },
+          reversal: { select: { reversedOn: true, createdAt: true } },
+        },
+      }),
+    ]);
+    return {
+      invoices: invoices.map((i) => ({
+        invoiceNumber: i.invoiceNumber ?? 0n,
+        issueDate: toIso(i.issueDate ?? new Date(0)),
+        totalMinor: i.totalMinor,
+        issuedAt: i.issuedAt ?? new Date(0),
+      })),
+      credits: credits.map((c) => ({
+        kind: c.kind,
+        creditNumber: c.creditNumber,
+        invoiceNumber: c.invoice.invoiceNumber,
+        creditedOn: toIso(c.creditedOn),
+        amountMinor: c.amountMinor,
+        createdAt: c.createdAt,
+      })),
+      payments: payments.map((p) => ({
+        receiptNumber: p.receiptNumber ?? 0n,
+        receivedOn: toIso(p.receivedOn),
+        amountMinor: p.amountMinor,
+        createdAt: p.createdAt,
+      })),
+      refunds: payments.flatMap((p) =>
+        p.refunds.map((r) => ({
+          receiptNumber: p.receiptNumber ?? 0n,
+          refundedOn: toIso(r.refundedOn),
+          amountMinor: r.amountMinor,
+          createdAt: r.createdAt,
+        })),
+      ),
+      reversals: payments.flatMap((p) =>
+        p.reversal
+          ? [
+              {
+                receiptNumber: p.receiptNumber ?? 0n,
+                reversedOn: toIso(p.reversal.reversedOn),
+                amountMinor: p.amountMinor,
+                createdAt: p.reversal.createdAt,
+              },
+            ]
+          : [],
+      ),
+    };
+  }
+
+  async outstandingInvoices(): Promise<OutstandingInvoice[]> {
+    const rows = await this.tx.invoice.findMany({
+      where: { ...this.scope, status: 'ISSUED' },
+      select: {
+        id: true,
+        unitId: true,
+        billTo: true,
+        tenancyId: true,
+        dueDate: true,
+        totalMinor: true,
+        unit: { select: { number: true } },
+        allocations: { where: { releasedAt: null }, select: { amountMinor: true } },
+        credits: { select: { amountMinor: true } },
+      },
+      orderBy: [{ dueDate: 'asc' }, { invoiceNumber: 'asc' }],
+    });
+    return rows
+      .map((r) => ({
+        invoiceId: r.id,
+        unitId: r.unitId,
+        unitNumber: r.unit.number,
+        billTo: r.billTo,
+        tenancyId: r.tenancyId,
+        dueDate: toIso(r.dueDate),
+        outstandingMinor:
+          r.totalMinor -
+          r.allocations.reduce((sum, a) => sum + a.amountMinor, 0n) -
+          r.credits.reduce((sum, c) => sum + c.amountMinor, 0n),
+      }))
+      .filter((r) => r.outstandingMinor > 0n);
   }
 
   async audit(event: FinanceAuditEvent): Promise<void> {

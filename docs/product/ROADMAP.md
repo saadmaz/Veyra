@@ -27,7 +27,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
-| 6     | Finance and billing                      | In progress (Parts 1-3 done) |
+| 6     | Finance and billing                      | In progress (Parts 1-4 done) |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
@@ -139,7 +139,8 @@ Decisions (owner, 2026-11-11):
   idempotent callbacks and a sandbox adapter. No real provider yet.
 - **No late fees or penalties** in Phase 6: overdue status and ageing only.
 - **Maker-checker** (a second person approves) only for risky actions: reversals, write-offs,
-  refunds and reopening a closed period.
+  refunds and reopening a closed period. Any finance officer or organisation admin other than
+  the requester may approve (owner decision, 2026-11-12).
 - **No tax lines yet**; leave room for a per-country tax adapter.
 - **Allocation:** oldest invoice first; an overpayment is kept as unit credit and applied
   automatically to later invoices; finance staff can reallocate.
@@ -155,7 +156,7 @@ ledger lines; callbacks are idempotent; no card data is stored.
 | 1 | Ledger foundation: accounts per property, accounting periods, journal entries and lines; posting checks (balance, open period, active accounts, currency) with gap-free numbering; posted entries immutable for every role; mirrored reversals, at most once; property currency fixed once entries exist; RLS | ✅ Done |
 | 2 | Finance roles and billing: finance officer permissions, the default chart of accounts and monthly periods per property, charge types with their liable party, recurring (flat or per sqm) and one-off charges, invoice issue posting to the ledger; API | ✅ Done |
 | 3 | Payments: manual payments and receipts, oldest-first allocation, unit credit and reallocation; payment-gateway port with signed idempotent callbacks and a sandbox adapter | ✅ Done |
-| 4 | Controls and reports: maker-checker for reversals, write-offs, refunds and period reopening; credit notes; statements, overdue status and ageing | |
+| 4 | Controls and reports: maker-checker for reversals, write-offs, refunds and period reopening; credit notes; statements, overdue status and ageing | ✅ Done |
 | 5 | Console: finance screens for staff; residents' invoices, receipts, statement and bank-transfer reference; browser journeys; Phase 6 exit review | |
 
 ## Release gates
@@ -178,6 +179,11 @@ readiness, user training and release communication, and known limitations docume
   the intent pending with no screen to resolve it yet; payment lists return the 200 most recent;
   payments cannot be reversed or refunded until Part 4; no real payment provider adapter yet
   (owner decision); callbacks are not rate-limited (they are signature-checked first).
+- Controls: statements cover a party's whole history (no date range or opening balance yet);
+  ageing is computed from what is outstanding now, so an `asOf` date in the past does not
+  reconstruct what was owed then; approvals list the 200 most recent; no notification tells an
+  approver that a request is waiting (notifications module); refunds go to the payment's unit
+  credit only (no refund of a deposit or of an overpayment across parties).
 - Resident console: the people picker (`GET …/properties/:id/persons`) returns at most 200
   people and the console does not use its `query` filter yet; add type-ahead search when a
   property has more.

@@ -894,7 +894,11 @@ export interface InvoiceDto {
   total: MoneyDto;
   /** Paid so far (allocations not released). */
   paid: MoneyDto;
+  /** Credit notes and write-offs. */
+  credited: MoneyDto;
   outstanding: MoneyDto;
+  /** Issued, not settled and past its due date. */
+  overdue: boolean;
   createdAt: string;
   issuedAt: string | null;
 }
@@ -908,8 +912,20 @@ export interface InvoiceLineDto {
   billingMonth: string | null;
 }
 
+export interface InvoiceCreditDto {
+  id: string;
+  kind: 'CREDIT_NOTE' | 'WRITE_OFF';
+  /** "CRN-000042" for credit notes; null for write-offs. */
+  number: string | null;
+  lineNumber: number | null;
+  amount: MoneyDto;
+  reason: string;
+  creditedOn: string;
+}
+
 export interface InvoiceDetailDto extends InvoiceDto {
   lines: InvoiceLineDto[];
+  credits: InvoiceCreditDto[];
   journalEntryId: string | null;
 }
 
@@ -973,6 +989,9 @@ export interface PaymentDto {
   allocated: MoneyDto;
   /** Kept as the unit's credit for this party's later invoices. */
   unallocated: MoneyDto;
+  refunded: MoneyDto;
+  /** Set when the payment was reversed (e.g. a bounced cheque). */
+  reversedOn: string | null;
   receivedOn: string;
   reference: string | null;
   allocations: PaymentAllocationDto[];
@@ -1016,4 +1035,111 @@ export interface CreatePaymentIntentResponse {
   intent: PaymentIntentDto;
   /** Where the payer completes the payment with the provider. */
   checkoutUrl: string;
+}
+
+// Controls and reports (Phase 6 Part 4).
+
+export type FinanceApprovalAction = 'REVERSE_PAYMENT' | 'REFUND' | 'WRITE_OFF' | 'REOPEN_PERIOD';
+export type FinanceApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+/** A risky action waiting for, or decided by, a second person. */
+export interface FinanceApprovalDto {
+  id: string;
+  action: FinanceApprovalAction;
+  status: FinanceApprovalStatus;
+  paymentId: string | null;
+  invoiceId: string | null;
+  periodId: string | null;
+  amount: MoneyDto | null;
+  refundMethod: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | null;
+  reason: string;
+  requestedBy: { userId: string; name: string };
+  decidedBy: { userId: string; name: string } | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+}
+
+export type FinanceApprovalRequest =
+  | { action: 'REVERSE_PAYMENT'; paymentId: string; reason: string }
+  | {
+      action: 'REFUND';
+      paymentId: string;
+      amount: string;
+      method: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE';
+      reason: string;
+    }
+  | { action: 'WRITE_OFF'; invoiceId: string; amount: string; reason: string }
+  | { action: 'REOPEN_PERIOD'; periodId: string; reason: string };
+
+export interface ApprovalDecisionRequest {
+  note?: string;
+}
+
+export interface AccountingPeriodDto {
+  id: string;
+  startDate: string;
+  endDate: string;
+  status: 'OPEN' | 'CLOSED';
+  closedAt: string | null;
+}
+
+export interface CreateCreditNoteRequest {
+  lineNumber: number;
+  amount: string;
+  reason: string;
+}
+
+export type StatementLineKind =
+  | 'INVOICE'
+  | 'CREDIT_NOTE'
+  | 'WRITE_OFF'
+  | 'PAYMENT'
+  | 'REFUND'
+  | 'PAYMENT_REVERSAL';
+
+export interface StatementLineDto {
+  date: string;
+  kind: StatementLineKind;
+  reference: string;
+  /** Adds to what is owed. */
+  debit: MoneyDto;
+  /** Reduces it. */
+  credit: MoneyDto;
+  /** Positive: owed; negative: credit held. */
+  balance: MoneyDto;
+}
+
+export interface StatementDto {
+  unitId: string;
+  unitNumber: string;
+  paidBy: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  asOf: string;
+  lines: StatementLineDto[];
+  balance: MoneyDto;
+}
+
+export interface AgeingBucketsDto {
+  /** Not yet due. */
+  current: MoneyDto;
+  days1to30: MoneyDto;
+  days31to60: MoneyDto;
+  days61to90: MoneyDto;
+  over90: MoneyDto;
+}
+
+export interface AgeingRowDto {
+  unitId: string;
+  unitNumber: string;
+  billTo: 'OWNERS' | 'TENANTS';
+  tenancyId: string | null;
+  buckets: AgeingBucketsDto;
+  total: MoneyDto;
+}
+
+export interface AgeingDto {
+  asOf: string;
+  rows: AgeingRowDto[];
+  totals: AgeingBucketsDto;
 }

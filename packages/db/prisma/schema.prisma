@@ -61,6 +61,12 @@ model User {
   journalEntriesCreated   JournalEntry[]      @relation("JournalEntryCreatedBy")
   journalEntriesPosted    JournalEntry[]      @relation("JournalEntryPostedBy")
 
+  approvalsRequested      FinanceApproval[] @relation("ApprovalRequestedBy")
+  approvalsDecided        FinanceApproval[] @relation("ApprovalDecidedBy")
+  invoiceCreditsCreated   InvoiceCredit[]   @relation("InvoiceCreditCreatedBy")
+  paymentRefundsCreated   PaymentRefund[]   @relation("PaymentRefundCreatedBy")
+  paymentReversalsCreated PaymentReversal[] @relation("PaymentReversalCreatedBy")
+
   @@map("users")
 }
 
@@ -348,6 +354,8 @@ model Property {
   paymentEvents     PaymentProviderEvent[]
   accountingPeriods AccountingPeriod[]
   journalEntries    JournalEntry[]
+
+  financeApprovals FinanceApproval[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, code])
@@ -929,6 +937,9 @@ enum JournalSource {
   INVOICE
   PAYMENT
   ALLOCATION
+  CREDIT_NOTE
+  WRITE_OFF
+  REFUND
 }
 
 /// An account in a property's chart of accounts. Accounts are archived, never deleted.
@@ -974,6 +985,8 @@ model AccountingPeriod {
   property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
   closedBy User?    @relation("PeriodClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
+  approvals FinanceApproval[]
+
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId, startDate])
   @@map("accounting_periods")
@@ -1013,6 +1026,10 @@ model JournalEntry {
   payment            Payment?
   allocations        PaymentAllocation[] @relation("AllocationEntry")
   allocationReleases PaymentAllocation[] @relation("AllocationReleaseEntry")
+
+  invoiceCredit   InvoiceCredit?
+  paymentRefund   PaymentRefund?
+  paymentReversal PaymentReversal?
 
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, currency])
@@ -1189,6 +1206,9 @@ model Invoice {
   recipients   InvoiceRecipient[]
   allocations  PaymentAllocation[]
 
+  credits   InvoiceCredit[]
+  approvals FinanceApproval[]
+
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, unitId, billingMonth])
   @@unique([organisationId, propertyId, journalEntryId])
@@ -1304,6 +1324,10 @@ model Payment {
   recordedBy   User?               @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   allocations  PaymentAllocation[]
 
+  refunds   PaymentRefund[]
+  reversal  PaymentReversal?
+  approvals FinanceApproval[]
+
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, unitId])
   @@unique([organisationId, propertyId, journalEntryId])
@@ -1399,4 +1423,155 @@ model PaymentProviderEvent {
   @@unique([provider, providerEventId])
   @@index([organisationId, intentId])
   @@map("payment_provider_events")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Controls (Phase 6 Part 4). Risky actions (payment reversals, refunds, write-offs, reopening a
+// closed period) need a second person's approval (maker-checker); credit notes correct issued
+// invoices. Rules are hand-written in migration 20261112180000_controls.
+// ---------------------------------------------------------------------------------------------
+
+enum FinanceApprovalAction {
+  REVERSE_PAYMENT
+  REFUND
+  WRITE_OFF
+  REOPEN_PERIOD
+}
+
+enum FinanceApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum InvoiceCreditKind {
+  /// Corrects an issued invoice (income reduced). No approval needed.
+  CREDIT_NOTE
+  /// Gives up on what is owed (bad debt). Needs an approval.
+  WRITE_OFF
+}
+
+/// A request for a risky finance action. Approved or rejected by someone other than the
+/// requester; an approval is carried out in the same transaction.
+model FinanceApproval {
+  id                String                @id @default(uuid(7)) @db.Uuid
+  organisationId    String                @map("organisation_id") @db.Uuid
+  propertyId        String                @map("property_id") @db.Uuid
+  action            FinanceApprovalAction
+  status            FinanceApprovalStatus @default(PENDING)
+  paymentId         String?               @map("payment_id") @db.Uuid
+  invoiceId         String?               @map("invoice_id") @db.Uuid
+  periodId          String?               @map("period_id") @db.Uuid
+  /// REFUND and WRITE_OFF: the amount, minor units.
+  amountMinor       BigInt?               @map("amount_minor")
+  /// REFUND: how the money is paid back.
+  refundMethod      PaymentMethod?        @map("refund_method")
+  reason            String
+  requestedByUserId String                @map("requested_by_user_id") @db.Uuid
+  decidedByUserId   String?               @map("decided_by_user_id") @db.Uuid
+  decidedAt         DateTime?             @map("decided_at") @db.Timestamptz(3)
+  decisionNote      String?               @map("decision_note")
+  /// When an approved action was carried out (same transaction as the approval).
+  executedAt        DateTime?             @map("executed_at") @db.Timestamptz(3)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  payment     Payment?          @relation(fields: [organisationId, propertyId, paymentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoice     Invoice?          @relation(fields: [organisationId, propertyId, invoiceId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  period      AccountingPeriod? @relation(fields: [organisationId, propertyId, periodId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy User              @relation("ApprovalRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decidedBy   User?             @relation("ApprovalDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  credit      InvoiceCredit?
+  refund      PaymentRefund?
+  reversal    PaymentReversal?
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, status])
+  @@map("finance_approvals")
+}
+
+/// A credit note or write-off reducing what an issued invoice still owes. Never changes.
+model InvoiceCredit {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  organisationId  String            @map("organisation_id") @db.Uuid
+  propertyId      String            @map("property_id") @db.Uuid
+  unitId          String            @map("unit_id") @db.Uuid
+  invoiceId       String            @map("invoice_id") @db.Uuid
+  kind            InvoiceCreditKind
+  /// Credit notes: sequential per property, assigned on insert. Null for write-offs.
+  creditNumber    BigInt?           @map("credit_number")
+  /// Credit notes: the invoice line corrected.
+  lineNumber      Int?              @map("line_number")
+  amountMinor     BigInt            @map("amount_minor")
+  reason          String
+  /// Property-local date; also the ledger date.
+  creditedOn      DateTime          @map("credited_on") @db.Date
+  journalEntryId  String            @map("journal_entry_id") @db.Uuid
+  /// Write-offs: the approval that allowed it.
+  approvalId      String?           @map("approval_id") @db.Uuid
+  createdByUserId String?           @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice      Invoice          @relation(fields: [organisationId, propertyId, invoiceId, unitId], references: [organisationId, propertyId, id, unitId], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry     @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  approval     FinanceApproval? @relation(fields: [organisationId, propertyId, approvalId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User?            @relation("InvoiceCreditCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, journalEntryId])
+  @@unique([organisationId, propertyId, approvalId])
+  @@unique([propertyId, creditNumber])
+  @@index([organisationId, invoiceId])
+  @@map("invoice_credits")
+}
+
+/// Unused payment money paid back to the payer. Needs an approval. Never changes.
+model PaymentRefund {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  organisationId  String        @map("organisation_id") @db.Uuid
+  propertyId      String        @map("property_id") @db.Uuid
+  unitId          String        @map("unit_id") @db.Uuid
+  paymentId       String        @map("payment_id") @db.Uuid
+  amountMinor     BigInt        @map("amount_minor")
+  method          PaymentMethod
+  refundedOn      DateTime      @map("refunded_on") @db.Date
+  journalEntryId  String        @map("journal_entry_id") @db.Uuid
+  approvalId      String        @map("approval_id") @db.Uuid
+  createdByUserId String?       @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  payment      Payment         @relation(fields: [organisationId, propertyId, paymentId, unitId], references: [organisationId, propertyId, id, unitId], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry    @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  approval     FinanceApproval @relation(fields: [organisationId, propertyId, approvalId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User?           @relation("PaymentRefundCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, journalEntryId])
+  @@unique([organisationId, propertyId, approvalId])
+  @@index([organisationId, paymentId])
+  @@map("payment_refunds")
+}
+
+/// A payment taken back entirely (e.g. a bounced cheque): its ledger entry is reversed. Needs an
+/// approval. A payment is reversed at most once.
+model PaymentReversal {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  organisationId  String   @map("organisation_id") @db.Uuid
+  propertyId      String   @map("property_id") @db.Uuid
+  paymentId       String   @map("payment_id") @db.Uuid
+  reversedOn      DateTime @map("reversed_on") @db.Date
+  journalEntryId  String   @map("journal_entry_id") @db.Uuid
+  approvalId      String   @map("approval_id") @db.Uuid
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  payment      Payment         @relation(fields: [organisationId, propertyId, paymentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry    @relation(fields: [organisationId, propertyId, journalEntryId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  approval     FinanceApproval @relation(fields: [organisationId, propertyId, approvalId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User?           @relation("PaymentReversalCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, paymentId])
+  @@unique([organisationId, propertyId, journalEntryId])
+  @@unique([organisationId, propertyId, approvalId])
+  @@map("payment_reversals")
 }

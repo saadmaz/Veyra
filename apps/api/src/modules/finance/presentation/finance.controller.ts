@@ -31,6 +31,7 @@ import type {
   InvoiceRecord,
   RecurringChargeRecord,
 } from '../application/finance-ports';
+import { formatCreditNumber } from '../domain/control-rules';
 import {
   type BillingRunInput,
   billingRunSchema,
@@ -81,12 +82,14 @@ const toInvoice = (i: InvoiceRecord): InvoiceDto => ({
   issueDate: i.issueDate,
   total: money(i.totalMinor, i.currency),
   paid: money(i.paidMinor, i.currency),
-  outstanding: money(i.totalMinor - i.paidMinor, i.currency),
+  credited: money(i.creditedMinor, i.currency),
+  outstanding: money(i.totalMinor - i.paidMinor - i.creditedMinor, i.currency),
+  overdue: i.overdue,
   createdAt: i.createdAt.toISOString(),
   issuedAt: i.issuedAt?.toISOString() ?? null,
 });
 
-const toInvoiceDetail = (i: InvoiceDetailRecord): InvoiceDetailDto => ({
+export const toInvoiceDetail = (i: InvoiceDetailRecord): InvoiceDetailDto => ({
   ...toInvoice(i),
   lines: i.lines.map((line) => ({
     lineNumber: line.lineNumber,
@@ -97,6 +100,15 @@ const toInvoiceDetail = (i: InvoiceDetailRecord): InvoiceDetailDto => ({
     billingMonth: line.billingMonth === null ? null : toMonth(line.billingMonth),
   })),
   journalEntryId: i.journalEntryId,
+  credits: i.credits.map((c) => ({
+    id: c.id,
+    kind: c.kind,
+    number: c.creditNumber === null ? null : formatCreditNumber(c.creditNumber),
+    lineNumber: c.lineNumber,
+    amount: money(c.amountMinor, i.currency),
+    reason: c.reason,
+    creditedOn: c.creditedOn,
+  })),
 });
 
 const FINANCE = 'properties/:propertyId/finance';

@@ -438,6 +438,31 @@ expiry, rehash on sign-in, idempotent sign-out).
   left pending, a failure recorded, unknown references answered and unknown providers 404. The
   Part 2 set-up test now expects the gateway clearing account.
 
+### Part 4: controls and reports
+
+- `packages/db` integration (15, `controls.int.test.ts`): no tenant context sees nothing in any
+  control table; approvals and rejections by the requester, cancellations by anyone else, an
+  approval not carried out, a second decision and a request naming the wrong target are refused;
+  credit notes are numbered and stay within their line and what the invoice still owes (a paid or
+  draft invoice refuses them), and stop allocations overpaying a credited invoice; write-offs need
+  a matching approval, used once; refunds only of unused money and by the approved method, and a
+  refunded amount cannot be allocated; a payment is reversed only with nothing allocated
+  (released allocations do not count) and only with an approval, after which nothing is allocated
+  from it; reopening a closed period needs an approval carried out after it was closed; credits
+  never change, even for the superuser. The Part 1 period test now expects reopening without an
+  approval to be refused, and its TRUNCATE test includes the control tables.
+- `apps/api` unit (+3, `test/finance/control-rules.test.ts`): ageing buckets, statement order and
+  running balance, approval request shapes.
+- `apps/api` integration (8, `controls.int.test.ts`): a refund approved by a second finance
+  officer (refused for the requester, 403 `SAME_PERSON`, and for a manager), decided once, reduces
+  the payment's unused money and the unit credit; only the requester cancels, someone else
+  rejects; a reversal releases allocations and restores the invoice and the unit credit, and
+  cannot be repeated; credit notes within line and balance, numbered; a write-off only after
+  approval; a closed period refuses payments until a second person approves reopening it; the
+  statement's balance equals what is outstanding less unused payments; ageing totals do not change
+  with `asOf`, everything is current today and overdue later. The Part 2 finance test now closes
+  and reopens periods through the API and expects the bad debts account.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
