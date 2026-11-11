@@ -45,6 +45,10 @@ export const PERMISSIONS = [
   'property.visitor.read',
   /** Revoke any visitor invitation of the property. */
   'property.visitor.manage',
+  /** View the property's chart of accounts, charge types, recurring charges and invoices. */
+  'property.finance.read',
+  /** Set up the property's finance, manage charge types and recurring charges, run billing, issue and discard invoices. */
+  'property.finance.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

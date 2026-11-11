@@ -610,7 +610,12 @@ describe('immutability', () => {
         posted,
       ]),
     ).rejects.toMatchObject({ code: '23514' });
-    await expect(superuser.query('TRUNCATE journal_lines, journal_entries')).rejects.toMatchObject({
+    // Everything that references the ledger is included, so only the triggers can refuse it.
+    await expect(
+      superuser.query(
+        'TRUNCATE invoice_lines, invoice_recipients, invoices, journal_lines, journal_entries',
+      ),
+    ).rejects.toMatchObject({
       code: '42501',
     });
     await expect(owner.query('TRUNCATE journal_lines')).rejects.toMatchObject({ code: '42501' });
@@ -786,11 +791,15 @@ describe('concurrency', () => {
     const adder = await openTenantTransaction(ids.orgA);
     try {
       await post(posting, entry);
-      const added = line(adder, entry, { n: 3, account: acctOf(ids.propA).bank, debit: 1 });
+      // Settle the outcome at once: the refusal can arrive before the assertion below runs.
+      const added = line(adder, entry, { n: 3, account: acctOf(ids.propA).bank, debit: 1 }).then(
+        () => null,
+        (error: unknown) => error,
+      );
       // The line waits for the posting transaction to finish.
       await new Promise((resolve) => setTimeout(resolve, 200));
       await posting.query('COMMIT');
-      await expect(added).rejects.toMatchObject({ code: '42501' });
+      expect(await added).toMatchObject({ code: '42501' });
     } finally {
       await adder.query('ROLLBACK').catch(() => undefined);
       await posting.query('ROLLBACK').catch(() => undefined);

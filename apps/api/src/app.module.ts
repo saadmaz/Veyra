@@ -7,6 +7,7 @@ import {
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AccessControlModule } from './modules/access-control/access-control.module';
 import { PermissionGuard } from './modules/access-control/presentation/permission.guard';
+import { FinanceModule } from './modules/finance/finance.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AuthGuard } from './modules/identity/presentation/auth.guard';
 import { OrganisationsModule } from './modules/organisations/organisations.module';
@@ -35,6 +36,7 @@ export class AppModule implements NestModule {
         PropertiesModule,
         ResidentsModule,
         VisitorsModule,
+        FinanceModule,
       ],
       controllers: [HealthController],
       providers: [
