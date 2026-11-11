@@ -261,3 +261,81 @@ test.describe('scoped roles', () => {
     await expect(page.getByRole('button', { name: /Record|Add|Void|Archive/ })).toHaveCount(0);
   });
 });
+
+test.describe('people pickers', () => {
+  test("offer unattached profiles and this property's people, not another property's", async ({
+    page,
+  }) => {
+    const { api, admin, org, unitUrl } = setup();
+    const other = api.addProperty(org.id, 'Lakeside', 'LKS');
+    const otherUnit = api.addUnit(other.id, '9');
+    api.addOwnership(otherUnit.id, api.addPerson(org.id, 'Lake Owner'), '2026-01-01');
+    api.addPerson(org.id, 'Una Unattached');
+    api.currentUserId = admin.id;
+    await api.install(page);
+
+    await page.goto(unitUrl);
+    const owner = page.getByRole('region', { name: 'Owners' }).getByLabel('Owner', { exact: true });
+    await expect(owner.getByRole('option', { name: 'Una Unattached' })).toHaveCount(1);
+    await expect(owner.getByRole('option', { name: 'Lake Owner' })).toHaveCount(0);
+  });
+});
+
+test.describe('residents', () => {
+  function residentSetup() {
+    const ctx = setup();
+    const { api, org, unit } = ctx;
+    const ana = api.addPerson(org.id, 'Ana Owner', 'ana@example.test');
+    api.addOwnership(unit.id, ana, '2026-01-01');
+    const kit = api.addPerson(org.id, 'Kit Child');
+    api.household.push({
+      id: crypto.randomUUID(),
+      unitId: unit.id,
+      personId: kit.id,
+      fullName: kit.fullName,
+      relationship: 'CHILD',
+      validFrom: '2026-01-01',
+      validTo: null,
+      voidedAt: null,
+    });
+    return { ...ctx, ana, kit };
+  }
+
+  test('an owner finds their home and sees who lives there, with no staff controls', async ({
+    page,
+  }) => {
+    const { api, org, ana } = residentSetup();
+    const user = api.addUser('ana@example.test', PASSWORD, 'Ana Owner');
+    api.linkPerson(ana.id, user.id);
+    api.currentUserId = user.id;
+    await api.install(page);
+
+    await page.goto(`/organisations/${org.id}`);
+    const homes = page.getByRole('region', { name: 'Your homes' });
+    await expect(homes).toContainText('Harbour View · Owner');
+    await homes.getByRole('link', { name: 'Unit 101' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Unit 101', level: 1 })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Unit details' })).toContainText('You areOwner');
+    const who = page.getByRole('list', { name: 'Current residents' });
+    await expect(who).toContainText('Owner (Whole unit)');
+    await expect(who).toContainText('Household: child');
+    await expect(page.getByRole('button', { name: /Record|Add|Void/ })).toHaveCount(0);
+    await expectAccessible(page);
+    await expectNoHorizontalScroll(page);
+  });
+
+  test('a household member sees the unit but not the list of residents', async ({ page }) => {
+    const { api, kit, unitUrl } = residentSetup();
+    const user = api.addUser('kit@example.test', PASSWORD, 'Kit Child');
+    api.linkPerson(kit.id, user.id);
+    api.currentUserId = user.id;
+    await api.install(page);
+
+    await page.goto(unitUrl);
+    await expect(page.getByRole('heading', { name: 'Unit 101', level: 1 })).toBeVisible();
+    await expect(page.getByText('You are')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Who lives here' })).toHaveCount(0);
+    await expect(page.getByText('Ana Owner')).toHaveCount(0);
+  });
+});

@@ -136,6 +136,21 @@ export class ResidentsStaffController {
     return toPerson(await this.staff.createPerson(access, body, requestMeta(req)));
   }
 
+  @Get('properties/:propertyId/persons')
+  @RequirePermission(READ)
+  @ApiOperation({
+    summary:
+      'People staff can pick for this property: related to it, or not yet attached anywhere.',
+  })
+  async selectablePersons(
+    @CurrentAccess() access: OrganisationAccess,
+    @Query(new ZodValidationPipe(personSearchSchema)) query: z.infer<typeof personSearchSchema>,
+    @Req() req: Request,
+  ): Promise<{ data: PersonDto[] }> {
+    const people = await this.staff.listSelectablePersons(access, query.query, requestMeta(req));
+    return { data: people.map(toPerson) };
+  }
+
   @Get('properties/:propertyId/residents')
   @RequirePermission(READ)
   @ApiOperation({ summary: 'Current residents of the property with their units and roles.' })

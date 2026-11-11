@@ -25,7 +25,9 @@ All notable changes to VEYRA are recorded here. Versions follow [Semantic Versio
   fractional shares and transfers, tenancies with move-in and move-out, household members,
   vehicles, voiding with a reason); property resident list; resident page (profile editing,
   records at the property, emergency contacts, app invitation link); unit numbers link to the
-  unit page from the property and building pages. API client gains `DELETE`. Browser journeys
+  unit page from the property and building pages; "Your homes" and a "Who lives here" view for
+  residents; people picker endpoint `GET …/properties/:id/persons` (the property's people and
+  unattached profiles). API client gains `DELETE`. Browser journeys
   for admin, property manager, finance officer and archived units.
 - **Phase 4 staff residents API**: resident profiles (property-scoped visibility and an
   organisation directory), set owners from a date (first owner or transfer) with exact share

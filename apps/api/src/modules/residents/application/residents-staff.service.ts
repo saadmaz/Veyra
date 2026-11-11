@@ -86,6 +86,11 @@ export class ResidentsStaffService {
     });
   }
 
+  /** People property staff can choose in forms (same visibility as the profile page). */
+  listSelectablePersons(access: OrganisationAccess, query: string | undefined, meta: RequestMeta) {
+    return this.inProperty(access, meta, (uow) => uow.listSelectablePersons(query));
+  }
+
   listPropertyResidents(access: OrganisationAccess, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) =>
       uow.listPropertyResidents(await uow.localToday()),

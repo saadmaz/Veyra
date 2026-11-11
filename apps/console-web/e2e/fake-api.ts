@@ -136,7 +136,8 @@ export class FakeApi {
   floors: FloorDto[] = [];
   units: UnitDto[] = [];
   commonAreas: CommonAreaDto[] = [];
-  persons: (PersonDto & { organisationId: string })[] = [];
+  /** userId: the login linked by an accepted resident invitation. */
+  persons: (PersonDto & { organisationId: string; userId: string | null })[] = [];
   ownerships: OwnershipDto[] = [];
   tenancies: TenancyDto[] = [];
   household: HouseholdMemberDto[] = [];
@@ -233,9 +234,11 @@ export class FakeApi {
       status: 'ACTIVE' as const,
       linked: false,
       createdAt: now(),
+      userId: null,
     };
     this.persons.push(person);
-    return person;
+    const { organisationId: _o, userId: _u, ...dto } = person;
+    return dto;
   }
 
   addOwnership(unitId: string, person: PersonDto, effectiveFrom: string, share = [1, 1]) {
@@ -283,9 +286,124 @@ export class FakeApi {
     );
   }
 
+  /** Links a resident profile to a login, as accepting a resident invitation does. */
+  linkPerson(personId: string, userId: string) {
+    const person = this.persons.find((p) => p.id === personId);
+    if (person) {
+      person.userId = userId;
+      person.linked = true;
+    }
+  }
+
+  /** Derived resident roles of a login on a unit today (property time zone), like the API. */
+  private residentRoles(userId: string, unitId: string): string[] {
+    const unit = this.units.find((u) => u.id === unitId);
+    const property = this.properties.find((p) => p.id === unit?.propertyId);
+    if (!unit || !property) return [];
+    const today = todayIn(property.timeZone);
+    const mine = new Set(this.persons.filter((p) => p.userId === userId).map((p) => p.id));
+    const roles = new Set<string>();
+    for (const o of this.ownerships)
+      if (
+        o.unitId === unitId &&
+        mine.has(o.personId) &&
+        !o.voidedAt &&
+        covers(o.effectiveFrom, o.effectiveTo, today)
+      )
+        roles.add('OWNER');
+    for (const t of this.tenancies)
+      if (
+        t.unitId === unitId &&
+        !t.voidedAt &&
+        covers(t.startDate, t.endDate, today) &&
+        t.occupants.some((o) => mine.has(o.personId))
+      )
+        roles.add('TENANT');
+    for (const h of this.household)
+      if (
+        h.unitId === unitId &&
+        mine.has(h.personId) &&
+        !h.voidedAt &&
+        covers(h.validFrom, h.validTo, today)
+      )
+        roles.add('HOUSEHOLD_MEMBER');
+    return [...roles].sort();
+  }
+
+  private residentUnitIds(organisationId: string, userId: string): string[] {
+    const propertyIds = new Set(
+      this.properties.filter((p) => p.organisationId === organisationId).map((p) => p.id),
+    );
+    return this.units
+      .filter((u) => propertyIds.has(u.propertyId) && this.residentRoles(userId, u.id).length > 0)
+      .map((u) => u.id);
+  }
+
+  /** Current residents of a unit, names only (GET …/units/:id/residents). */
+  private unitResidents(unitId: string, today: string) {
+    const live = <T extends { voidedAt: string | null }>(rows: T[]) =>
+      rows.filter((r) => !r.voidedAt);
+    return {
+      owners: live(this.ownerships)
+        .filter((o) => o.unitId === unitId && covers(o.effectiveFrom, o.effectiveTo, today))
+        .map((o) => ({
+          personId: o.personId,
+          fullName: o.fullName,
+          shareNumerator: o.shareNumerator,
+          shareDenominator: o.shareDenominator,
+          since: o.effectiveFrom,
+        })),
+      tenants: live(this.tenancies)
+        .filter((t) => t.unitId === unitId && covers(t.startDate, t.endDate, today))
+        .flatMap((t) =>
+          t.occupants.map((o) => ({
+            personId: o.personId,
+            fullName: o.fullName,
+            isPrimary: o.isPrimary,
+            since: t.startDate,
+            until: t.endDate,
+          })),
+        ),
+      household: live(this.household)
+        .filter((h) => h.unitId === unitId && covers(h.validFrom, h.validTo, today))
+        .map((h) => ({
+          personId: h.personId,
+          fullName: h.fullName,
+          relationship: h.relationship,
+          since: h.validFrom,
+        })),
+    };
+  }
+
+  private unitDetail(
+    unit: UnitDto,
+    property: PropertyDto,
+    permissions: string[],
+    myRoles: string[],
+  ) {
+    return {
+      unitId: unit.id,
+      unitNumber: unit.number,
+      unitType: unit.type,
+      status: unit.status,
+      areaSqm: unit.areaSqm,
+      propertyId: property.id,
+      propertyName: property.name,
+      buildingName: this.buildings.find((b) => b.id === unit.buildingId)?.name ?? null,
+      floorName: this.floors.find((f) => f.id === unit.floorId)?.name ?? null,
+      myRoles,
+      permissions,
+    };
+  }
+
   private organisationPermissions(organisationId: string, userId: string): string[] {
     const grants = this.grants(organisationId, userId);
-    if (grants.length === 0) return [];
+    if (grants.length === 0) {
+      // Residents are members through their records: the baseline permission only.
+      return this.residentUnitIds(organisationId, userId).length > 0
+        ? ['organisation.profile.read']
+        : [];
+    }
     const permissions = new Set(['organisation.profile.read']); // member baseline
     for (const g of grants) {
       if (g.scopeType === 'ORGANISATION')
@@ -468,6 +586,22 @@ export class FakeApi {
       return this.reply(route, 204);
     }
 
+    if (rest === '/my-units' && method === 'GET') {
+      const data = this.residentUnitIds(organisation.id, user.id).map((unitId) => {
+        const unit = this.units.find((u) => u.id === unitId) as UnitDto;
+        const property = this.properties.find((p) => p.id === unit.propertyId) as PropertyDto;
+        return {
+          unitId,
+          unitNumber: unit.number,
+          unitType: unit.type,
+          propertyId: property.id,
+          propertyName: property.name,
+          buildingName: this.buildings.find((b) => b.id === unit.buildingId)?.name ?? null,
+          roles: this.residentRoles(user.id, unitId),
+        };
+      });
+      return this.reply(route, 200, { data });
+    }
     const personInvite = /^\/persons\/([^/]+)\/invitations$/.exec(rest);
     if (personInvite && method === 'POST') {
       if (!can('organisation.member.invite')) return this.error(route, 403, 'FORBIDDEN');
@@ -519,6 +653,24 @@ export class FakeApi {
       (p) => p.id === propertyMatch[1] && p.organisationId === organisation.id,
     );
     const pp = property ? this.propertyPermissions(organisation.id, property.id, user.id) : null;
+    if (property && !pp && method === 'GET') {
+      // Residents reach only their own unit (derived roles), never the property itself.
+      const own = /^\/units\/([^/]+)(\/residents)?$/.exec(propertyMatch[2] ?? '');
+      const unit = own
+        ? this.units.find((u) => u.id === own[1] && u.propertyId === property.id)
+        : undefined;
+      const roles = unit ? this.residentRoles(user.id, unit.id) : [];
+      if (own && unit && roles.length > 0) {
+        const permissions = ['unit.profile.read'];
+        if (roles.includes('OWNER') || roles.includes('TENANT'))
+          permissions.push('unit.residents.read');
+        if (!own[2])
+          return this.reply(route, 200, this.unitDetail(unit, property, permissions, roles));
+        if (!permissions.includes('unit.residents.read'))
+          return this.error(route, 403, 'FORBIDDEN');
+        return this.reply(route, 200, this.unitResidents(unit.id, todayIn(property.timeZone)));
+      }
+    }
     if (!property || !pp) return this.error(route, 404, 'NOT_FOUND');
     const sub = propertyMatch[2] ?? '';
     const need = (permission: string) =>
@@ -562,6 +714,7 @@ export class FakeApi {
       organisation.id,
       property,
       pp,
+      user.id,
     );
     if (residentRoute) return residentRoute;
 
@@ -706,6 +859,7 @@ export class FakeApi {
     organisationId: string,
     property: PropertyDto,
     pp: string[],
+    userId: string,
   ): Promise<void> | null {
     const today = todayIn(property.timeZone);
     const str = (key: string) =>
@@ -718,7 +872,11 @@ export class FakeApi {
     const unitIds = new Set(units.map((u) => u.id));
     const person = (id: string | undefined) =>
       this.persons.find((p) => p.id === id && p.organisationId === organisationId);
-    const toPerson = ({ organisationId: _o, ...p }: (typeof this.persons)[number]): PersonDto => p;
+    const toPerson = ({
+      organisationId: _o,
+      userId: _u,
+      ...p
+    }: (typeof this.persons)[number]): PersonDto => p;
 
     // ---------------------------------------------------------------- people
     if (sub === '/residents' && method === 'GET') {
@@ -750,6 +908,35 @@ export class FakeApi {
         person: toPerson(person(personId) as (typeof this.persons)[number]),
         units: list,
       }));
+      return this.reply(route, 200, { data });
+    }
+    if (sub === '/persons' && method === 'GET') {
+      // People staff may pick: related to this property by any record, or not attached anywhere.
+      const denied = need(READ);
+      if (denied) return denied;
+      const related = (personId: string, inProperty: boolean) => {
+        const unitOk = (unitId: string | null) =>
+          !inProperty || (unitId !== null && unitIds.has(unitId));
+        return (
+          this.ownerships.some((o) => o.personId === personId && unitOk(o.unitId)) ||
+          this.household.some((h) => h.personId === personId && unitOk(h.unitId)) ||
+          this.tenancies.some(
+            (t) => unitOk(t.unitId) && t.occupants.some((o) => o.personId === personId),
+          ) ||
+          this.vehicles.some(
+            (v) => v.personId === personId && (!inProperty || v.propertyId === property.id),
+          )
+        );
+      };
+      const data = this.persons
+        .filter(
+          (p) =>
+            p.organisationId === organisationId &&
+            p.status === 'ACTIVE' &&
+            (related(p.id, true) || !related(p.id, false)),
+        )
+        .sort((a, b) => a.fullName.localeCompare(b.fullName))
+        .map(toPerson);
       return this.reply(route, 200, { data });
     }
     if (sub === '/persons' && method === 'POST') {
@@ -892,23 +1079,20 @@ export class FakeApi {
         const denied = need('unit.profile.read');
         if (denied) return denied;
       }
-      return this.reply(route, 200, {
-        unitId: unit.id,
-        unitNumber: unit.number,
-        unitType: unit.type,
-        status: unit.status,
-        areaSqm: unit.areaSqm,
-        propertyId: property.id,
-        propertyName: property.name,
-        buildingName: this.buildings.find((b) => b.id === unit.buildingId)?.name ?? null,
-        floorName: this.floors.find((f) => f.id === unit.floorId)?.name ?? null,
-        myRoles: [],
-        permissions: pp,
-      });
+      return this.reply(
+        route,
+        200,
+        this.unitDetail(unit, property, pp, this.residentRoles(userId, unit.id)),
+      );
     }
     {
       const denied = need(method === 'GET' ? READ : MANAGE);
       if (denied) return denied;
+    }
+    if (usub === '/residents' && method === 'GET') {
+      const denied = need('unit.residents.read');
+      if (denied) return denied;
+      return this.reply(route, 200, this.unitResidents(unit.id, today));
     }
     const ownerships = this.ownerships.filter((o) => o.unitId === unit.id);
     const tenancies = this.tenancies.filter((t) => t.unitId === unit.id);

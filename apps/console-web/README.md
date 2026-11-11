@@ -16,12 +16,12 @@ bun run --cwd apps/console-web dev   # http://localhost:3000 (needs the API on :
 | `/sign-in`, `/sign-up` | Sign in or create an account; `?next=` returns to the requested page (same-site paths only) |
 | `/organisations` | The user's organisations, empty state with "create" |
 | `/organisations/new` | Create an organisation (the creator becomes its admin) |
-| `/organisations/[id]` | Overview; members and invitations when the user may see them |
+| `/organisations/[id]` | Overview; "Your homes" for residents; members and invitations when the user may see them |
 | `/invitations/accept#token=…` | Accept an invitation; the token is in the URL fragment, never sent to a server |
 | `/organisations/[id]/properties/new` | Add a property (organisation admins) |
 | `/organisations/[id]/properties/[pid]` | Property overview, activate/archive (admins), buildings, units, common areas, invite a property manager |
 | `/organisations/[id]/properties/[pid]/buildings/[bid]` | A building's floors and units |
-| `/organisations/[id]/properties/[pid]/units/[uid]` | A unit: details for every staff role; for admins and property managers its owners (exact shares, transfers), tenancies (move-in, move-out), household, vehicles; voiding mistakes with a reason |
+| `/organisations/[id]/properties/[pid]/units/[uid]` | A unit: details for every staff role and its residents; owners and tenants see who lives there; for admins and property managers its owners (exact shares, transfers), tenancies (move-in, move-out), household, vehicles; voiding mistakes with a reason |
 | `/organisations/[id]/properties/[pid]/residents` | Current residents of the property with their units and roles; add a person |
 | `/organisations/[id]/properties/[pid]/residents/[personId]` | A resident's profile (edit), records at this property, emergency contacts, app invitation link |
 

@@ -113,11 +113,9 @@ readiness, user training and release communication, and known limitations docume
 
 ## Technical debt
 
-- Resident console: forms choose people from the property's *current* residents plus anyone
-  added during the visit. A profile created but not attached before leaving the page can only
-  be found again through the organisation directory API (admins); property managers have no
-  search. Past residents cannot be picked for new records. Fix with a property-scoped person
-  search endpoint.
+- Resident console: the people picker (`GET …/properties/:id/persons`) returns at most 200
+  people and the console does not use its `query` filter yet; add type-ahead search when a
+  property has more.
 - Resident console: no UI for vehicles linked to a person (not a unit), archived vehicles,
   archiving a resident profile, or the full ownership/tenancy history of archived units' numbers
   (shown as "Archived unit"). The resident list has no paging or search (the API returns all

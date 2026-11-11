@@ -2,8 +2,11 @@
 
 - **Date:** 2026-11-11
 - **Scope:** PRs #17 (resident data foundation), #18 (derived resident access and invitations),
-  #19 (staff residents API, occupancy guard), and Part 4 (resident console, this change)
-- **Decision:** Phase 4 is complete for staff workflows. Proceed to Phase 5 (visitor and access
+  #19 (staff residents API, occupancy guard), and Part 4 (resident console, this change). Part 4
+  also brings over the person-picker endpoint and the resident view from the unmerged branch
+  `feat/phase-4-resident-console` (2026-11-09), which built the same part independently
+- **Decision:** Phase 4 is complete for staff workflows, with a first resident view in the
+  console ("Your homes", "Who lives here"). Proceed to Phase 5 (visitor and access
   management) once the owner has reviewed this document. The resident mobile app was deferred
   by decision (2026-11-09) and is not part of this exit. The pilot-readiness items from the
   Phase 2 review are still open (section 5).
@@ -19,6 +22,8 @@
 | Data minimisation for roles that do not need resident data | ✅ | Finance officers have no resident permissions (API tests). Console: shows unit details only and never requests resident endpoints (asserted on the request log) |
 | Units cannot be archived while occupied | ✅ | `app_unit_is_occupied`; API tests for units and properties |
 | Staff can carry out the journeys in the console | ✅ | Unit page, resident list and resident page; browser journeys on desktop and phone with axe WCAG 2.2 AA checks |
+| Residents see their own homes only | ✅ | "Your homes" from `my-units`; the unit page shows owners and tenants who lives there, household members the unit only; residents never reach the property (browser tests; API Part 2 tests) |
+| Staff pick people only from their property or unattached profiles | ✅ | `GET …/properties/:id/persons` (API integration test: another property's resident is not offered; browser test) |
 
 ## 2. Product requirements (PRD 3.2)
 
@@ -43,8 +48,8 @@ and Redis 7).
 | Typecheck (18 workspaces), build (12) | ✅ |
 | Lint (Biome) | ✅ for the repository. Locally it also reported an untracked, git-ignored `.vscode/settings.json` created by the editor |
 | Unit tests | ✅ 223 (API 142, console 30, domain 20, db 9, worker 6, other packages 16) |
-| Integration, real PostgreSQL 17 | ✅ db 82, API 104 including the 5 Redis tests (run with `REDIS_URL` set). One API case in `organisations.int.test.ts` failed once under heavy machine load and passed on three reruns (section 5) |
-| Browser journeys (Playwright, desktop and phone, axe WCAG 2.2 AA) | ✅ 44, run with one worker against the production build |
+| Integration, real PostgreSQL 17 | ✅ db 82, API 105 including the 5 Redis tests (run with `REDIS_URL` set). One API case in `organisations.int.test.ts` failed once under heavy machine load and passed on three reruns (section 5) |
+| Browser journeys (Playwright, desktop and phone, axe WCAG 2.2 AA) | ✅ 50 against the production build with one worker, on port 3005 because a dev server held 3000. Two runs of one existing test (`console.spec.ts`, safe redirect) failed only because it expects the literal `localhost:3000` in the URL; the redirect itself behaved correctly |
 | Console requests against the real API | ✅ Checked by hand with a script: every create, end, void and delete call of the new screens, plus the expected refusals (backdated transfer, shares not adding up, voiding one co-owner, invitation without email) and the CORS preflight for `DELETE` |
 | CI `verify` | ✅ #17-#19 green before merge; Part 4 to be confirmed on its PR |
 
@@ -74,8 +79,8 @@ an automated full-stack smoke test (console + API + PostgreSQL + Redis).
 
 ### New in Phase 4, can wait
 
-- Property-scoped person search, so property managers can find profiles that are not current
-  residents (today: current residents plus people added during the visit).
+- Type-ahead search in the people picker (the endpoint supports `query`; the console lists up
+  to 200).
 - Console support for vehicles linked to a person, archived vehicles, archiving profiles,
   resident list paging and search.
 - A design-system dialog to replace the native prompt for void reasons.
