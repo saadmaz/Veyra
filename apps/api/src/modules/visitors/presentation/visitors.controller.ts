@@ -15,13 +15,18 @@ import type {
   ValidatePassResponse,
   VisitDto,
   VisitorInvitationDto,
+  WalkInRequestDto,
 } from '@veyra/api-contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
 import { requestMeta } from '../../../platform/request-meta';
 import { ZodValidationPipe } from '../../../platform/validation/zod-validation.pipe';
 import { CurrentAccess, type OrganisationAccess, RequirePermission } from '../../access-control';
-import type { InvitationRecord, VisitRecord } from '../application/visitor-ports';
+import type {
+  InvitationRecord,
+  VisitRecord,
+  WalkInRequestRecord,
+} from '../application/visitor-ports';
 import { VisitorsService } from '../application/visitors.service';
 import {
   type AdmitInput,
@@ -35,8 +40,12 @@ import {
   type ValidatePassInput,
   validatePassSchema,
   visitLogQuerySchema,
+  WALK_IN_APPROVAL_MS,
   type WalkInInput,
+  type WalkInRequestInput,
+  walkInRequestSchema,
   walkInSchema,
+  walkInStatus,
 } from '../domain/visitor-rules';
 
 const uuid = new ParseUUIDPipe();
@@ -75,7 +84,29 @@ const toVisit = (v: VisitRecord): VisitDto => ({
   source: v.source,
 });
 
+const toWalkIn = (r: WalkInRequestRecord, now: Date): WalkInRequestDto => ({
+  id: r.id,
+  unitId: r.unitId,
+  unitNumber: r.unitNumber,
+  category: r.category,
+  visitorName: r.visitorName,
+  visitorPhone: r.visitorPhone,
+  vehiclePlate: r.vehiclePlate,
+  gate: r.gate,
+  status: walkInStatus(r, now),
+  createdAt: r.createdAt.toISOString(),
+  expiresAt: r.expiresAt.toISOString(),
+  decidedAt: r.decidedAt?.toISOString() ?? null,
+  approvalValidUntil:
+    r.status === 'APPROVED' && r.decidedAt
+      ? new Date(r.decidedAt.getTime() + WALK_IN_APPROVAL_MS).toISOString()
+      : null,
+  used: r.used,
+});
+
 const UNIT = 'properties/:propertyId/units/:unitId/visitor-invitations';
+const UNIT_WALK_INS = 'properties/:propertyId/units/:unitId/walk-in-requests';
+const GATE_WALK_INS = 'properties/:propertyId/gate/walk-in-requests';
 const PROPERTY = 'properties/:propertyId';
 
 /**
@@ -234,7 +265,7 @@ export class VisitorsController {
   @RequirePermission('property.visitor.check_in')
   @ApiOperation({
     summary:
-      'Someone without a pass. To a unit: needs the resident’s approval (409 until Part 3). To the property: admitted.',
+      'Someone without a pass, to the property itself: admitted. To a unit: 409, send a walk-in request for the resident to approve.',
   })
   async walkIn(
     @CurrentAccess() access: OrganisationAccess,
@@ -264,5 +295,116 @@ export class VisitorsController {
     @Req() req: Request,
   ): Promise<{ data: VisitDto[] }> {
     return { data: (await this.visitors.visitorsInside(access, requestMeta(req))).map(toVisit) };
+  }
+
+  // ------------------------------------------------------------------ walk-in approval (Part 3)
+
+  @Post(GATE_WALK_INS)
+  @RequirePermission('property.visitor.check_in')
+  @ApiOperation({
+    summary: 'Ask the unit’s residents to let in someone without a pass (10 minutes to answer).',
+  })
+  async requestWalkIn(
+    @CurrentAccess() access: OrganisationAccess,
+    @Body(new ZodValidationPipe(walkInRequestSchema)) body: WalkInRequestInput,
+    @Req() req: Request,
+  ): Promise<WalkInRequestDto> {
+    return toWalkIn(await this.visitors.requestWalkIn(access, body, requestMeta(req)), new Date());
+  }
+
+  @Get(GATE_WALK_INS)
+  @RequirePermission('property.visitor.check_in')
+  @ApiOperation({
+    summary: 'Walk-in requests of the last 24 hours, newest first (poll for answers).',
+  })
+  async gateWalkIns(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<{ data: WalkInRequestDto[] }> {
+    const now = new Date();
+    const rows = await this.visitors.gateWalkInRequests(access, requestMeta(req));
+    return { data: rows.map((r) => toWalkIn(r, now)) };
+  }
+
+  @Get(`${GATE_WALK_INS}/:requestId`)
+  @RequirePermission('property.visitor.check_in')
+  async gateWalkIn(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('requestId', uuid) requestId: string,
+    @Req() req: Request,
+  ): Promise<WalkInRequestDto> {
+    return toWalkIn(
+      await this.visitors.gateWalkInRequest(access, requestId, requestMeta(req)),
+      new Date(),
+    );
+  }
+
+  @Post(`${GATE_WALK_INS}/:requestId/admit`)
+  @RequirePermission('property.visitor.check_in')
+  @ApiOperation({ summary: 'Admit on the resident’s approval: once, within 15 minutes of it.' })
+  async admitWalkIn(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('requestId', uuid) requestId: string,
+    @Body(new ZodValidationPipe(departSchema)) body: z.infer<typeof departSchema>,
+    @Req() req: Request,
+  ): Promise<VisitDto> {
+    return toVisit(await this.visitors.admitWalkIn(access, requestId, body.gate, requestMeta(req)));
+  }
+
+  @Post(`${GATE_WALK_INS}/:requestId/cancel`)
+  @HttpCode(200)
+  @RequirePermission('property.visitor.check_in')
+  async cancelWalkIn(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('requestId', uuid) requestId: string,
+    @Req() req: Request,
+  ): Promise<WalkInRequestDto> {
+    return toWalkIn(
+      await this.visitors.cancelWalkIn(access, requestId, requestMeta(req)),
+      new Date(),
+    );
+  }
+
+  @Get(UNIT_WALK_INS)
+  @RequirePermission('unit.visitor.invite')
+  @ApiOperation({ summary: 'Walk-in requests for the unit: waiting for an answer, and recent.' })
+  async unitWalkIns(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<{ data: WalkInRequestDto[] }> {
+    const now = new Date();
+    const rows = await this.visitors.unitWalkInRequests(access, requestMeta(req));
+    return { data: rows.map((r) => toWalkIn(r, now)) };
+  }
+
+  @Post(`${UNIT_WALK_INS}/:requestId/approve`)
+  @HttpCode(200)
+  @RequirePermission('unit.visitor.invite')
+  @ApiOperation({
+    summary: 'A resident of the unit lets the visitor in (residents only, not staff).',
+  })
+  async approveWalkIn(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('requestId', uuid) requestId: string,
+    @Req() req: Request,
+  ): Promise<WalkInRequestDto> {
+    return toWalkIn(
+      await this.visitors.decideWalkIn(access, requestId, true, requestMeta(req)),
+      new Date(),
+    );
+  }
+
+  @Post(`${UNIT_WALK_INS}/:requestId/deny`)
+  @HttpCode(200)
+  @RequirePermission('unit.visitor.invite')
+  async denyWalkIn(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('requestId', uuid) requestId: string,
+    @Req() req: Request,
+  ): Promise<WalkInRequestDto> {
+    return toWalkIn(
+      await this.visitors.decideWalkIn(access, requestId, false, requestMeta(req)),
+      new Date(),
+    );
   }
 }

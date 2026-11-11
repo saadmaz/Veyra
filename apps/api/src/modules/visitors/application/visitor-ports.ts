@@ -1,5 +1,5 @@
 import type { RequestMeta } from '../../../platform/request-meta';
-import type { CreateInvitationInput } from '../domain/visitor-rules';
+import type { CreateInvitationInput, WalkInRequestInput } from '../domain/visitor-rules';
 
 export type VisitorCategory = 'GUEST' | 'DELIVERY' | 'CONTRACTOR' | 'SERVICE_PROVIDER';
 
@@ -48,6 +48,8 @@ export interface NewVisit {
   unitId: string | null;
   invitationId: string | null;
   passId: string | null;
+  /** The resident's approval a walk-in to a unit is admitted on. */
+  walkInRequestId?: string | null;
   category: VisitorCategory;
   visitorName: string;
   visitorPhone: string | null;
@@ -56,6 +58,23 @@ export interface NewVisit {
   denialReason: string | null;
   gate: string | null;
   arrivedAt: Date;
+}
+
+export interface WalkInRequestRecord {
+  id: string;
+  unitId: string;
+  unitNumber: string;
+  category: VisitorCategory;
+  visitorName: string;
+  visitorPhone: string | null;
+  vehiclePlate: string | null;
+  gate: string | null;
+  status: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED';
+  createdAt: Date;
+  expiresAt: Date;
+  decidedAt: Date | null;
+  /** A visit was admitted on this approval. */
+  used: boolean;
 }
 
 export type AccessEventType =
@@ -108,6 +127,18 @@ export interface VisitorsUnitOfWork {
   recordDeparture(visitId: string, at: Date): Promise<VisitRecord>;
   visitorsInside(): Promise<VisitRecord[]>;
   visitLog(from: Date, to: Date): Promise<VisitRecord[]>;
+  /** True when the caller is an owner, tenant or household member of the unit today. */
+  callerIsResidentOf(unitId: string): Promise<boolean>;
+  createWalkInRequest(input: WalkInRequestInput, expiresAt: Date): Promise<string>;
+  walkInRequest(id: string, options?: { lock?: boolean }): Promise<WalkInRequestRecord | null>;
+  /** Requests of the unit still waiting for an answer at `now`. */
+  openWalkInCount(unitId: string, now: Date): Promise<number>;
+  walkInRequests(filter: { unitId?: string; createdAfter: Date }): Promise<WalkInRequestRecord[]>;
+  decideWalkInRequest(
+    id: string,
+    status: 'APPROVED' | 'DENIED' | 'CANCELLED',
+    at: Date,
+  ): Promise<void>;
   accessEvent(
     type: AccessEventType,
     at: Date,

@@ -129,7 +129,12 @@ with an offset; the console shows them in the property's time zone.
 | POST | `gate/validate` | `property.visitor.check_in`; `{ token }` or `{ code }`; answers `{ valid, pass }` or `{ valid: false, reason }`; 60 checks per guard per minute |
 | POST | `gate/admit` | `property.visitor.check_in`; `{ passId }`; re-checked under a row lock (409 `PASS_NOT_VALID`) |
 | POST | `gate/deny` | `property.visitor.check_in`; for a pass or a named person; needs a reason |
-| POST | `gate/walk-in` | `property.visitor.check_in`; to a unit: 409 `WALK_IN_NEEDS_APPROVAL` until in-app approval (Part 3); to the property: admitted |
+| POST | `gate/walk-in` | `property.visitor.check_in`; to the property: admitted; to a unit: 409 `WALK_IN_NEEDS_APPROVAL` (send a walk-in request) |
+| POST | `gate/walk-in-requests` | `property.visitor.check_in`; `{ unitId, category, visitorName, visitorPhone?, vehiclePlate?, gate? }`; residents have 10 minutes; at most 5 open per unit (409 `TOO_MANY_WALK_IN_REQUESTS`) |
+| GET | `gate/walk-in-requests`, `gate/walk-in-requests/{requestId}` | `property.visitor.check_in`; last 24 hours / one request (poll for the answer) |
+| POST | `gate/walk-in-requests/{requestId}/admit`, `…/cancel` | `property.visitor.check_in`; admit once within 15 minutes of an approval (409 `WALK_IN_NOT_APPROVED`) |
+| GET | `units/{unitId}/walk-in-requests` | `unit.visitor.invite`; waiting and recent requests for the unit |
+| POST | `units/{unitId}/walk-in-requests/{requestId}/approve`, `…/deny` | `unit.visitor.invite` **and** a current owner, tenant or household role on the unit (staff get 403); before expiry (409 `WALK_IN_EXPIRED`, `WALK_IN_NOT_PENDING`) |
 | POST | `visits/{visitId}/depart` | `property.visitor.check_in`; once (409 `VISIT_ALREADY_DEPARTED`) |
 | GET | `visits/inside` | `property.visitor.check_in`; admitted and not departed |
 | GET | `visits?from=&to=` | `property.visitor.read`; up to 31 days |

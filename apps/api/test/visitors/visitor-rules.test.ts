@@ -11,6 +11,9 @@ import {
   type PassState,
   passRejection,
   validatePassSchema,
+  WALK_IN_ANSWER_MS,
+  walkInAdmissionProblem,
+  walkInStatus,
 } from '../../src/modules/visitors/domain/visitor-rules';
 
 const now = new Date('2026-11-11T12:00:00Z');
@@ -119,5 +122,33 @@ describe('input rules', () => {
     expect(
       denySchema.safeParse({ reason: 'No ID', category: 'GUEST', visitorName: 'Ola' }).success,
     ).toBe(true);
+  });
+});
+
+describe('walk-in requests', () => {
+  const created = new Date('2026-11-11T12:00:00Z');
+  const base = {
+    status: 'PENDING' as const,
+    expiresAt: new Date(created.getTime() + WALK_IN_ANSWER_MS),
+    decidedAt: null as Date | null,
+    used: false,
+  };
+  const minutes = (m: number) => new Date(created.getTime() + m * 60_000);
+
+  it('expire when unanswered after 10 minutes, and only then', () => {
+    expect(walkInStatus(base, minutes(10))).toBe('PENDING');
+    expect(walkInStatus(base, minutes(10.01))).toBe('EXPIRED');
+    expect(walkInStatus({ ...base, status: 'DENIED' }, minutes(60))).toBe('DENIED');
+  });
+
+  it('admit once, within 15 minutes of the approval', () => {
+    const approved = { ...base, status: 'APPROVED' as const, decidedAt: minutes(5) };
+    expect(walkInAdmissionProblem(base, minutes(1))).toBe('NOT_APPROVED');
+    expect(walkInAdmissionProblem(approved, minutes(20))).toBeNull();
+    expect(walkInAdmissionProblem(approved, minutes(20.01))).toBe('APPROVAL_LAPSED');
+    expect(walkInAdmissionProblem({ ...approved, used: true }, minutes(6))).toBe('ALREADY_USED');
+    expect(walkInAdmissionProblem({ ...base, status: 'CANCELLED' }, minutes(1))).toBe(
+      'NOT_APPROVED',
+    );
   });
 });

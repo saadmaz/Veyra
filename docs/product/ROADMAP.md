@@ -26,7 +26,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
-| 5     | Visitor and access management            | In progress: Parts 1-2 done; Part 3 (walk-in approval) next |
+| 5     | Visitor and access management            | In progress: Parts 1-3 done; Part 4 (console screens) next |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
@@ -123,8 +123,8 @@ personal data; a pass is never proof of identity; guards see the minimum necessa
 | ---- | ----- | ------ |
 | 1 | Data foundation: visitor invitations, passes (hashes only), visits, append-only access events; online admission backstop (window, revocation, entries, row lock against two gates); immutable visits; RLS | ✅ Done |
 | 2 | Security guard and supervisor roles; API: residents and staff create and revoke invitations, pass issue (QR token and reference code), guard validation with minimal data, check-in, check-out, denied entry, walk-in record; rate limits on pass lookups | ✅ Done |
-| 3 | In-app walk-in approval: request to the unit's residents, approve or deny, expiry; polling first, then WebSockets. Until then walk-ins to a unit are refused (`WALK_IN_NEEDS_APPROVAL`) | Next |
-| 4 | Console: residents' visitor pages, the guard's gate screen (installable PWA), the supervisor's log; browser journeys per role | |
+| 3 | In-app walk-in approval: the guard requests, a resident of the unit (not staff) approves or denies within 10 minutes, the approval admits once within 15; at most 5 open requests per unit; database backstop; polling endpoints for the app and the gate | ✅ Done |
+| 4 | Console: residents' visitor pages (register, pass, walk-in answers), the guard's gate screen (installable PWA), the supervisor's log; browser journeys per role | Next |
 | 5 | Offline: written paper procedure and late entry; offline gate mode with a cached day list, sync, conflict handling, and late records flagged when the invitation would not have allowed them | |
 
 ## Release gates
@@ -143,6 +143,9 @@ readiness, user training and release communication, and known limitations docume
   archiving a resident profile, or the full ownership/tenancy history of archived units' numbers
   (shown as "Archived unit"). The resident list has no paging or search (the API returns all
   current residents).
+- Walk-in requests reach residents by polling only. Instant delivery (WebSockets, then push
+  notifications through the notifications module) is still to come; until then a resident must
+  have the app open to answer within the 10 minutes.
 - Void reasons use the browser's native prompt (accessible, but plain); replace with the design
   system's dialog when one exists.
 - Mobile app not yet launched on a device or emulator.
@@ -181,6 +184,4 @@ readiness, user training and release communication, and known limitations docume
   `src/lib/messages.ts`); browser tests use a fake API, so an automated full-stack smoke test
   (console + API + database + Redis) is still missing. The Phase 4 console's requests were
   checked once by hand against the real API (2026-11-11).
-- One intermittent failure of an `organisations.int.test.ts` case was seen once on a heavily
-  loaded machine (2026-11-11) and not reproduced in three reruns; watch CI for repeats.
 - Dependency and secret scanning not yet in CI.

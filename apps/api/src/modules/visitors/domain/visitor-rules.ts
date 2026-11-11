@@ -188,3 +188,41 @@ export function passRejection(state: PassState, now: Date): PassRejectionReason 
   if (!state.hostStillResident) return 'HOST_NO_LONGER_RESIDENT';
   return null;
 }
+
+// ------------------------------------------------------------------------------ walk-ins (Part 3)
+
+/** Residents have this long to answer a guard's request. */
+export const WALK_IN_ANSWER_MS = 10 * 60_000;
+/** After an approval, the guard has this long to admit (the database checks the same limit). */
+export const WALK_IN_APPROVAL_MS = 15 * 60_000;
+/** Open requests per unit at once, so a unit cannot be flooded with requests. */
+export const MAX_PENDING_WALK_INS_PER_UNIT = 5;
+
+export const walkInRequestSchema = walkInSchema.extend({ unitId: z.uuid() });
+export type WalkInRequestInput = z.infer<typeof walkInRequestSchema>;
+
+export type WalkInStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED' | 'EXPIRED';
+
+/** A stored request's status as seen now: an unanswered request past its deadline is EXPIRED. */
+export function walkInStatus(
+  request: { status: Exclude<WalkInStatus, 'EXPIRED'>; expiresAt: Date },
+  now: Date,
+): WalkInStatus {
+  return request.status === 'PENDING' && now > request.expiresAt ? 'EXPIRED' : request.status;
+}
+
+/** Why a guard cannot admit on this request now, or null when they can. */
+export function walkInAdmissionProblem(
+  request: {
+    status: Exclude<WalkInStatus, 'EXPIRED'>;
+    expiresAt: Date;
+    decidedAt: Date | null;
+    used: boolean;
+  },
+  now: Date,
+): 'NOT_APPROVED' | 'APPROVAL_LAPSED' | 'ALREADY_USED' | null {
+  if (walkInStatus(request, now) !== 'APPROVED' || !request.decidedAt) return 'NOT_APPROVED';
+  if (request.used) return 'ALREADY_USED';
+  if (now.getTime() > request.decidedAt.getTime() + WALK_IN_APPROVAL_MS) return 'APPROVAL_LAPSED';
+  return null;
+}

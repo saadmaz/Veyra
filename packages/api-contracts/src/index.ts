@@ -676,3 +676,41 @@ export interface VisitDto {
   departedAt: string | null;
   source: 'ONLINE' | 'PAPER' | 'OFFLINE_SYNC';
 }
+
+// ---------------------------------------------------------------------------------------------
+// Walk-in approval (Phase 5 Part 3): a guard asks the unit's residents to let in someone without
+// a pass. Residents answer in the app within 10 minutes; an approval admits once within 15.
+// ---------------------------------------------------------------------------------------------
+
+/** POST …/properties/:propertyId/gate/walk-in-requests */
+export interface CreateWalkInRequest {
+  unitId: string;
+  category: VisitorCategory;
+  visitorName: string;
+  visitorPhone?: string;
+  vehiclePlate?: string;
+  gate?: string;
+}
+
+/** EXPIRED: no answer in time. APPROVED stays APPROVED; see approvalValidUntil and used. */
+export type WalkInRequestStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED' | 'EXPIRED';
+
+export interface WalkInRequestDto {
+  id: string;
+  unitId: string;
+  unitNumber: string;
+  category: VisitorCategory;
+  visitorName: string;
+  visitorPhone: string | null;
+  vehiclePlate: string | null;
+  gate: string | null;
+  status: WalkInRequestStatus;
+  createdAt: string;
+  /** The residents' deadline to answer. */
+  expiresAt: string;
+  decidedAt: string | null;
+  /** For an approval: the guard must admit before this time. */
+  approvalValidUntil: string | null;
+  /** True once a visit was admitted on this approval. */
+  used: boolean;
+}

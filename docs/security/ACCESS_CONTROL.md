@@ -132,6 +132,9 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   `unit.residents.read`, `property.resident.read` and `property.resident.manage` (admins also
   `organisation.resident.read` for the organisation-wide directory); finance officers only
   `unit.profile.read` (no resident names or contact details until billing needs them).
+  Answering a walk-in request needs `unit.visitor.invite` and a current derived resident role on
+  the unit: staff hold the permission through their property but cannot let someone into a
+  home on a resident's behalf (owner decision, 2026-11-11).
   Organisation admins and property managers also hold all four visitor permissions, gate
   operation included, so admins can appoint guards (anti-escalation: you can only give
   permissions you hold).

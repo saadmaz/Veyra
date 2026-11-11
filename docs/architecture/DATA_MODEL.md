@@ -120,15 +120,19 @@ numbers and photos are out of scope until a separate legal and privacy assessmen
 | `visitor_invitations` | property, unit, host_person?, created_by_user, category, visitor_name, visitor_phone?, vehicle_plate?, valid_from, valid_until, max_entries, status | Window ends after it starts and lasts at most 31 days; 1-50 entries. Expiry is not stored: an ACTIVE invitation outside its window is not valid. Revocation (`revoked_at`, optional `revoked_by_user_id`) is final; an invitation never moves to another property, unit or creator (trigger). |
 | `visitor_passes` | invitation, token_hash, code_hash, revoked_at? | Only SHA-256 hashes of the QR token and the reference code. Token hash unique; at most one live pass per invitation; a live code is unique per property. The only change allowed is revoking, once (trigger). A pass is never proof of identity. |
 | `visits` | property, unit?, invitation?, pass?, category, visitor details, decision, denial_reason?, gate?, arrived_at, departed_at?, recorded_by_user, source | ADMITTED or DENIED; a denial needs a reason and never departs. A pass implies an invitation, an invitation implies the unit (composite key to the invitation's property and unit). Immutable except recording the departure, once (trigger). `source` is ONLINE, PAPER or OFFLINE_SYNC. |
+| `walk_in_requests` | property, unit, category, visitor details, gate?, requested_by_user, status, expires_at, decided_at?, decided_by_user? | A guard's request to the unit's residents to admit someone without a pass (migration `20261111150000_walk_in_requests`). Expires at most 30 minutes after creation (the API uses 10). Decided once: only PENDING rows change, only their decision fields, and approval or denial after expiry is refused (trigger); the guard may still cancel. |
 | `access_events` | property, type, occurred_at, actor_user?, invitation?, visit?, gate? | Append-only for every role, including the superuser (UPDATE, DELETE and TRUNCATE rejected by trigger). No personal data. |
 
 **Online admission backstop** (`visits_admission_check`, before insert, ONLINE admissions with an
 invitation only): the arrival is recorded now (within 5 minutes), the invitation is ACTIVE, the
 arrival falls inside its window, the invitation still has entries left, and the pass, if used, is
 live. The invitation row is locked (`FOR UPDATE`), so two gates cannot both use the last entry.
-PAPER and OFFLINE_SYNC records describe what already happened and are stored as they are; the
-API flags those the invitation would not have allowed, so a stale offline copy never silently
-counts as a valid admission.
+Every ONLINE admission is recorded now. An online admission to a unit without an invitation
+needs `visits.walk_in_request_id`: an APPROVED request for that unit, admitted within 15 minutes
+of the approval; the column is unique, so an approval admits once. Walk-ins to the property
+itself (no unit) need neither. PAPER and OFFLINE_SYNC records describe what already happened and
+are stored as they are; the API flags those the invitation would not have allowed, so a stale
+offline copy never silently counts as a valid admission.
 
 Retention of visit records and access events is per jurisdiction and still to be set (section 9).
 
@@ -177,7 +181,7 @@ owning module is built.
 | Area | Entities |
 | ---- | -------- |
 | Property inventory | `CommonArea`, `Facility`, `ParkingSpace` |
-| Visitors and access (beyond section 5) | `VehicleUnitAssignment`, walk-in approval requests (Phase 5 Part 3) |
+| Visitors and access (beyond section 5) | `VehicleUnitAssignment` |
 | Maintenance and operations | `MaintenanceRequest`, `WorkOrder`, `WorkOrderAssignment`, `Inspection`, `Task`, `Shift`, `Incident` |
 | Assets and vendors | `Asset`, `AssetMaintenancePlan`, `AssetServiceRecord`, `Vendor`, `VendorContract` |
 | Facilities | `FacilitySchedule`, `Reservation`, `ReservationPolicy`, `FacilityClosure` |

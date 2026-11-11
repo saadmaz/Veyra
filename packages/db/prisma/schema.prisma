@@ -46,6 +46,8 @@ model User {
   visitsRecorded            Visit[]             @relation("VisitRecordedBy")
   visitDeparturesRecorded   Visit[]             @relation("VisitDepartureRecordedBy")
   accessEvents              AccessEvent[]
+  walkInRequestsMade        WalkInRequest[]     @relation("WalkInRequestedBy")
+  walkInRequestsDecided     WalkInRequest[]     @relation("WalkInDecidedBy")
 
   @@map("users")
 }
@@ -323,6 +325,7 @@ model Property {
   visitorPasses      VisitorPass[]
   visits             Visit[]
   accessEvents       AccessEvent[]
+  walkInRequests     WalkInRequest[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, code])
@@ -406,6 +409,7 @@ model Unit {
 
   visitorInvitations VisitorInvitation[]
   visits             Visit[]
+  walkInRequests     WalkInRequest[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -757,6 +761,8 @@ model Visit {
   recordedByUserId          String          @map("recorded_by_user_id") @db.Uuid
   departureRecordedByUserId String?         @map("departure_recorded_by_user_id") @db.Uuid
   source                    VisitSource     @default(ONLINE)
+  /// The resident's approval this walk-in was admitted on (Phase 5 Part 3). Used at most once.
+  walkInRequestId           String?         @unique @map("walk_in_request_id") @db.Uuid
   createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                 DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -766,6 +772,7 @@ model Visit {
   pass                VisitorPass?       @relation(fields: [organisationId, invitationId, passId], references: [organisationId, invitationId, id], onDelete: Restrict, onUpdate: Restrict)
   recordedBy          User               @relation("VisitRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   departureRecordedBy User?              @relation("VisitDepartureRecordedBy", fields: [departureRecordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  walkInRequest       WalkInRequest?     @relation(fields: [organisationId, propertyId, unitId, walkInRequestId], references: [organisationId, propertyId, unitId, id], onDelete: Restrict, onUpdate: Restrict)
   accessEvents        AccessEvent[]
 
   @@unique([organisationId, id])
@@ -794,4 +801,46 @@ model AccessEvent {
 
   @@index([organisationId, propertyId, occurredAt])
   @@map("access_events")
+}
+
+/// Expiry is not a status: a PENDING request past expires_at is expired.
+enum WalkInRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+}
+
+/// A guard asks the residents of a unit to let in someone without a pass (Phase 5 Part 3).
+/// Decided once, before it expires; an approval admits one visit within a short time.
+model WalkInRequest {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  organisationId    String              @map("organisation_id") @db.Uuid
+  propertyId        String              @map("property_id") @db.Uuid
+  unitId            String              @map("unit_id") @db.Uuid
+  category          VisitorCategory
+  visitorName       String              @map("visitor_name")
+  visitorPhone      String?             @map("visitor_phone")
+  vehiclePlate      String?             @map("vehicle_plate")
+  gate              String?
+  requestedByUserId String              @map("requested_by_user_id") @db.Uuid
+  status            WalkInRequestStatus @default(PENDING)
+  expiresAt         DateTime            @map("expires_at") @db.Timestamptz(3)
+  decidedAt         DateTime?           @map("decided_at") @db.Timestamptz(3)
+  /// The resident who approved or denied, or the guard who cancelled.
+  decidedByUserId   String?             @map("decided_by_user_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit        Unit     @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy User     @relation("WalkInRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decidedBy   User?    @relation("WalkInDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// At most one (visits.walk_in_request_id is unique).
+  visits      Visit[]
+
+  @@unique([organisationId, propertyId, unitId, id])
+  @@index([organisationId, unitId, expiresAt])
+  @@index([organisationId, propertyId, createdAt])
+  @@map("walk_in_requests")
 }
