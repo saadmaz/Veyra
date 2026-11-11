@@ -12,6 +12,8 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CreateVisitorInvitationResponse,
+  OfflineListResponse,
+  SyncLateEntriesResponse,
   ValidatePassResponse,
   VisitDto,
   VisitorInvitationDto,
@@ -37,6 +39,9 @@ import {
   denySchema,
   departSchema,
   formatCode,
+  reviewSchema,
+  type SyncLateEntriesInput,
+  syncLateEntriesSchema,
   type ValidatePassInput,
   validatePassSchema,
   visitLogQuerySchema,
@@ -82,6 +87,9 @@ const toVisit = (v: VisitRecord): VisitDto => ({
   arrivedAt: v.arrivedAt.toISOString(),
   departedAt: v.departedAt?.toISOString() ?? null,
   source: v.source,
+  reviewReason: v.reviewReason,
+  reviewedAt: v.reviewedAt?.toISOString() ?? null,
+  reviewNote: v.reviewNote,
 });
 
 const toWalkIn = (r: WalkInRequestRecord, now: Date): WalkInRequestDto => ({
@@ -406,5 +414,67 @@ export class VisitorsController {
       await this.visitors.decideWalkIn(access, requestId, false, requestMeta(req)),
       new Date(),
     );
+  }
+
+  // ------------------------------------------------------------------ offline gate (Part 5)
+
+  @Get(`${PROPERTY}/gate/offline-list`)
+  @RequirePermission('property.visitor.check_in')
+  @ApiOperation({
+    summary:
+      'Passes usable in the next 4 hours, as hashes, for checking while offline. Do not use after trustUntil.',
+  })
+  async offlineList(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<OfflineListResponse> {
+    const list = await this.visitors.offlineList(access, requestMeta(req));
+    return {
+      propertyId: access.propertyId as string,
+      generatedAt: list.generatedAt.toISOString(),
+      trustUntil: list.trustUntil.toISOString(),
+      entries: list.entries,
+    };
+  }
+
+  @Post(`${PROPERTY}/gate/late-entries`)
+  @HttpCode(200)
+  @RequirePermission('property.visitor.check_in')
+  @ApiOperation({
+    summary:
+      'Record what happened while offline (OFFLINE_SYNC) or in the paper log (PAPER, supervisors). Idempotent per clientRef.',
+  })
+  async lateEntries(
+    @CurrentAccess() access: OrganisationAccess,
+    @Body(new ZodValidationPipe(syncLateEntriesSchema)) body: SyncLateEntriesInput,
+    @Req() req: Request,
+  ): Promise<SyncLateEntriesResponse> {
+    return { results: await this.visitors.syncLateEntries(access, body, requestMeta(req)) };
+  }
+
+  @Get(`${PROPERTY}/visits/needs-review`)
+  @RequirePermission('property.visitor.read')
+  @ApiOperation({
+    summary: 'Paper and offline entries the pass would not have allowed, not yet reviewed.',
+  })
+  async needsReview(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<{ data: VisitDto[] }> {
+    return {
+      data: (await this.visitors.visitsNeedingReview(access, requestMeta(req))).map(toVisit),
+    };
+  }
+
+  @Post(`${PROPERTY}/visits/:visitId/review`)
+  @HttpCode(200)
+  @RequirePermission('property.visitor.manage')
+  async review(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('visitId', uuid) visitId: string,
+    @Body(new ZodValidationPipe(reviewSchema)) body: z.infer<typeof reviewSchema>,
+    @Req() req: Request,
+  ): Promise<VisitDto> {
+    return toVisit(await this.visitors.reviewVisit(access, visitId, body.note, requestMeta(req)));
   }
 }

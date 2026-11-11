@@ -326,6 +326,30 @@ expiry, rehash on sign-in, idempotent sign-out).
   for them. These caught three label-in-name failures (WCAG 2.5.3) and an "Inside now" list that
   did not refresh after an admission.
 
+### Part 5: offline gate and paper log
+
+- `packages/db` integration (5, `offline-entries.int.test.ts`): non-ONLINE entries need the
+  device reference and keep the time they happened; one row per reference (a retried sync is not
+  a second visit); only paper and offline entries can be flagged; a review records who and when,
+  follows a flag and happens once; the record otherwise never changes, and the departure is still
+  recordable once.
+- `apps/api` integration (+6): the offline list holds hashes that match the device's own hashing,
+  never codes, tokens or phone numbers, trusted for exactly 4 hours; an offline admission is
+  recorded at its own time, once per reference, with an idempotent departure; a pass cancelled
+  before the admission is flagged and one cancelled after is not; walk-ins to a unit are flagged,
+  entries from the future or older than 7 days refused; only supervisors type in the paper log;
+  flagged entries are reviewed once, by supervisors only.
+- `apps/api` unit (+3): admissions judged at the time they happened; time limits; what each kind
+  of entry needs.
+- `apps/console-web` unit (+4, `test/offline-gate.test.ts`): device hashing equals the server's;
+  offline checks by token or code, refused without a list or after its 4-hour trust, outside the
+  window, or when admissions already queued on the device use up the pass.
+- `apps/console-web` browser journeys (+2, desktop and phone): the guard loses the connection,
+  checks a code against the saved list, admits, sees the entry waiting, is refused a walk-in to a
+  unit, and the entry is sent and recorded as OFFLINE_SYNC when the connection returns
+  (Playwright offline emulation); a supervisor reviews a flagged entry with a note and types in a
+  paper-log walk-in that goes to review.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

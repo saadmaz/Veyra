@@ -11,6 +11,7 @@ import {
   type AccessEventType,
   type InvitationRecord,
   type NewVisit,
+  type OfflineCandidate,
   PassCodeCollision,
   type PassRecord,
   type VisitorAuditEvent,
@@ -80,6 +81,9 @@ const VISIT_SELECT = {
   arrivedAt: true,
   departedAt: true,
   source: true,
+  reviewReason: true,
+  reviewedAt: true,
+  reviewNote: true,
   unit: { select: { number: true } },
 } as const;
 
@@ -292,7 +296,12 @@ class PrismaVisitorsUnitOfWork implements VisitorsUnitOfWork {
 
   async createVisit(visit: NewVisit): Promise<VisitRecord> {
     const row = await this.tx.visit.create({
-      data: { ...this.scope, ...visit, recordedByUserId: this.userId, source: 'ONLINE' },
+      data: {
+        ...this.scope,
+        ...visit,
+        source: visit.source ?? 'ONLINE',
+        recordedByUserId: this.userId,
+      },
       select: VISIT_SELECT,
     });
     return toVisit(row as VisitRow);
@@ -340,6 +349,57 @@ class PrismaVisitorsUnitOfWork implements VisitorsUnitOfWork {
       take: 1000,
     });
     return rows.map((row) => toVisit(row as VisitRow));
+  }
+
+  async offlineCandidates(now: Date, until: Date): Promise<OfflineCandidate[]> {
+    const rows = await this.tx.visitorPass.findMany({
+      where: {
+        ...this.scope,
+        revokedAt: null,
+        invitation: { status: 'ACTIVE', validUntil: { gte: now }, validFrom: { lte: until } },
+      },
+      select: {
+        id: true,
+        tokenHash: true,
+        codeHash: true,
+        invitation: { select: INVITATION_SELECT },
+      },
+      take: 2000,
+    });
+    return rows.map(({ invitation, ...pass }) => ({
+      pass,
+      invitation: toInvitation(invitation as InvitationRow),
+    }));
+  }
+
+  async visitByClientRef(clientRef: string) {
+    const row = await this.tx.visit.findFirst({
+      where: { organisationId: this.organisationId, clientRef },
+      select: { ...VISIT_SELECT, propertyId: true },
+    });
+    // A reference from another property is not this property's visit.
+    if (!row || row.propertyId !== this.propertyId) return null;
+    const { propertyId: _p, ...visit } = row;
+    return toVisit(visit as VisitRow);
+  }
+
+  async visitsNeedingReview() {
+    const rows = await this.tx.visit.findMany({
+      where: { ...this.scope, reviewReason: { not: null }, reviewedAt: null },
+      select: VISIT_SELECT,
+      orderBy: { arrivedAt: 'desc' },
+      take: 500,
+    });
+    return rows.map((row) => toVisit(row as VisitRow));
+  }
+
+  async markReviewed(visitId: string, note: string | null, at: Date) {
+    const row = await this.tx.visit.update({
+      where: { id: visitId, ...this.scope },
+      data: { reviewedAt: at, reviewedByUserId: this.userId, reviewNote: note },
+      select: VISIT_SELECT,
+    });
+    return toVisit(row as VisitRow);
   }
 
   async callerIsResidentOf(unitId: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Page, Route } from '@playwright/test';
 import type {
   BuildingDto,
@@ -136,7 +136,12 @@ type FakeVisitorInvitation = VisitorInvitationDto & {
   /** The resident login that registered the visitor; null for staff. */
   hostUserId: string | null;
 };
-type FakeVisit = VisitDto & { propertyId: string; walkInRequestId: string | null };
+type FakeVisit = VisitDto & {
+  propertyId: string;
+  walkInRequestId: string | null;
+  /** Device reference of paper and offline entries (idempotent sync). */
+  clientRef?: string;
+};
 type FakeWalkIn = WalkInRequestDto & { propertyId: string };
 
 /** Today in the property's time zone, as the API computes it. */
@@ -1321,7 +1326,12 @@ export class FakeApi {
     };
   }
 
-  private visitDto({ propertyId: _p, walkInRequestId: _w, ...v }: FakeVisit): VisitDto {
+  private visitDto({
+    propertyId: _p,
+    walkInRequestId: _w,
+    clientRef: _c,
+    ...v
+  }: FakeVisit): VisitDto {
     return v;
   }
 
@@ -1349,7 +1359,18 @@ export class FakeApi {
   private newVisit(
     property: PropertyDto,
     userId: string,
-    fields: Omit<FakeVisit, 'id' | 'propertyId' | 'arrivedAt' | 'departedAt' | 'source'>,
+    fields: Omit<
+      FakeVisit,
+      | 'id'
+      | 'propertyId'
+      | 'arrivedAt'
+      | 'departedAt'
+      | 'source'
+      | 'reviewReason'
+      | 'reviewedAt'
+      | 'reviewNote'
+    > &
+      Partial<Pick<FakeVisit, 'arrivedAt' | 'source' | 'reviewReason'>> & { clientRef?: string },
   ): FakeVisit {
     const visit: FakeVisit = {
       id: randomUUID(),
@@ -1357,6 +1378,9 @@ export class FakeApi {
       arrivedAt: now(),
       departedAt: null,
       source: 'ONLINE',
+      reviewReason: null,
+      reviewedAt: null,
+      reviewNote: null,
       ...fields,
     };
     void userId;
@@ -1481,7 +1505,8 @@ export class FakeApi {
     const mineInvitations = this.visitorInvitations.filter((i) => i.propertyId === property.id);
     const gateRoute = sub.startsWith('/gate/') || sub.startsWith('/visits');
 
-    if (gateRoute && !sub.startsWith('/visits?') && sub !== '/visits') {
+    const readRoutes = ['/visits', '/visits/needs-review'];
+    if (gateRoute && !readRoutes.includes(sub) && !/^\/visits\/[^/]+\/review$/.test(sub)) {
       const denied = needs('property.visitor.check_in');
       if (denied) return denied;
     }
@@ -1634,6 +1659,113 @@ export class FakeApi {
       if (!visit) return this.error(route, 404, 'NOT_FOUND');
       if (visit.departedAt) return this.error(route, 409, 'VISIT_ALREADY_DEPARTED');
       visit.departedAt = now();
+      return this.reply(route, 200, this.visitDto(visit));
+    }
+    if (sub === '/gate/offline-list' && method === 'GET') {
+      const sha = (value: string) => createHash('sha256').update(value).digest('hex');
+      const at = Date.now();
+      const until = at + 4 * 3_600_000;
+      const entries = mineInvitations
+        .filter((i) => {
+          // Like the API: usable within the next 4 hours (now, or starting before then).
+          if (Date.parse(i.validUntil) < at || Date.parse(i.validFrom) > until) return false;
+          const problem = this.passProblem(i);
+          return problem === null || problem === 'NOT_YET_VALID';
+        })
+        .map((i) => ({
+          invitationId: i.id,
+          passId: i.id,
+          tokenHash: sha(`token:${i.token}`),
+          codeHash: sha(`code:${property.id}:${i.code}`),
+          category: i.category,
+          visitorName: i.visitorName,
+          vehiclePlate: i.vehiclePlate,
+          unitNumber: i.unitNumber,
+          validFrom: i.validFrom,
+          validUntil: i.validUntil,
+          entriesLeft: i.maxEntries - this.visitorDto(i).entriesUsed,
+        }));
+      return this.reply(route, 200, {
+        propertyId: property.id,
+        generatedAt: new Date(at).toISOString(),
+        trustUntil: new Date(until).toISOString(),
+        entries,
+      });
+    }
+    if (sub === '/gate/late-entries' && method === 'POST') {
+      const source = str('source') as 'OFFLINE_SYNC' | 'PAPER';
+      if (source === 'PAPER' && !pp.includes('property.visitor.manage'))
+        return this.error(route, 403, 'FORBIDDEN');
+      const results = ((body.entries ?? []) as Record<string, string>[]).map((e) => {
+        const existing = this.visits.find((v) => v.clientRef === e.clientRef);
+        if (e.kind !== 'DEPART' && existing)
+          return { clientRef: e.clientRef, status: 'ALREADY_RECORDED', visitId: existing.id };
+        if (e.kind === 'DEPART') {
+          const visit = this.visits.find(
+            (v) => v.id === e.visitId || (e.departRef && v.clientRef === e.departRef),
+          );
+          if (!visit) return { clientRef: e.clientRef, status: 'REJECTED', error: 'NOT_FOUND' };
+          if (visit.departedAt)
+            return { clientRef: e.clientRef, status: 'ALREADY_RECORDED', visitId: visit.id };
+          visit.departedAt = e.occurredAt as string;
+          return { clientRef: e.clientRef, status: 'RECORDED', visitId: visit.id };
+        }
+        const invitation = mineInvitations.find(
+          (i) => i.id === e.passId || (e.code && i.code === normaliseCode(e.code)),
+        );
+        const toUnit = e.kind === 'WALK_IN' && e.unitId;
+        const unit = this.units.find((u) => u.id === (invitation?.unitId ?? e.unitId));
+        const flag =
+          e.kind === 'ADMIT' && invitation?.status === 'REVOKED'
+            ? 'REVOKED'
+            : toUnit
+              ? 'WALK_IN_WITHOUT_APPROVAL'
+              : null;
+        const visit = this.newVisit(property, userId, {
+          unitId: unit?.id ?? null,
+          unitNumber: unit?.number ?? null,
+          invitationId: invitation?.id ?? null,
+          category: (invitation?.category ?? e.category ?? 'GUEST') as VisitDto['category'],
+          visitorName: invitation?.visitorName ?? e.visitorName ?? '',
+          vehiclePlate: invitation?.vehiclePlate ?? null,
+          decision: e.kind === 'DENY' ? 'DENIED' : 'ADMITTED',
+          denialReason: e.kind === 'DENY' ? (e.reason ?? '') : null,
+          gate: e.gate ?? null,
+          walkInRequestId: null,
+          arrivedAt: e.occurredAt,
+          source,
+          reviewReason: flag,
+          clientRef: e.clientRef,
+        });
+        return {
+          clientRef: e.clientRef,
+          status: 'RECORDED',
+          visitId: visit.id,
+          reviewReason: flag,
+        };
+      });
+      return this.reply(route, 200, { results });
+    }
+    if (sub === '/visits/needs-review' && method === 'GET') {
+      const denied = needs('property.visitor.read');
+      if (denied) return denied;
+      const data = this.visits
+        .filter((v) => v.propertyId === property.id && v.reviewReason && !v.reviewedAt)
+        .map((v) => this.visitDto(v));
+      return this.reply(route, 200, { data });
+    }
+    const reviewMatch = /^\/visits\/([^/]+)\/review$/.exec(sub);
+    if (reviewMatch && method === 'POST') {
+      const denied = needs('property.visitor.manage');
+      if (denied) return denied;
+      const visit = this.visits.find(
+        (v) => v.id === reviewMatch[1] && v.propertyId === property.id,
+      );
+      if (!visit) return this.error(route, 404, 'NOT_FOUND');
+      if (!visit.reviewReason) return this.error(route, 409, 'NOT_FLAGGED');
+      if (visit.reviewedAt) return this.error(route, 409, 'ALREADY_REVIEWED');
+      visit.reviewedAt = now();
+      visit.reviewNote = str('note') ?? null;
       return this.reply(route, 200, this.visitDto(visit));
     }
     if (sub === '/visits' && method === 'GET') {

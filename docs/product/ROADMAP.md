@@ -26,7 +26,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 2     | Identity and multi-tenancy               | Done. Exit review: [PHASE_2_REVIEW](../reviews/PHASE_2_REVIEW.md) |
 | 3     | Organisation and property management     | Done. Exit review: [PHASE_3_REVIEW](../reviews/PHASE_3_REVIEW.md) |
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
-| 5     | Visitor and access management            | In progress: Parts 1-4 done; Part 5 (offline gate) next |
+| 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
 | 6     | Finance and billing                      | |
 | 7     | Maintenance and work orders              | |
 | 8     | Facilities and reservations              | |
@@ -125,7 +125,7 @@ personal data; a pass is never proof of identity; guards see the minimum necessa
 | 2 | Security guard and supervisor roles; API: residents and staff create and revoke invitations, pass issue (QR token and reference code), guard validation with minimal data, check-in, check-out, denied entry, walk-in record; rate limits on pass lookups | ✅ Done |
 | 3 | In-app walk-in approval: the guard requests, a resident of the unit (not staff) approves or denies within 10 minutes, the approval admits once within 15; at most 5 open requests per unit; database backstop; polling endpoints for the app and the gate | ✅ Done |
 | 4 | Console: residents' visitor pages (register, pass, walk-in answers), the guard's gate screen (installable PWA), the supervisor's log; browser journeys per role | ✅ Done |
-| 5 | Offline: written paper procedure and late entry; offline gate mode with a cached day list, sync, conflict handling, and late records flagged when the invitation would not have allowed them | |
+| 5 | Offline: paper procedure ([GATE_OFFLINE](../operations/GATE_OFFLINE.md)) and paper-log entry for supervisors; offline gate mode with a 4-hour hashed list, a device queue and idempotent sync; entries re-checked at the time they happened and flagged for supervisor review | ✅ Done |
 
 ## Release gates
 
@@ -144,7 +144,10 @@ readiness, user training and release communication, and known limitations docume
   (shown as "Archived unit"). The resident list has no paging or search (the API returns all
   current residents).
 - QR scanning relies on the browser's `BarcodeDetector` (Chromium); Safari and Firefox fall back
-  to typing the reference code. The PWA has no service worker yet (Part 5 brings offline use).
+  to typing the reference code.
+- Offline gate mode works when the connection drops while the gate screen is open. Opening the
+  screen with no connection needs a service worker caching the app shell (not built); until
+  then the paper procedure applies ([GATE_OFFLINE](../operations/GATE_OFFLINE.md)).
 - Walk-in requests reach residents by polling only. Instant delivery (WebSockets, then push
   notifications through the notifications module) is still to come; until then a resident must
   have the app open to answer within the 10 minutes.

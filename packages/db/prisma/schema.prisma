@@ -48,6 +48,7 @@ model User {
   accessEvents              AccessEvent[]
   walkInRequestsMade        WalkInRequest[]     @relation("WalkInRequestedBy")
   walkInRequestsDecided     WalkInRequest[]     @relation("WalkInDecidedBy")
+  visitsReviewed            Visit[]             @relation("VisitReviewedBy")
 
   @@map("users")
 }
@@ -763,6 +764,13 @@ model Visit {
   source                    VisitSource     @default(ONLINE)
   /// The resident's approval this walk-in was admitted on (Phase 5 Part 3). Used at most once.
   walkInRequestId           String?         @unique @map("walk_in_request_id") @db.Uuid
+  /// Set by the device for offline and paper entries, so a retried sync never records twice.
+  clientRef                 String?         @map("client_ref") @db.Uuid
+  /// Why a paper or offline entry needs a supervisor's review (e.g. REVOKED); null when it does not.
+  reviewReason              String?         @map("review_reason")
+  reviewedAt                DateTime?       @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId          String?         @map("reviewed_by_user_id") @db.Uuid
+  reviewNote                String?         @map("review_note")
   createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                 DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -773,9 +781,11 @@ model Visit {
   recordedBy          User               @relation("VisitRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   departureRecordedBy User?              @relation("VisitDepartureRecordedBy", fields: [departureRecordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   walkInRequest       WalkInRequest?     @relation(fields: [organisationId, propertyId, unitId, walkInRequestId], references: [organisationId, propertyId, unitId, id], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy          User?              @relation("VisitReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   accessEvents        AccessEvent[]
 
   @@unique([organisationId, id])
+  @@unique([organisationId, clientRef])
   @@index([organisationId, propertyId, arrivedAt])
   @@index([organisationId, invitationId])
   @@map("visits")

@@ -6,10 +6,14 @@ import {
   formatCode,
   hashCode,
   hashToken,
+  LATE_ENTRY_MAX_AGE_MS,
+  lateAdmissionFlag,
+  lateEntryTimeProblem,
   newPassSecret,
   normaliseCode,
   type PassState,
   passRejection,
+  syncLateEntriesSchema,
   validatePassSchema,
   WALK_IN_ANSWER_MS,
   walkInAdmissionProblem,
@@ -150,5 +154,58 @@ describe('walk-in requests', () => {
     expect(walkInAdmissionProblem({ ...base, status: 'CANCELLED' }, minutes(1))).toBe(
       'NOT_APPROVED',
     );
+  });
+});
+
+describe('late entries (offline and paper)', () => {
+  const at = new Date('2026-11-11T12:00:00Z');
+  const state = {
+    invitationStatus: 'ACTIVE' as const,
+    invitationRevokedAt: null as Date | null,
+    passRevokedAt: null as Date | null,
+    validFrom: new Date('2026-11-11T10:00:00Z'),
+    validUntil: new Date('2026-11-11T14:00:00Z'),
+    maxEntries: 1,
+    entriesUsed: 0,
+    hostStillResident: true,
+  };
+
+  it('judges an admission at the time it happened, not when it was synced', () => {
+    expect(lateAdmissionFlag(state, at)).toBeNull();
+    // Cancelled after the visitor came in: the admission was valid.
+    const later = new Date('2026-11-11T12:30:00Z');
+    expect(
+      lateAdmissionFlag({ ...state, invitationStatus: 'REVOKED', invitationRevokedAt: later }, at),
+    ).toBeNull();
+    // Cancelled before: flagged, even though the offline copy did not know.
+    const earlier = new Date('2026-11-11T11:00:00Z');
+    expect(lateAdmissionFlag({ ...state, passRevokedAt: earlier }, at)).toBe('REVOKED');
+    expect(lateAdmissionFlag(state, new Date('2026-11-11T15:00:00Z'))).toBe('EXPIRED');
+    expect(lateAdmissionFlag({ ...state, entriesUsed: 1 }, at)).toBe('NO_ENTRIES_LEFT');
+  });
+
+  it('refuses entries from the future or older than a week', () => {
+    expect(lateEntryTimeProblem(new Date(at.getTime() + 4 * 60_000), at)).toBeNull();
+    expect(lateEntryTimeProblem(new Date(at.getTime() + 6 * 60_000), at)).toBe('IN_THE_FUTURE');
+    expect(lateEntryTimeProblem(new Date(at.getTime() - LATE_ENTRY_MAX_AGE_MS + 1), at)).toBeNull();
+    expect(lateEntryTimeProblem(new Date(at.getTime() - LATE_ENTRY_MAX_AGE_MS - 1), at)).toBe(
+      'TOO_OLD',
+    );
+  });
+
+  it('checks each kind of entry has what it needs', () => {
+    const base = { clientRef: crypto.randomUUID(), occurredAt: '2026-11-11T12:00:00Z' };
+    const parse = (entry: Record<string, unknown>) =>
+      syncLateEntriesSchema.safeParse({ source: 'OFFLINE_SYNC', entries: [{ ...base, ...entry }] })
+        .success;
+    expect(parse({ kind: 'ADMIT', passId: crypto.randomUUID() })).toBe(true);
+    expect(parse({ kind: 'ADMIT', code: 'k7q2-m9xa' })).toBe(true);
+    expect(parse({ kind: 'ADMIT' })).toBe(false);
+    expect(parse({ kind: 'DENY', passId: crypto.randomUUID() })).toBe(false);
+    expect(parse({ kind: 'WALK_IN', visitorName: 'Ola' })).toBe(false);
+    expect(parse({ kind: 'DEPART' })).toBe(false);
+    expect(
+      parse({ kind: 'DEPART', visitId: crypto.randomUUID(), departRef: crypto.randomUUID() }),
+    ).toBe(false);
   });
 });

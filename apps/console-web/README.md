@@ -48,7 +48,11 @@ The header has a skip link, an organisation switcher (native `<select>`) and sig
 ## Installable app and camera
 
 The console has a web app manifest (`src/app/manifest.ts`) so the gate phone can add it to its
-home screen. It needs a connection; offline gate mode is Phase 5 Part 5. The camera is allowed
+home screen. If the connection drops while the gate screen is open, it keeps working offline
+(`src/lib/offline-gate.ts`, `src/lib/use-offline-gate.ts`): passes are checked against a saved
+4-hour list of hashes and entries queue on the device until the connection returns. Opening the
+screen without a connection is not supported yet (no service worker); see
+[GATE_OFFLINE](../../docs/operations/GATE_OFFLINE.md). The camera is allowed
 on the gate page only (`next.config.ts` overrides the shared `Permissions-Policy` for that
 route); every other page keeps it off. Scanning uses the browser's own `BarcodeDetector`
 (Chromium, e.g. Chrome on Android); elsewhere guards type the reference code.
