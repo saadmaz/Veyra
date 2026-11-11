@@ -266,14 +266,31 @@ Finance entities still to come (later phases): `ReconciliationBatch`, `Reconcili
 planned `CreditNote` and `Refund` became `invoice_credits` and `payment_refunds`) (the planned `ChargeDefinition` and
 `ChargeSchedule` became `charge_types` and `recurring_charges`).
 
-## 7. Identity vs person vs relationship
+## 7. Maintenance (Phase 7, data foundation implemented)
+
+Migration `20261114090000_maintenance`. A request reports a problem; staff accept it and do the
+work through work orders; the requester confirms or reopens. Costs are recorded for reporting
+only (owner decision, 2026-11-11: never billed in Phase 7).
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `maintenance_sla_targets` | property, priority (`LOW`/`MEDIUM`/`HIGH`/`URGENT`), response_minutes, resolution_minutes | One per priority per property; resolution not shorter than response, at most a year. Configuration: may be replaced. |
+| `maintenance_requests` | unit **or** common area, request_number, category, priority, title, description, location_detail?, status, status_note?, submitted_by_user, accepted_by_user?, accepted_at?, response_due_at?, resolution_due_at?, resolved_at?, closed_at?, reopen_count | Exactly one ACTIVE place of a property that is not archived. Numbered per property (MR-000042, advisory lock). Due times = creation + the property's target for the priority (none without a target), recomputed when the priority changes. **What was reported never changes.** Status: `SUBMITTED → ACCEPTED \| REJECTED \| CANCELLED`, `ACCEPTED → RESOLVED \| CANCELLED`, `RESOLVED → CLOSED \| ACCEPTED` (reopen); rejecting, cancelling and reopening need a reason. RESOLVED only with a completed work order and none still open; CANCELLED only with no open work. Accepted-by/at, resolved/closed times and the reopen count are set by the database, whatever the client sends. CLOSED, REJECTED and CANCELLED are final. |
+| `work_orders` | request?, unit **or** common area, work_order_number, category, priority, title, description?, status, status_note?, assigned_to_user?, created_by_user, due_at?, started_at?, completed_at? | Raised for an ACCEPTED request (at its place) or directly by staff. Numbered per property (WO-000042). Status: `OPEN → ASSIGNED \| CANCELLED`, `ASSIGNED → OPEN \| IN_PROGRESS \| CANCELLED`, `IN_PROGRESS → ON_HOLD \| COMPLETED \| CANCELLED`, `ON_HOLD → IN_PROGRESS \| CANCELLED`; pausing, completing (what was done) and cancelling need a note. Open work has no assignee, assigned/started/paused/completed work has one; reassigning is allowed while the work is live. Start and completion times set by the database. Never moves to another request or place. COMPLETED and CANCELLED are final. Requests and their work orders serialise on an advisory lock per request. |
+| `work_order_costs` | work order, kind (`LABOUR`/`MATERIAL`/`OTHER`), description, amount_minor, currency, recorded_by_user, voided_at?, voided_by_user?, void_reason? | Positive, in the property's currency, never on cancelled work. Never edited: voided once with a reason, then recorded again. |
+| `maintenance_events` | sequence, request?, work_order?, type (`STATUS_CHANGED`/`ASSIGNEE_CHANGED`/`PRIORITY_CHANGED`/`NOTE`), visibility (`RESIDENT`/`INTERNAL`), from_value?, to_value?, body?, actor_user? | **Append-only for every role**, the superuser included (UPDATE, DELETE and TRUNCATE refused). Status, assignee and priority changes are written by the database's own triggers with the current user as actor; the application can add only notes (text and author required). Request changes are visible to the requester; work order changes are internal. A work order's note is also filed under its request. `sequence` orders events written in the same transaction. |
+
+All five tables have RLS by organisation; the application has no DELETE grant except on SLA
+targets.
+
+## 8. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
 holds the personal fields the product needs and may exist without a login. Relationships to
 units (ownership, tenancy, household membership) are separate, effective-dated records. One
 person may relate to many units and properties, and hold many roles.
 
-## 8. Conceptual entity catalogue (later phases)
+## 9. Conceptual entity catalogue (later phases)
 
 Starting point for discovery, not a final schema. Validate entities and cardinalities when the
 owning module is built.
@@ -282,7 +299,7 @@ owning module is built.
 | ---- | -------- |
 | Property inventory | `CommonArea`, `Facility`, `ParkingSpace` |
 | Visitors and access (beyond section 5) | `VehicleUnitAssignment` |
-| Maintenance and operations | `MaintenanceRequest`, `WorkOrder`, `WorkOrderAssignment`, `Inspection`, `Task`, `Shift`, `Incident` |
+| Maintenance and operations (section 7 holds requests and work orders; assignment is a column) | `Inspection`, `Task`, `Shift`, `Incident` |
 | Assets and vendors | `Asset`, `AssetMaintenancePlan`, `AssetServiceRecord`, `Vendor`, `VendorContract` |
 | Facilities | `FacilitySchedule`, `Reservation`, `ReservationPolicy`, `FacilityClosure` |
 | Governance | `Committee`, `CommitteeMembership`, `Meeting`, `MeetingAgendaItem`, `MeetingMinute`, `Resolution`, `ApprovalRequest`, `ApprovalStep`, `Vote` (only where legal requirements are validated) |
@@ -292,7 +309,7 @@ File bytes live in object storage. The database stores metadata, ownership, acce
 checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
 server-side authorisation check.
 
-## 9. Data lifecycle
+## 10. Data lifecycle
 
 - Retention is defined per data category and jurisdiction.
 - Correction and deletion are supported where legally required.
