@@ -79,8 +79,23 @@ export class PrismaGrantRepository implements GrantRepository {
         });
         const derived = await tx.$queryRaw<{ role: string; unit_id: string }[]>`
           SELECT "role", "unit_id" FROM app_resident_grants(${userId}::uuid)`;
+        // Approved support access (Phase 13): a read-only grant for the approved window.
+        const support = await tx.supportAccess.findMany({
+          where: { organisationId, requestedByUserId: userId, status: 'APPROVED' },
+          select: { startsAt: true, endsAt: true },
+        });
         const grants: Grant[] = [
           ...memberships,
+          ...support
+            .filter((s) => s.startsAt && s.endsAt)
+            .map((s) => ({
+              role: 'SUPPORT_AGENT',
+              scopeType: 'ORGANISATION' as const,
+              scopeId: organisationId,
+              status: 'ACTIVE' as const,
+              validFrom: s.startsAt as Date,
+              validUntil: s.endsAt,
+            })),
           ...derived.map((row) => ({
             role: row.role,
             scopeType: 'UNIT' as const,

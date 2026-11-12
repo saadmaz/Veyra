@@ -228,7 +228,9 @@ export class AccessControlService {
   /** Current derived resident grants of the user in the organisation (for "my units"). */
   async residentGrants(userId: string, organisationId: string): Promise<Grant[]> {
     const loaded = await this.grants.loadGrants(userId, organisationId);
-    return (loaded?.grants ?? []).filter((grant) => roleDefinition(grant.role)?.derived);
+    return (loaded?.grants ?? []).filter(
+      (grant) => grant.scopeType === 'UNIT' && roleDefinition(grant.role)?.derived,
+    );
   }
 
   /** The caller's organisation-level access, or null when they are not an effective member. */

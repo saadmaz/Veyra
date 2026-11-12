@@ -321,10 +321,21 @@ status changes and suspensions go only through `app_platform_set_subscription()`
 that organisation's context and write its audit log and subscription history. The API's
 `/platform` routes answer 404 to everyone else. See docs/operations/PLATFORM_ADMIN.md.
 
+### 6.4c Support access (Phase 13)
+
+Platform super admins do not see tenant data by default. A platform administrator asks one
+organisation for access through `app_support_request()` with a reason and for 1 to 24 hours.
+An organisation admin (`organisation.member.manage`) approves or denies it and may revoke it at
+any time; the database refuses decisions by the requester, sets the window (from approval for
+the asked hours) and writes every step to the organisation's audit log. While the window is open
+the grant loader gives the requester the derived, never-assignable `SUPPORT_AGENT` role at
+organisation scope, which holds every `*.read` permission and nothing else (exports and all
+changes stay refused). Requests are listed under `/organisations/{org}/support-access` with
+`organisation.member.read`, so admins see them even while the organisation is read-only.
+
 ### 6.5 Not yet implemented
 
 - MFA for privileged mutations (rule 7) depends on MFA in authentication (ADR 0005 gap).
 - Building and unit scopes and derived owner/tenant grants: later Phase 3 parts and Phase 4.
 - Property managers cannot invite others to their property yet (organisation admins do).
-- Platform support access to tenant data (Phase 13 Part 3).
 - Permission caching with invalidation events (not needed while reads are cheap).

@@ -455,6 +455,11 @@ are separate and unchanged.
 `platform_admins` (user, note?, granted_at, revoked_at?) lists VEYRA staff; only the database
 owner writes it.
 
+`support_access` (organisation, requested_by_user, reason, hours 1-24, status
+`REQUESTED`/`APPROVED`/`DENIED`/`REVOKED`, decided_by_user?, decided_at?, starts_at?, ends_at?,
+revoked_at?) is created only through `app_support_request()` by a platform administrator; the
+organisation decides it (never the requester); the database sets the times and audits each step.
+
 Inserting a property or a unit beyond the plan's limit fails with the application's own SQLSTATE
 `VE401` or `VE402`, answered as 409 `PLAN_LIMIT_REACHED`.
 

@@ -99,6 +99,8 @@ model User {
   approvalDecisionsMade    ApprovalDecision[]       @relation("ApprovalDecisionBy")
   subscriptionChanges      SubscriptionEvent[]      @relation("SubscriptionEventActor")
   platformAdmin            PlatformAdmin?
+  supportRequested         SupportAccess[]          @relation("SupportRequestedBy")
+  supportDecided           SupportAccess[]          @relation("SupportDecidedBy")
   webhookEndpointsCreated  WebhookEndpoint[]        @relation("WebhookEndpointCreatedBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
@@ -196,6 +198,7 @@ model Organisation {
   webhookDeliveries      WebhookDelivery[]
   subscription           Subscription?
   subscriptionEvents     SubscriptionEvent[]
+  supportAccess          SupportAccess[]
 
   @@map("organisations")
 }
@@ -3454,4 +3457,42 @@ model PlatformAdmin {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("platform_admins")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Support access (Phase 13 Part 3). A platform administrator asks for read-only access to one
+// organisation, with a reason and for at most 24 hours; an organisation admin approves or denies
+// it and can revoke it at any time. Visible to the organisation throughout. Rules are
+// hand-written in migration 20261202090000_support_access.
+// ---------------------------------------------------------------------------------------------
+
+enum SupportAccessStatus {
+  REQUESTED
+  APPROVED
+  DENIED
+  REVOKED
+}
+
+model SupportAccess {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  organisationId    String              @map("organisation_id") @db.Uuid
+  requestedByUserId String              @map("requested_by_user_id") @db.Uuid
+  reason            String
+  hours             Int
+  status            SupportAccessStatus @default(REQUESTED)
+  decidedByUserId   String?             @map("decided_by_user_id") @db.Uuid
+  decidedAt         DateTime?           @map("decided_at") @db.Timestamptz(3)
+  startsAt          DateTime?           @map("starts_at") @db.Timestamptz(3)
+  endsAt            DateTime?           @map("ends_at") @db.Timestamptz(3)
+  revokedAt         DateTime?           @map("revoked_at") @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy  User         @relation("SupportRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decidedBy    User?        @relation("SupportDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, createdAt])
+  @@index([requestedByUserId, status])
+  @@map("support_access")
 }
