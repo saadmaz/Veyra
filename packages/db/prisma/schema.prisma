@@ -61,42 +61,44 @@ model User {
   journalEntriesCreated   JournalEntry[]      @relation("JournalEntryCreatedBy")
   journalEntriesPosted    JournalEntry[]      @relation("JournalEntryPostedBy")
 
-  approvalsRequested      FinanceApproval[]        @relation("ApprovalRequestedBy")
-  approvalsDecided        FinanceApproval[]        @relation("ApprovalDecidedBy")
-  invoiceCreditsCreated   InvoiceCredit[]          @relation("InvoiceCreditCreatedBy")
-  paymentRefundsCreated   PaymentRefund[]          @relation("PaymentRefundCreatedBy")
-  paymentReversalsCreated PaymentReversal[]        @relation("PaymentReversalCreatedBy")
-  bankTransfersSubmitted  BankTransferSubmission[] @relation("BankTransferSubmittedBy")
-  bankTransfersDecided    BankTransferSubmission[] @relation("BankTransferDecidedBy")
-  maintenanceRequests     MaintenanceRequest[]     @relation("MaintenanceRequestSubmittedBy")
-  maintenanceAccepted     MaintenanceRequest[]     @relation("MaintenanceRequestAcceptedBy")
-  workOrdersAssigned      WorkOrder[]              @relation("WorkOrderAssignee")
-  workOrdersCreated       WorkOrder[]              @relation("WorkOrderCreatedBy")
-  vendorDocumentsAdded    VendorDocument[]         @relation("VendorDocumentCreatedBy")
-  schedulesCreated        MaintenanceSchedule[]    @relation("MaintenanceScheduleCreatedBy")
-  departmentMemberships   DepartmentMember[]       @relation("DepartmentMemberUser")
-  shiftsWorked            Shift[]                  @relation("ShiftWorker")
-  shiftsCreated           Shift[]                  @relation("ShiftCreatedBy")
-  checklistTemplatesMade  ChecklistTemplate[]      @relation("ChecklistTemplateCreatedBy")
-  checklistsAssigned      ChecklistRun[]           @relation("ChecklistRunAssignee")
-  checklistsCreated       ChecklistRun[]           @relation("ChecklistRunCreatedBy")
-  checklistsVerified      ChecklistRun[]           @relation("ChecklistRunVerifiedBy")
-  checklistItemsAnswered  ChecklistRunItem[]       @relation("ChecklistRunItemAnsweredBy")
-  announcementsCreated    Announcement[]           @relation("AnnouncementCreatedBy")
-  announcementsPublished  Announcement[]           @relation("AnnouncementPublishedBy")
-  announcementsReceived   AnnouncementRecipient[]  @relation("AnnouncementRecipientUser")
-  notifications           Notification[]           @relation("NotificationUser")
-  vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
-  workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
-  workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
-  maintenanceEvents       MaintenanceEvent[]       @relation("MaintenanceEventActor")
-  attachmentsUploaded     MaintenanceAttachment[]  @relation("MaintenanceAttachmentUploadedBy")
-  attachmentsRemoved      MaintenanceAttachment[]  @relation("MaintenanceAttachmentRemovedBy")
-  facilityClosures        FacilityClosure[]        @relation("FacilityClosureCreatedBy")
-  facilityClosuresLifted  FacilityClosure[]        @relation("FacilityClosureLiftedBy")
-  facilityBookingsMade    FacilityBooking[]        @relation("FacilityBookingBookedBy")
-  facilityBookingsDecided FacilityBooking[]        @relation("FacilityBookingDecidedBy")
-  facilityBookingEvents   FacilityBookingEvent[]   @relation("FacilityBookingEventActor")
+  approvalsRequested       FinanceApproval[]        @relation("ApprovalRequestedBy")
+  approvalsDecided         FinanceApproval[]        @relation("ApprovalDecidedBy")
+  invoiceCreditsCreated    InvoiceCredit[]          @relation("InvoiceCreditCreatedBy")
+  paymentRefundsCreated    PaymentRefund[]          @relation("PaymentRefundCreatedBy")
+  paymentReversalsCreated  PaymentReversal[]        @relation("PaymentReversalCreatedBy")
+  bankTransfersSubmitted   BankTransferSubmission[] @relation("BankTransferSubmittedBy")
+  bankTransfersDecided     BankTransferSubmission[] @relation("BankTransferDecidedBy")
+  maintenanceRequests      MaintenanceRequest[]     @relation("MaintenanceRequestSubmittedBy")
+  maintenanceAccepted      MaintenanceRequest[]     @relation("MaintenanceRequestAcceptedBy")
+  workOrdersAssigned       WorkOrder[]              @relation("WorkOrderAssignee")
+  workOrdersCreated        WorkOrder[]              @relation("WorkOrderCreatedBy")
+  vendorDocumentsAdded     VendorDocument[]         @relation("VendorDocumentCreatedBy")
+  schedulesCreated         MaintenanceSchedule[]    @relation("MaintenanceScheduleCreatedBy")
+  departmentMemberships    DepartmentMember[]       @relation("DepartmentMemberUser")
+  shiftsWorked             Shift[]                  @relation("ShiftWorker")
+  shiftsCreated            Shift[]                  @relation("ShiftCreatedBy")
+  checklistTemplatesMade   ChecklistTemplate[]      @relation("ChecklistTemplateCreatedBy")
+  checklistsAssigned       ChecklistRun[]           @relation("ChecklistRunAssignee")
+  checklistsCreated        ChecklistRun[]           @relation("ChecklistRunCreatedBy")
+  checklistsVerified       ChecklistRun[]           @relation("ChecklistRunVerifiedBy")
+  checklistItemsAnswered   ChecklistRunItem[]       @relation("ChecklistRunItemAnsweredBy")
+  announcementsCreated     Announcement[]           @relation("AnnouncementCreatedBy")
+  announcementsPublished   Announcement[]           @relation("AnnouncementPublishedBy")
+  announcementsReceived    AnnouncementRecipient[]  @relation("AnnouncementRecipientUser")
+  notifications            Notification[]           @relation("NotificationUser")
+  documentsCreated         Document[]               @relation("DocumentCreatedBy")
+  documentVersionsUploaded DocumentVersion[]        @relation("DocumentVersionUploadedBy")
+  vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
+  workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
+  workOrderCostsVoided     WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
+  maintenanceEvents        MaintenanceEvent[]       @relation("MaintenanceEventActor")
+  attachmentsUploaded      MaintenanceAttachment[]  @relation("MaintenanceAttachmentUploadedBy")
+  attachmentsRemoved       MaintenanceAttachment[]  @relation("MaintenanceAttachmentRemovedBy")
+  facilityClosures         FacilityClosure[]        @relation("FacilityClosureCreatedBy")
+  facilityClosuresLifted   FacilityClosure[]        @relation("FacilityClosureLiftedBy")
+  facilityBookingsMade     FacilityBooking[]        @relation("FacilityBookingBookedBy")
+  facilityBookingsDecided  FacilityBooking[]        @relation("FacilityBookingDecidedBy")
+  facilityBookingEvents    FacilityBookingEvent[]   @relation("FacilityBookingEventActor")
 
   @@map("users")
 }
@@ -410,6 +412,8 @@ model Property {
   checklistRunItems      ChecklistRunItem[]
   announcements          Announcement[]
   announcementRecipients AnnouncementRecipient[]
+  documents              Document[]
+  documentVersions       DocumentVersion[]
   facilityOpeningHours   FacilityOpeningHours[]
   facilityClosures       FacilityClosure[]
   facilityBookings       FacilityBooking[]
@@ -2759,4 +2763,99 @@ model NotificationDelivery {
   @@unique([notificationId, channel])
   @@index([organisationId, status, createdAt])
   @@map("notification_deliveries")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Documents (Phase 10 Part 3). A property's document (house rules, minutes, notices, forms) with a
+// category, an audience and an optional expiry date; each upload is a numbered version, checked
+// before it is shown; the newest ready version is the current one. Files live in object storage
+// (ADR 0007). Rules are hand-written in migration 20261125090000_documents.
+// ---------------------------------------------------------------------------------------------
+
+enum DocumentCategory {
+  RULES
+  MINUTES
+  NOTICE
+  FORM
+  FINANCIAL
+  CONTRACT
+  INSURANCE
+  OTHER
+}
+
+enum DocumentAudience {
+  /// Residents and staff.
+  EVERYONE
+  /// Owners, tenants and household members (and staff who manage documents).
+  RESIDENTS
+  /// Owners only (and staff who manage documents).
+  OWNERS
+  /// Staff only.
+  STAFF
+}
+
+enum DocumentStatus {
+  ACTIVE
+  /// Hidden from readers, kept for history. Final.
+  ARCHIVED
+}
+
+enum DocumentVersionStatus {
+  PENDING
+  READY
+  REJECTED
+}
+
+model Document {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  organisationId  String           @map("organisation_id") @db.Uuid
+  propertyId      String           @map("property_id") @db.Uuid
+  title           String
+  description     String?
+  category        DocumentCategory
+  audience        DocumentAudience
+  /// The last day it is valid, e.g. an insurance certificate; null when it does not expire.
+  expiresOn       DateTime?        @map("expires_on") @db.Date
+  status          DocumentStatus   @default(ACTIVE)
+  archivedAt      DateTime?        @map("archived_at") @db.Timestamptz(3)
+  createdByUserId String           @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property  Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User              @relation("DocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versions  DocumentVersion[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, status])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id               String                @id @default(uuid(7)) @db.Uuid
+  organisationId   String                @map("organisation_id") @db.Uuid
+  propertyId       String                @map("property_id") @db.Uuid
+  documentId       String                @map("document_id") @db.Uuid
+  /// 1, 2, 3… per document, set by the database.
+  versionNumber    Int                   @default(0) @map("version_number")
+  /// Chosen by the server: org/<organisation>/prop/<property>/documents/<id>.
+  storageKey       String                @map("storage_key")
+  fileName         String                @map("file_name")
+  contentType      String                @map("content_type")
+  sizeBytes        Int                   @map("size_bytes")
+  /// What changed in this version.
+  note             String?
+  status           DocumentVersionStatus @default(PENDING)
+  uploadedByUserId String                @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  readyAt          DateTime?             @map("ready_at") @db.Timestamptz(3)
+
+  property   Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  document   Document @relation(fields: [organisationId, propertyId, documentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  uploadedBy User     @relation("DocumentVersionUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([storageKey])
+  @@unique([documentId, versionNumber])
+  @@index([organisationId, documentId])
+  @@map("document_versions")
 }
