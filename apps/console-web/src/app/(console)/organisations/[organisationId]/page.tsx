@@ -96,6 +96,18 @@ export default function OrganisationPage() {
         </dl>
       </Card>
 
+      {org.permissions.includes('organisation.member.read') ? (
+        <Card title="Plan and support">
+          <p className="muted">
+            Your plan and what it includes, and support access for VEYRA staff.
+          </p>
+          <div className="form__actions">
+            <ButtonLink href={`/organisations/${org.id}/plan`} variant="secondary">
+              Plan and support
+            </ButtonLink>
+          </div>
+        </Card>
+      ) : null}
       {org.permissions.includes('organisation.webhook.manage') ? (
         <Card title="Webhooks">
           <p className="muted">Tell other systems when incidents and approvals happen.</p>

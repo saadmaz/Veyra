@@ -25,6 +25,7 @@ import { FakeFinance } from './fake-finance';
 import { FakeGovernance } from './fake-governance';
 import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
 import { FakeOps } from './fake-ops';
+import { FakePlatform } from './fake-platform';
 import { FakeReporting } from './fake-reporting';
 
 /**
@@ -305,6 +306,7 @@ export class FakeApi {
   comms = new FakeComms();
   governance = new FakeGovernance();
   reporting = new FakeReporting();
+  platform = new FakePlatform();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -717,6 +719,14 @@ export class FakeApi {
 
     if (rest === '' && method === 'GET')
       return this.reply(route, 200, { ...organisation, permissions });
+    const platformReply = this.platform.handleOrganisation({
+      method,
+      sub: rest,
+      organisationId: organisation.id,
+      permissions,
+      user,
+    });
+    if (platformReply) return this.reply(route, platformReply.status, platformReply.body);
     const reported = this.reporting.handleOrganisation({
       method,
       sub: rest,
