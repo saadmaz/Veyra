@@ -585,6 +585,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   back without blocking the others; the SLA check runs in the tenant's context, refuses a
   malformed payload, and is a tenant job. The env test requires `DATABASE_URL`.
 
+### Part 5: maintenance console
+
+- `apps/console-web` unit (+5, `test/maintenance.test.ts`): place and history wording, file
+  checks before upload, sizes and due times, upload and storage error messages.
+- `packages/design-tokens` unit (+1): every text and status colour has at least 4.5:1 contrast on
+  the page background and on cards, in both schemes (the warning colour was darkened).
+- Browser journeys (3 × desktop and phone, `e2e/maintenance.spec.ts`, backed by
+  `e2e/fake-maintenance.ts` and a fake storage host): a resident reports a problem with a photo;
+  the maintenance manager accepts it with a message and gives it to a technician; the technician
+  starts, records a cost, adds an after photo and finishes; the manager marks it done; the
+  resident sees the updates and the photo (not the work order) and confirms. Managers set targets
+  (refused when fixing is due before the response); technicians cannot open the queue and see
+  only their own work. A file whose content is not what it claims is refused, and a text file is
+  refused before upload. axe WCAG 2.2 AA and no horizontal scroll on phones.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

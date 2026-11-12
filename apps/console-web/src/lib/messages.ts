@@ -84,6 +84,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   NO_LONGER_UNUSED: 'Less of the payment is unused now. Ask for a new approval.',
   INVALID_MONEY: 'Enter a valid amount in the property currency.',
   ASSIGNEE_NOT_ALLOWED: 'This person cannot be given maintenance work at this property.',
+  NOT_UPLOADER: 'Only the person who uploaded this file can do that.',
+  UPLOAD_FAILED: 'The file could not be uploaded. Check your connection and try again.',
+  UPLOAD_MISSING: 'The file did not arrive. Try uploading it again.',
+  FILE_REJECTED: 'This file is not a photo or PDF we can accept. It was not added.',
+  ATTACHMENT_NOT_ALLOWED: 'No more files can be added here.',
+  STORAGE_NOT_CONFIGURED: 'File uploads are not available yet.',
   TOO_MANY_PENDING:
     'Several transfers are already waiting for finance to check them. Please wait for their answer.',
 };

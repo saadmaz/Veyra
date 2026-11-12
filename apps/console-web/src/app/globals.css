@@ -655,3 +655,14 @@ a {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Maintenance notes keep the writer's line breaks. */
+.note {
+  white-space: pre-wrap;
+  font-weight: 400;
+}
+
+textarea.field__input {
+  min-height: 6rem;
+  resize: vertical;
+}
