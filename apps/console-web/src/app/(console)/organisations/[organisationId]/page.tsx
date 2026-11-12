@@ -96,6 +96,12 @@ export default function OrganisationPage() {
         </dl>
       </Card>
 
+      <Card title="Inbox">
+        <p className="muted">Announcements and notifications for you in this organisation.</p>
+        <div className="form__actions">
+          <ButtonLink href={`/organisations/${org.id}/inbox`}>Open inbox</ButtonLink>
+        </div>
+      </Card>
       <YourHomes organisationId={org.id} />
       <Properties organisationId={org.id} canCreate={can('organisation.property.create')} />
       {can('organisation.vendor.read') ? (

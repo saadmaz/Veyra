@@ -201,6 +201,23 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      {can('property.announcement.read') || can('property.document.read') ? (
+        <Card title="Communications">
+          <p className="muted">
+            Announcements to residents and staff, and the property's documents.
+          </p>
+          <div className="form__actions">
+            {can('property.announcement.read') ? (
+              <ButtonLink href={`${base}/announcements`}>Announcements</ButtonLink>
+            ) : null}
+            {can('property.document.read') ? (
+              <ButtonLink href={`${base}/documents`} variant="secondary">
+                Documents
+              </ButtonLink>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
       {can('property.maintenance.read') ? (
         <Card title="Assets">
           <p className="muted">

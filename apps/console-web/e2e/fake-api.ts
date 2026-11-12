@@ -19,6 +19,7 @@ import type {
   VisitorInvitationDto,
   WalkInRequestDto,
 } from '@veyra/api-contracts';
+import { FakeComms } from './fake-comms';
 import { FakeFacilities } from './fake-facilities';
 import { FakeFinance } from './fake-finance';
 import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
@@ -77,6 +78,10 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'organisation.vendor.manage',
     ],
     property: [
+      'property.announcement.read',
+      'property.announcement.manage',
+      'property.document.read',
+      'property.document.manage',
       'property.staff.read',
       'property.staff.manage',
       'property.staff.work',
@@ -121,6 +126,10 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
   PROPERTY_MANAGER: {
     organisation: [],
     property: [
+      'property.announcement.read',
+      'property.announcement.manage',
+      'property.document.read',
+      'property.document.manage',
       'property.profile.read',
       'property.resident.manage',
       'property.resident.read',
@@ -257,6 +266,7 @@ export class FakeApi {
   maintenance = new FakeMaintenance();
   facilities = new FakeFacilities();
   ops = new FakeOps();
+  comms = new FakeComms();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -669,6 +679,10 @@ export class FakeApi {
 
     if (rest === '' && method === 'GET')
       return this.reply(route, 200, { ...organisation, permissions });
+    if (rest.startsWith('/inbox') || rest.startsWith('/notifications')) {
+      const reply = this.comms.handleOrganisation({ method, sub: rest, user });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
     if (rest.startsWith('/vendors')) {
       const reply = this.ops.handleVendors({
         method,
@@ -815,10 +829,19 @@ export class FakeApi {
         const permissions = ['unit.profile.read', 'unit.visitor.invite'];
         if (roles.includes('OWNER') || roles.includes('TENANT'))
           permissions.push('unit.residents.read', 'unit.finance.read', 'unit.finance.pay');
-        permissions.push('unit.maintenance.request');
+        permissions.push('unit.maintenance.request', 'unit.document.read');
         if (roles.includes('OWNER') || roles.includes('TENANT'))
           permissions.push('unit.facility.book');
         const usub = own[2] ?? '';
+        if (usub.startsWith('/documents')) {
+          const reply = this.comms.handleUnit({
+            method,
+            sub: usub,
+            propertyId: property.id,
+            owner: roles.includes('OWNER'),
+          });
+          if (reply) return this.reply(route, reply.status, reply.body);
+        }
         if (usub.startsWith('/facilities') || usub.startsWith('/facility-bookings')) {
           if (!permissions.includes('unit.facility.book'))
             return this.error(route, 403, 'FORBIDDEN');
@@ -954,6 +977,39 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    if (
+      sub.startsWith('/announcements') ||
+      sub.startsWith('/documents') ||
+      sub.startsWith('/notification-deliveries')
+    ) {
+      const reply = this.comms.handleProperty({
+        method,
+        sub,
+        body,
+        property,
+        user,
+        permissions: pp,
+        residents: () =>
+          this.users
+            .filter((u) =>
+              this.units.some(
+                (unit) =>
+                  unit.propertyId === property.id && this.residentRoles(u.id, unit.id).length > 0,
+              ),
+            )
+            .map((u) => u.id),
+        staff: () =>
+          this.users
+            .filter((u) =>
+              (this.propertyPermissions(organisation.id, property.id, u.id) ?? []).includes(
+                'property.profile.read',
+              ),
+            )
+            .map((u) => u.id),
+      });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
 
     if (
       sub.startsWith('/staff') ||

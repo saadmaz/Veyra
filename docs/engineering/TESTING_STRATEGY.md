@@ -781,6 +781,16 @@ expiry, rehash on sign-in, idempotent sign-out).
   version and readers the newest; a file that is not a PDF is rejected and deleted; guards cannot
   archive; archived documents disappear and take no new versions.
 
+### Part 4: communications console
+
+- `apps/console-web` unit (2, `test/communications.test.ts`): document file checks (type, empty,
+  20 MB) and expiry wording.
+- Browser journeys (2, `e2e/communications.spec.ts`, desktop and phone, with an in-memory
+  `e2e/fake-comms.ts`): a property manager publishes an urgent announcement asking for
+  acknowledgement; the tenant opens the inbox from the organisation page, reads it and confirms;
+  the manager sees it reached, read and acknowledged by one person. The tenant opens Documents from
+  their home and sees the document for everyone but not the owners' one. axe WCAG 2.2 AA.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

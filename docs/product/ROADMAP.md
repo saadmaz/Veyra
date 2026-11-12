@@ -242,7 +242,7 @@ categories, audiences, versions and expiry dates, stored in the existing object 
 | 1 | Announcements: drafts, publishing to an audience, inbox copies, reads and acknowledgements, withdrawal | ✅ Done |
 | 2 | Notifications: channels (in-app, email, SMS, push) behind adapters, delivery records with status and retries through the worker, and the first events (bookings, maintenance updates) | ✅ Done (email through a logging adapter; SMS and push need phone numbers and device tokens, still to come) |
 | 3 | Documents: categories, audience, versions, expiry reminders, short-lived download links | ✅ Done (expiry shown on each document; reminder notifications with the daily worker job) |
-| 4 | Console screens and browser journeys | |
+| 4 | Console screens and browser journeys | ✅ Done (inbox and notifications, announcements with delivery status, documents for staff and residents) |
 | 5 | Phase 10 exit review | |
 
 ## Release gates
