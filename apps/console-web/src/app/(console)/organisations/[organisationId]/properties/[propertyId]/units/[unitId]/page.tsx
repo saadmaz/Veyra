@@ -152,6 +152,15 @@ export default function UnitPage() {
         </Card>
       ) : null}
 
+      {u.permissions.includes('unit.document.read') && u.myRoles.length > 0 ? (
+        <Card title="Documents">
+          <p className="muted">House rules, minutes, forms and notices for your home.</p>
+          <div className="form__actions">
+            <ButtonLink href={`${unitPath}/documents`}>Read documents</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
+
       {u.permissions.includes('unit.facility.book') && u.myRoles.length > 0 ? (
         <Card title="Facilities">
           <p className="muted">Book the pool, gym or function room for your home.</p>
