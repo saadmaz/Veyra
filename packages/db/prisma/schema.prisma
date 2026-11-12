@@ -100,6 +100,8 @@ model User {
   subscriptionChanges      SubscriptionEvent[]      @relation("SubscriptionEventActor")
   platformAdmin            PlatformAdmin?
   accountTokens            AccountToken[]
+  mfaFactor                MfaFactor?
+  mfaRecoveryCodes         MfaRecoveryCode[]
   supportRequested         SupportAccess[]          @relation("SupportRequestedBy")
   supportDecided           SupportAccess[]          @relation("SupportDecidedBy")
   webhookEndpointsCreated  WebhookEndpoint[]        @relation("WebhookEndpointCreatedBy")
@@ -152,6 +154,8 @@ model Session {
   idleExpiresAt     DateTime      @map("idle_expires_at") @db.Timestamptz(3)
   absoluteExpiresAt DateTime      @map("absolute_expires_at") @db.Timestamptz(3)
   revokedAt         DateTime?     @map("revoked_at") @db.Timestamptz(3)
+  /// When this session was confirmed with a second factor (Phase 14).
+  mfaVerifiedAt     DateTime?     @map("mfa_verified_at") @db.Timestamptz(3)
   ipAddress         String?       @map("ip_address")
   userAgent         String?       @map("user_agent")
 
@@ -3523,4 +3527,36 @@ model AccountToken {
 
   @@index([userId, purpose])
   @@map("account_tokens")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Multi-factor authentication (Phase 14 Part 2). One TOTP factor per user, its secret encrypted
+// with AES-256-GCM under MFA_ENCRYPTION_KEY (never stored in clear); the last accepted time step
+// is kept so a code cannot be replayed. Recovery codes are stored as SHA-256 hashes and used once.
+// Rules are hand-written in migration 20261204090000_mfa.
+// ---------------------------------------------------------------------------------------------
+
+model MfaFactor {
+  userId           String    @id @map("user_id") @db.Uuid
+  secretCiphertext String    @map("secret_ciphertext")
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  lastUsedStep     BigInt?   @map("last_used_step")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("mfa_factors")
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @unique @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([userId])
+  @@map("mfa_recovery_codes")
 }

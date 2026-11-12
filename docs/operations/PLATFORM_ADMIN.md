@@ -20,7 +20,8 @@ bun run --cwd packages/db platform-admin revoke staff@example.com
 
 The person must have signed up first. Revocation takes effect on their next request.
 
-Until MFA exists (ACCESS_CONTROL rule 7), keep the list short and review it monthly.
+Platform administrators must turn on two-step sign-in in the console (Account → Two-step
+sign-in) before they can change anything where MFA is enforced. Review the list monthly.
 
 ## The admin tool
 

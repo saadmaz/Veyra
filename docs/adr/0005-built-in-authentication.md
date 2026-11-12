@@ -46,6 +46,11 @@ must not mean "simplified".
 - **Provided in Phase 14 Part 1:** email verification and password reset through one-time
   links (only SHA-256 hashes stored, a day and an hour respectively; a reset ends every
   session; the reset request answers the same whether or not the account exists).
+- **Provided in Phase 14 Part 2:** TOTP two-step sign-in (RFC 6238, built on node:crypto) with
+  the secret sealed by AES-256-GCM under `MFA_ENCRYPTION_KEY`, replay protection by time step,
+  ten single-use recovery codes stored as hashes, and per-session verification. Privileged
+  changes need a verified session where `MFA_ENFORCEMENT=privileged` (the production default).
+  WebAuthn and breached-password checks remain to do.
 - **Not yet provided**, and required before a privileged customer goes live: MFA (TOTP or
   WebAuthn) for privileged roles, email verification, password reset, and breached-password
   checks. These are tracked in the roadmap. ACCESS_CONTROL's MFA requirement for privileged

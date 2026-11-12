@@ -309,6 +309,8 @@ export class FakeApi {
   platform = new FakePlatform();
   /** Users who have not confirmed their email (everyone else has). */
   unverified = new Set<string>();
+  /** Two-step sign-in per user; the right code is always 123456. */
+  mfa = new Map<string, { enabled: boolean; verified: boolean; codesLeft: number }>();
   /** Account requests the fake received (verify, reset), for assertions. */
   accountCalls: { path: string; body: Record<string, unknown> }[] = [];
   currentUserId: string | null = null;
@@ -688,9 +690,45 @@ export class FakeApi {
           email: user.email,
           displayName: user.displayName,
           emailVerified: !this.unverified.has(user.id),
+          mfaEnabled: this.mfa.get(user.id)?.enabled ?? false,
         },
-        session: { client: 'web' },
+        session: { client: 'web', mfaVerified: this.mfa.get(user.id)?.verified ?? false },
       });
+    }
+    if (path.startsWith('/auth/mfa')) {
+      const m = this.mfa.get(user.id) ?? { enabled: false, verified: false, codesLeft: 0 };
+      this.mfa.set(user.id, m);
+      const good = body.code === '123456';
+      if (method === 'GET' && path === '/auth/mfa') {
+        return this.reply(route, 200, {
+          enabled: m.enabled,
+          sessionVerified: m.enabled && m.verified,
+          recoveryCodesLeft: m.codesLeft,
+        });
+      }
+      if (path === '/auth/mfa/setup') {
+        return this.reply(route, 201, {
+          secret: 'JBSWY3DPEHPK3PXP',
+          otpauthUri: `otpauth://totp/VEYRA:${user.email}?secret=JBSWY3DPEHPK3PXP&issuer=VEYRA`,
+        });
+      }
+      if (!good && body.recoveryCode !== 'AAAA-BBBB') {
+        return this.error(route, 400, 'INVALID_MFA_CODE');
+      }
+      if (path === '/auth/mfa/confirm') {
+        Object.assign(m, { enabled: true, verified: true, codesLeft: 10 });
+        return this.reply(route, 200, {
+          recoveryCodes: Array.from({ length: 10 }, (_, i) => `AAAA-BBB${i}`),
+        });
+      }
+      if (path === '/auth/mfa/verify') {
+        m.verified = true;
+        return this.reply(route, 204);
+      }
+      if (path === '/auth/mfa/disable') {
+        Object.assign(m, { enabled: false, verified: false, codesLeft: 0 });
+        return this.reply(route, 204);
+      }
     }
     if (method === 'POST' && path === '/auth/sign-out') {
       this.currentUserId = null;
@@ -2212,6 +2250,7 @@ export class FakeApi {
         email: user.email,
         displayName: user.displayName,
         emailVerified: !this.unverified.has(user.id),
+        mfaEnabled: this.mfa.get(user.id)?.enabled ?? false,
       },
       session: {
         client: 'web',

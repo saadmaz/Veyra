@@ -9,6 +9,10 @@ export interface AuthenticatedPrincipal {
   email: string;
   displayName: string;
   emailVerified: boolean;
+  /** Two-step sign-in is on for the account. */
+  mfaEnabled: boolean;
+  /** This session was confirmed with a second factor. */
+  mfaVerified: boolean;
 }
 
 /** A token as presented on the wire, and the transport it arrived on. */

@@ -1,6 +1,7 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { MfaPolicy } from '../../../platform/auth/mfa-policy';
 import { ROUTE_ACCESS, type RouteAccess } from '../../../platform/auth/route-access';
 import { ApiError } from '../../../platform/errors/api-error';
 import { AccessControlService } from '../application/access-control.service';
@@ -11,6 +12,7 @@ import {
   UNIT_ID_PARAM,
 } from './require-permission.decorator';
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -22,9 +24,20 @@ export class PermissionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly accessControl: AccessControlService,
+    private readonly mfa: MfaPolicy,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const allowed = await this.decide(context);
+    const req = context.switchToHttp().getRequest<Request>();
+    // Rule 7: privileged people change things only from a session verified with a second factor.
+    if (allowed && req.access?.privileged && !SAFE_METHODS.has(req.method)) {
+      this.mfa.requireForPrivilegedChange(req.principal);
+    }
+    return allowed;
+  }
+
+  private async decide(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== 'http') return false;
     const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ROUTE_ACCESS, [
       context.getHandler(),

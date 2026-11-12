@@ -25,6 +25,11 @@ export interface OrganisationAccess {
   /** Set on unit-scoped routes. */
   unitId?: string;
   permissions: ReadonlySet<Permission>;
+  /**
+   * Holds a privileged role here (organisation admin, finance officer): changes need a session
+   * verified with a second factor where MFA is enforced (rule 7).
+   */
+  privileged?: boolean;
 }
 
 export interface LoadedGrants {
@@ -80,6 +85,13 @@ function entitledPermissions(
     permissionsAt(loaded.grants, loaded.organisationStatus, scope, now),
     loaded.entitlement,
   );
+}
+
+const PRIVILEGED_ROLES = new Set(['ORGANISATION_ADMIN', 'FINANCE_OFFICER']);
+
+/** ACCESS_CONTROL rule 7: an effective organisation admin or finance officer grant. */
+function isPrivileged(loaded: LoadedGrants, now: Date): boolean {
+  return loaded.grants.some((g) => PRIVILEGED_ROLES.has(g.role) && isGrantEffective(g, now));
 }
 
 const forbidden = () =>
@@ -143,7 +155,13 @@ export class AccessControlService {
     if (!hasCoveringGrant(loaded.grants, scope, now)) throw notFound();
     const permissions = entitledPermissions(loaded, scope, now);
     if (!permissions.has(permission)) throw forbidden();
-    return { userId, organisationId, propertyId, permissions };
+    return {
+      userId,
+      organisationId,
+      propertyId,
+      permissions,
+      privileged: isPrivileged(loaded, now),
+    };
   }
 
   /**
@@ -172,7 +190,14 @@ export class AccessControlService {
     if (!hasCoveringGrant(loaded.grants, scope, now)) throw notFound();
     const permissions = entitledPermissions(loaded, scope, now);
     if (!permissions.has(permission)) throw forbidden();
-    return { userId, organisationId, propertyId, unitId, permissions };
+    return {
+      userId,
+      organisationId,
+      propertyId,
+      unitId,
+      permissions,
+      privileged: isPrivileged(loaded, now),
+    };
   }
 
   /**
@@ -245,6 +270,7 @@ export class AccessControlService {
       userId,
       organisationId,
       permissions: entitledPermissions(loaded, { type: 'ORGANISATION' }, now),
+      privileged: isPrivileged(loaded, now),
     };
   }
 

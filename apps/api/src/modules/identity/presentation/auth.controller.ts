@@ -104,8 +104,9 @@ export class AuthController {
         email: principal.email,
         displayName: principal.displayName,
         emailVerified: principal.emailVerified,
+        mfaEnabled: principal.mfaEnabled,
       },
-      session: { client: toClient(principal.client) },
+      session: { client: toClient(principal.client), mfaVerified: principal.mfaVerified },
     };
   }
 
@@ -118,6 +119,7 @@ export class AuthController {
         email: user.email,
         displayName: user.displayName,
         emailVerified: user.emailVerified,
+        mfaEnabled: user.mfaEnabled,
       },
       session: {
         client: toClient(session.client),

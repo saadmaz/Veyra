@@ -66,6 +66,8 @@ export interface AuthUserDto {
   displayName: string;
   /** Whether the email address has been confirmed through its link (Phase 14). */
   emailVerified: boolean;
+  /** Two-step sign-in is on (Phase 14). */
+  mfaEnabled: boolean;
 }
 
 export interface AuthSessionDto {
@@ -86,7 +88,21 @@ export interface AuthResponse {
 /** Response of GET /auth/session. */
 export interface CurrentSessionResponse {
   user: AuthUserDto;
-  session: { client: AuthClient };
+  /** mfaVerified: this session was confirmed with a second factor (Phase 14). */
+  session: { client: AuthClient; mfaVerified: boolean };
+}
+
+/** Two-step sign-in (Phase 14 Part 2). */
+export interface MfaStatusDto {
+  enabled: boolean;
+  sessionVerified: boolean;
+  recoveryCodesLeft: number;
+}
+
+/** Shown once while setting up: the secret and the link for a QR code. */
+export interface MfaSetupDto {
+  secret: string;
+  otpauthUri: string;
 }
 
 // ---------------------------------------------------------------------------------------------

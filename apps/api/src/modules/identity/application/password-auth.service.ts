@@ -196,6 +196,8 @@ export class PasswordAuthService implements IdentityProvider {
       email: user.email,
       displayName: user.displayName,
       emailVerified: user.emailVerified,
+      mfaEnabled: user.mfaEnabled,
+      mfaVerified: user.mfaEnabled && session.mfaVerifiedAt !== null,
     };
   }
 

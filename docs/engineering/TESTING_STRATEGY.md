@@ -947,6 +947,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   (mismatch refused, incomplete links explained); the reminder banner, sending the link again,
   confirming from the link. axe WCAG 2.2 AA.
 
+### Part 2: two-step sign-in
+
+- `apps/api` unit (5, `test/identity/totp.test.ts`): the RFC 6238 test vectors, base32, one step
+  of drift and no reuse of a step, sealed secrets only the key opens, recovery codes and the
+  authenticator link.
+- `apps/api` integration (4, `mfa.int.test.ts`, enforcement on, controllable clock): privileged
+  changes refused until set up, reads always allowed; turning it on with a code gives ten
+  recovery codes and verifies the session; a new session must verify, the same code never works
+  twice, the next one does; recovery codes work once; other roles unaffected; platform
+  administrators bound too; turning it off needs a verified session and a current code.
+- Browser journey (1, `e2e/mfa.spec.ts`, desktop and phone): set up with the QR code and key,
+  wrong code refused, recovery codes shown once, a later session prompted and verified with a
+  recovery code. axe WCAG 2.2 AA.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
