@@ -97,6 +97,7 @@ model User {
   resolutionsRecorded      Resolution[]             @relation("ResolutionRecordedBy")
   approvalRequestsMade     ApprovalRequest[]        @relation("ApprovalRequestRequestedBy")
   approvalDecisionsMade    ApprovalDecision[]       @relation("ApprovalDecisionBy")
+  webhookEndpointsCreated  WebhookEndpoint[]        @relation("WebhookEndpointCreatedBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided     WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -189,6 +190,8 @@ model Organisation {
   notifications          Notification[]
   notificationDeliveries NotificationDelivery[]
   persons                Person[]
+  webhookEndpoints       WebhookEndpoint[]
+  webhookDeliveries      WebhookDelivery[]
 
   @@map("organisations")
 }
@@ -3295,4 +3298,70 @@ model ApprovalDecision {
 
   @@unique([requestId, userId])
   @@map("approval_decisions")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Webhooks (Phase 12 Part 3). An organisation's HTTPS endpoints receive the events they subscribe
+// to, signed with HMAC-SHA256 under a secret derived from the server's master key (never stored).
+// Each delivery is handed to the worker through the outbox, retried, and its outcome recorded only
+// through app_webhook_delivery_result(). Rules are hand-written in migration
+// 20261129090000_webhooks.
+// ---------------------------------------------------------------------------------------------
+
+enum WebhookEndpointStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model WebhookEndpoint {
+  id              String                @id @default(uuid(7)) @db.Uuid
+  organisationId  String                @map("organisation_id") @db.Uuid
+  url             String
+  description     String?
+  /// Event types it receives, e.g. incident.reported.
+  events          String[]
+  status          WebhookEndpointStatus @default(ACTIVE)
+  /// Part of the secret derivation; raised to rotate the secret.
+  secretVersion   Int                   @default(1) @map("secret_version")
+  createdByUserId String                @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User              @relation("WebhookEndpointCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  deliveries   WebhookDelivery[]
+
+  @@unique([organisationId, id])
+  @@index([organisationId, status])
+  @@map("webhook_endpoints")
+}
+
+/// One event sent to one endpoint. Content never changes; outcomes only through the function.
+model WebhookDelivery {
+  id             String                @id @default(uuid(7)) @db.Uuid
+  organisationId String                @map("organisation_id") @db.Uuid
+  endpointId     String                @map("endpoint_id") @db.Uuid
+  eventType      String                @map("event_type")
+  /// The same for every endpoint that receives this event.
+  eventId        String                @map("event_id") @db.Uuid
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  lastStatusCode Int?                  @map("last_status_code")
+  lastError      String?               @map("last_error")
+  deliveredAt    DateTime?             @map("delivered_at") @db.Timestamptz(3)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  endpoint     WebhookEndpoint @relation(fields: [organisationId, endpointId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([endpointId, eventId])
+  @@index([organisationId, endpointId, createdAt])
+  @@map("webhook_deliveries")
 }

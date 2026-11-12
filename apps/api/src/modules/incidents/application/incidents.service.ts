@@ -4,6 +4,7 @@ import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
 import { AccessControlService, type OrganisationAccess } from '../../access-control';
 import { NotificationsService } from '../../communications/application/notifications.service';
+import { WebhooksService } from '../../integrations/application/webhooks.service';
 import {
   type ActionInput,
   alertsManagers,
@@ -46,6 +47,7 @@ export class IncidentsService {
     @Inject(INCIDENT_REPOSITORY) private readonly repository: IncidentRepository,
     private readonly accessControl: AccessControlService,
     private readonly notifications: NotificationsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   list(access: OrganisationAccess, open: boolean, meta: RequestMeta) {
@@ -81,6 +83,7 @@ export class IncidentsService {
       });
       const incident = await this.mustFind(uow, id);
       if (alertsManagers(input.severity)) await this.alertManagers(uow, access, incident);
+      await this.emit(uow, access, 'incident.reported', incident);
       return this.load(uow, access, id);
     });
   }
@@ -123,6 +126,9 @@ export class IncidentsService {
         resourceType: 'incident',
         resourceId: id,
       });
+      if (input.status === 'CLOSED') {
+        await this.emit(uow, access, 'incident.closed', await this.mustFind(uow, id));
+      }
       return this.load(uow, access, id);
     });
   }
@@ -267,6 +273,24 @@ export class IncidentsService {
           email: true,
         })),
     );
+  }
+
+  /** Tells webhook endpoints, without details and never about sensitive incidents. */
+  private async emit(
+    uow: IncidentUnitOfWork,
+    access: OrganisationAccess,
+    type: 'incident.reported' | 'incident.closed',
+    incident: IncidentRecord,
+  ) {
+    if (incident.sensitive) return;
+    await this.webhooks.emitWithin(uow.transaction(), access.organisationId, type, {
+      incidentId: incident.id,
+      reference: `IN-${String(incident.number).padStart(6, '0')}`,
+      propertyId: this.propertyOf(access),
+      category: incident.category,
+      severity: incident.severity,
+      status: incident.status,
+    });
   }
 
   private async requireStaff(access: OrganisationAccess, userId: string) {

@@ -179,6 +179,9 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   is suppressed below three units; every download writes a `report.exported` audit record with
   the report, row count and dates; at most 366 days and 10,000 rows; cells are defused against
   spreadsheet formula injection.
+  Webhooks (Phase 12) are managed with `organisation.webhook.manage` (organisation admins). A
+  secret is shown only when created or rotated. The worker refuses endpoints that resolve to
+  private, loopback or link-local addresses (DNS rebinding included) and does not follow redirects.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

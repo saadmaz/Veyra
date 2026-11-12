@@ -36,6 +36,14 @@ export const apiEnvSchema = z
      */
     PAYMENT_SANDBOX_SECRET: z.string().min(32).optional(),
     /**
+     * Master key for webhook signing secrets (Phase 12): at least 32 bytes, base64. The worker
+     * needs the same value. Without it, webhook endpoints answer 409 WEBHOOKS_NOT_CONFIGURED.
+     */
+    WEBHOOK_SIGNING_KEY: z
+      .string()
+      .refine((v) => Buffer.from(v, 'base64').length >= 32, 'Use at least 32 bytes, base64')
+      .optional(),
+    /**
      * S3-compatible object storage for uploaded files (ADR 0007). Without STORAGE_BUCKET, file
      * features answer 409 STORAGE_NOT_CONFIGURED. STORAGE_ENDPOINT is omitted for AWS S3 and
      * must be reachable by browsers (signed URLs point at it).

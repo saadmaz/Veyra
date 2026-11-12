@@ -444,6 +444,13 @@ Who may decide (a holder of `property.approval.decide`, or a current seat on the
 checked by the application. Finance's own maker-checker approvals (`finance_approvals`, Phase 6)
 are separate and unchanged.
 
+**Webhooks** (Phase 12, migration `20261129090000_webhooks`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `webhook_endpoints` | organisation, url, description?, events (1–20), status (`ACTIVE`/`DISABLED`), secret_version, created_by_user | HTTPS to a named host (no IP literals, localhost, `.local` or `.internal`). The signing secret is derived from the server's master key, the endpoint and the version, and never stored; the version only rises, one at a time. |
+| `webhook_deliveries` | endpoint, event_type, event_id (shared by every endpoint receiving the event), payload (≤ 16 KB), status (`PENDING`/`SUCCEEDED`/`FAILED`), attempts, last_status_code?, last_error?, delivered_at? | Only to active endpoints subscribed to the event (`webhook.test` to any); one per endpoint and event; never changed by the application, which has no UPDATE grant. Each writes a `webhook.delivery.due` outbox event in the same transaction; the worker records attempts only through `app_webhook_delivery_result()`. |
+
 ## 12. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)

@@ -4,6 +4,7 @@ import {
   createDbClient,
   markOutboxFailed,
   markOutboxPublished,
+  parseWebhookKey,
 } from '@veyra/db';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
@@ -14,7 +15,10 @@ import { OutboxRelay } from './outbox-relay';
 async function main(): Promise<void> {
   const env = loadWorkerEnv();
   const db = createDbClient(env.DATABASE_URL);
-  const router = createJobRouter({ db });
+  const router = createJobRouter({
+    db,
+    webhookKey: env.WEBHOOK_SIGNING_KEY ? parseWebhookKey(env.WEBHOOK_SIGNING_KEY) : null,
+  });
 
   // BullMQ workers require maxRetriesPerRequest: null for blocking commands.
   const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });

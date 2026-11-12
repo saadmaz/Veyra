@@ -5,6 +5,7 @@ import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
 import { AccessControlService, type OrganisationAccess } from '../../access-control';
 import { NotificationsService } from '../../communications/application/notifications.service';
+import { WebhooksService } from '../../integrations/application/webhooks.service';
 import {
   type ApprovalRequestInput,
   DEFAULT_RULE,
@@ -43,6 +44,7 @@ export class ApprovalsService {
     @Inject(APPROVAL_REPOSITORY) private readonly repository: ApprovalRepository,
     private readonly accessControl: AccessControlService,
     private readonly notifications: NotificationsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   policies(access: OrganisationAccess, meta: RequestMeta) {
@@ -130,6 +132,7 @@ export class ApprovalsService {
       });
       const view = await this.load(uow, access, id);
       await this.tellApprovers(uow, access, view.request);
+      await this.emit(uow, access, 'approval_request.created', view.request);
       return view;
     });
   }
@@ -169,7 +172,10 @@ export class ApprovalsService {
         resourceId: id,
       });
       const after = await this.load(uow, access, id);
-      if (after.request.status !== 'PENDING') await this.tellRequester(uow, access, after.request);
+      if (after.request.status !== 'PENDING') {
+        await this.tellRequester(uow, access, after.request);
+        await this.emit(uow, access, 'approval_request.settled', after.request);
+      }
       return after;
     });
   }
@@ -264,6 +270,26 @@ export class ApprovalsService {
         email: true,
       },
     ]);
+  }
+
+  /** Tells webhook endpoints: references, amounts and states, no names or text. */
+  private async emit(
+    uow: ApprovalUnitOfWork,
+    access: OrganisationAccess,
+    type: 'approval_request.created' | 'approval_request.settled',
+    r: ApprovalRequestRecord,
+  ) {
+    await this.webhooks.emitWithin(uow.transaction(), access.organisationId, type, {
+      requestId: r.id,
+      reference: `AR-${String(r.number).padStart(6, '0')}`,
+      propertyId: this.propertyOf(access),
+      requestType: r.requestType,
+      status: r.status,
+      amount:
+        r.amountMinor !== null && r.currency
+          ? { amountMinor: r.amountMinor.toString(), currency: r.currency }
+          : null,
+    });
   }
 
   private async mustFind(uow: ApprovalUnitOfWork, id: string) {

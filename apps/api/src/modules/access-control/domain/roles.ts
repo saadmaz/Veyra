@@ -35,6 +35,7 @@ export const ROLES = {
       'organisation.member.invite',
       'organisation.property.create',
       'organisation.resident.read',
+      'organisation.webhook.manage',
       'property.profile.read',
       'property.settings.manage',
       'property.lifecycle.manage',

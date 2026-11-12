@@ -17,6 +17,11 @@ export const workerEnvSchema = z.object({
   OUTBOX_POLL_MS: z.coerce.number().int().min(1000).max(300000).default(15000),
   /** Email provider adapter. Only "log" exists yet: it accepts and logs delivery ids (Phase 10). */
   EMAIL_ADAPTER: z.enum(['log']).default('log'),
+  /** The API's webhook master key (base64, at least 32 bytes); without it webhooks fail. */
+  WEBHOOK_SIGNING_KEY: z
+    .string()
+    .refine((v) => Buffer.from(v, 'base64').length >= 32, 'Use at least 32 bytes, base64')
+    .optional(),
 });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
