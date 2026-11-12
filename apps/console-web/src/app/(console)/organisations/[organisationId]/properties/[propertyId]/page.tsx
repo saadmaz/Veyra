@@ -201,6 +201,29 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      {can('property.incident.read') ? (
+        <Card title="Incidents">
+          <p className="muted">Report incidents, follow the response and see whom to call.</p>
+          <div className="form__actions">
+            <ButtonLink href={`${base}/incidents`}>Incidents</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
+      {can('property.governance.read') || can('property.approval.read') ? (
+        <Card title="Governance">
+          <p className="muted">Committees, meetings, minutes and resolutions, and approvals.</p>
+          <div className="form__actions">
+            {can('property.governance.read') ? (
+              <ButtonLink href={`${base}/committees`}>Committees and meetings</ButtonLink>
+            ) : null}
+            {can('property.approval.read') ? (
+              <ButtonLink href={`${base}/approvals`} variant="secondary">
+                Approvals
+              </ButtonLink>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
       {can('property.announcement.read') || can('property.document.read') ? (
         <Card title="Communications">
           <p className="muted">
