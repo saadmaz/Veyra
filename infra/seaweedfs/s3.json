@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "veyra-dev",
+      "credentials": [{ "accessKey": "veyra", "secretKey": "veyra-storage-dev" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

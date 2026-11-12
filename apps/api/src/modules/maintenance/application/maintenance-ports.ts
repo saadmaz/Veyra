@@ -86,6 +86,24 @@ export interface EventRecord {
   createdAt: Date;
 }
 
+export interface AttachmentRecord {
+  id: string;
+  requestId: string | null;
+  workOrderId: string | null;
+  storageKey: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  kind: 'BEFORE' | 'AFTER' | 'OTHER';
+  visibility: Visibility;
+  status: 'PENDING' | 'READY' | 'REJECTED';
+  uploadedByUserId: string;
+  uploadedByName: string;
+  createdAt: Date;
+  readyAt: Date | null;
+  removedAt: Date | null;
+}
+
 export interface MaintenanceAuditEvent {
   action: string;
   resourceType: string;
@@ -180,6 +198,22 @@ export interface MaintenanceUnitOfWork {
     visibility: Visibility;
     body: string;
   }): Promise<void>;
+  createAttachment(input: {
+    id: string;
+    storageKey: string;
+    requestId: string | null;
+    workOrderId: string | null;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    kind: AttachmentRecord['kind'];
+    visibility: Visibility;
+  }): Promise<void>;
+  attachment(id: string, options?: { lock?: boolean }): Promise<AttachmentRecord | null>;
+  /** Not removed, not rejected, oldest first. A request's include its work orders' ones. */
+  attachments(target: { requestId: string } | { workOrderId: string }): Promise<AttachmentRecord[]>;
+  setAttachmentStatus(id: string, status: 'READY' | 'REJECTED'): Promise<void>;
+  removeAttachment(id: string): Promise<void>;
   audit(event: MaintenanceAuditEvent): Promise<void>;
 }
 

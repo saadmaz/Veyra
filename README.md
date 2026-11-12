@@ -86,7 +86,7 @@ workspaces need symlinks, which exFAT/FAT drives do not support.
 ```powershell
 bun install
 Copy-Item .env.example .env
-bun run services:up      # PostgreSQL + Redis
+bun run services:up      # PostgreSQL, Redis and S3-compatible storage (SeaweedFS, bucket veyra-dev)
 bun run dev              # api + worker + console
 bun run dev:mobile       # resident app (Expo)
 bun run lint

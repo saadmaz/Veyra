@@ -327,8 +327,10 @@ before building visible features.
 - Claim an integration works without verifying it.
 - Claim a feature is complete without testing it.
 - Commit secrets or real customer data.
-- Run `git commit` or `git push`, or add co-author / AI attribution trailers.
-  The repository owner commits manually.
+- Add co-author trailers or any AI / assistant attribution to commits, pull requests or
+  repository text. Commits and PRs are authored under the repository owner's identity.
+- Commit directly to `main`, force-push, bypass branch protection, or merge a pull request
+  whose CI checks are not all passing. Follow the git workflow in `CLAUDE.md`.
 
 **ALWAYS:**
 

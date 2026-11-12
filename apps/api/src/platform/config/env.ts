@@ -35,7 +35,31 @@ export const apiEnvSchema = z
      * Development and test only: refused in production.
      */
     PAYMENT_SANDBOX_SECRET: z.string().min(32).optional(),
+    /**
+     * S3-compatible object storage for uploaded files (ADR 0007). Without STORAGE_BUCKET, file
+     * features answer 409 STORAGE_NOT_CONFIGURED. STORAGE_ENDPOINT is omitted for AWS S3 and
+     * must be reachable by browsers (signed URLs point at it).
+     */
+    STORAGE_ENDPOINT: z.string().url().optional(),
+    STORAGE_REGION: z.string().min(1).default('auto'),
+    STORAGE_BUCKET: z.string().min(3).optional(),
+    STORAGE_ACCESS_KEY_ID: z.string().min(1).optional(),
+    STORAGE_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    /** true for SeaweedFS and other self-hosted servers (path-style URLs). */
+    STORAGE_FORCE_PATH_STYLE: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
   })
+  .refine(
+    (env) =>
+      env.STORAGE_BUCKET === undefined ||
+      (env.STORAGE_ACCESS_KEY_ID !== undefined && env.STORAGE_SECRET_ACCESS_KEY !== undefined),
+    {
+      message: 'STORAGE_BUCKET needs STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY',
+      path: ['STORAGE_BUCKET'],
+    },
+  )
   .refine((env) => env.NODE_ENV !== 'production' || env.PAYMENT_SANDBOX_SECRET === undefined, {
     message: 'The sandbox payment gateway cannot be enabled in production',
     path: ['PAYMENT_SANDBOX_SECRET'],

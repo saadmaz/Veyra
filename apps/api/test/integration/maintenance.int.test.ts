@@ -9,6 +9,8 @@ import { configureApp } from '../../src/bootstrap';
 import { loadApiEnv } from '../../src/platform/config/env';
 import { REDIS_CLIENT } from '../../src/platform/infrastructure/infrastructure.module';
 import { RATE_LIMITER } from '../../src/platform/rate-limit/rate-limiter';
+import { OBJECT_STORAGE } from '../../src/platform/storage/object-storage';
+import { FakeObjectStorage } from '../support/fake-object-storage';
 import { InMemoryRateLimiter } from '../support/in-memory-rate-limiter';
 
 /**
@@ -20,6 +22,7 @@ import { InMemoryRateLimiter } from '../support/in-memory-rate-limiter';
 
 const PASSWORD = 'correct horse battery staple';
 let app: INestApplication;
+const storage = new FakeObjectStorage();
 const run = randomUUID().slice(0, 8);
 const http = () => request(app.getHttpServer());
 
@@ -89,6 +92,8 @@ beforeAll(async () => {
     .useValue({ quit: async () => 'OK' })
     .overrideProvider(RATE_LIMITER)
     .useValue(new InMemoryRateLimiter())
+    .overrideProvider(OBJECT_STORAGE)
+    .useValue(storage)
     .compile();
   app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, env);
@@ -537,5 +542,227 @@ describe('staff', () => {
     await as(u.guard).get(mUrl('requests')).expect(403);
     await as(u.techq).get(myUrl('', P)).expect(404);
     await as(u.mgr).get(mUrl('requests', Q)).expect(404);
+  });
+});
+
+describe('attachments', () => {
+  const png = new Uint8Array([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    ...new Array(120).fill(1),
+  ]);
+  const photo = { fileName: 'leak.png', contentType: 'image/png', sizeBytes: png.length };
+
+  /** Asks, uploads (as the browser) and completes; returns the attachment id. */
+  async function attach(
+    ask: () => request.Test,
+    complete: (id: string) => request.Test,
+    bytes: Uint8Array = png,
+  ): Promise<string> {
+    const asked = (await ask().expect(201)).body;
+    storage.put(asked.upload.url, bytes);
+    await complete(asked.attachmentId).expect(200);
+    return asked.attachmentId;
+  }
+
+  it('residents add a checked photo to their request; it shows only once it is checked', async () => {
+    const id = (await as(u.tenant).post(unitUrl('U1')).send(report).expect(201)).body.request.id;
+    const asked = (
+      await as(u.tenant)
+        .post(unitUrl('U1', `${id}/attachments`))
+        .send({ ...photo, visibility: 'INTERNAL', kind: 'AFTER' })
+        .expect(201)
+    ).body;
+    expect(asked.upload).toMatchObject({ method: 'PUT', headers: { 'Content-Type': 'image/png' } });
+    expect(asked.upload.url).toContain(`org/${org}/prop/${P}/maintenance/${asked.attachmentId}`);
+    expect((await as(u.tenant).get(unitUrl('U1', id)).expect(200)).body.attachments).toEqual([]);
+
+    const early = await as(u.tenant)
+      .post(unitUrl('U1', `${id}/attachments/${asked.attachmentId}/complete`))
+      .expect(409);
+    expect(early.body.error.code).toBe('UPLOAD_MISSING');
+    storage.put(asked.upload.url, png);
+    const done = (
+      await as(u.tenant)
+        .post(unitUrl('U1', `${id}/attachments/${asked.attachmentId}/complete`))
+        .expect(200)
+    ).body;
+    // Residents' files are always resident-visible, whatever they ask for.
+    expect(done).toMatchObject({ fileName: 'leak.png', visibility: 'RESIDENT', kind: 'OTHER' });
+
+    const seen = (await as(u.child).get(unitUrl('U1', id)).expect(200)).body.attachments;
+    expect(seen.map((a: { id: string }) => a.id)).toEqual([asked.attachmentId]);
+    const link = (
+      await as(u.child)
+        .get(unitUrl('U1', `${id}/attachments/${asked.attachmentId}/download`))
+        .expect(200)
+    ).body;
+    expect(link.url).toContain('signature=download');
+    // Another unit cannot reach it, even by its id.
+    await as(u.neighbour)
+      .get(
+        `${pUrl()}/units/${units.U2}/maintenance-requests/${id}/attachments/${asked.attachmentId}/download`,
+      )
+      .expect(404);
+    // Staff see it too.
+    const staffView = (
+      await as(u.mgr)
+        .get(mUrl(`requests/${id}`))
+        .expect(200)
+    ).body;
+    expect(staffView.attachments).toHaveLength(1);
+  });
+
+  it('refuses a file that is not what it claims, and deletes it', async () => {
+    const id = (await as(u.tenant).post(unitUrl('U1')).send(report).expect(201)).body.request.id;
+    const html = new TextEncoder().encode('<html><script>alert(1)</script></html>'.padEnd(128));
+    for (const [declared, bytes] of [
+      [photo, html],
+      [photo, png.slice(0, 100)],
+    ] as const) {
+      const asked = (
+        await as(u.tenant)
+          .post(unitUrl('U1', `${id}/attachments`))
+          .send(declared)
+          .expect(201)
+      ).body;
+      const key = storage.put(asked.upload.url, bytes);
+      const refused = await as(u.tenant)
+        .post(unitUrl('U1', `${id}/attachments/${asked.attachmentId}/complete`))
+        .expect(422);
+      expect(refused.body.error.code).toBe('FILE_REJECTED');
+      expect(storage.objects.has(key)).toBe(false);
+      await as(u.tenant)
+        .get(unitUrl('U1', `${id}/attachments/${asked.attachmentId}/download`))
+        .expect(404);
+    }
+    for (const bad of [
+      { ...photo, contentType: 'image/svg+xml' },
+      { ...photo, sizeBytes: 10 * 1024 * 1024 + 1 },
+      { ...photo, sizeBytes: 0 },
+    ]) {
+      await as(u.tenant)
+        .post(unitUrl('U1', `${id}/attachments`))
+        .send(bad)
+        .expect(400);
+    }
+  });
+
+  it('keeps internal files from residents; technicians add evidence to their own work only', async () => {
+    const id = await acceptedRequest('Ceiling stain');
+    const internal = await attach(
+      () =>
+        as(u.mgr)
+          .post(mUrl(`requests/${id}/attachments`))
+          .send({ ...photo, fileName: 'survey.png', visibility: 'INTERNAL' }),
+      (a) => as(u.mgr).post(mUrl(`attachments/${a}/complete`)),
+    );
+    const wo = (
+      await as(u.mgr)
+        .post(mUrl('work-orders'))
+        .send({ requestId: id, assignedToUserId: u.tech.id })
+        .expect(201)
+    ).body.workOrder.id;
+    await as(u.tech2)
+      .post(myUrl(`${wo}/attachments`))
+      .send({ ...photo, kind: 'BEFORE' })
+      .expect(404);
+    const before = await attach(
+      () =>
+        as(u.tech)
+          .post(myUrl(`${wo}/attachments`))
+          .send({ ...photo, fileName: 'before.png', kind: 'BEFORE', visibility: 'RESIDENT' }),
+      (a) => as(u.tech).post(myUrl(`${wo}/attachments/${a}/complete`)),
+    );
+    const work = (await as(u.tech).get(myUrl(wo)).expect(200)).body;
+    expect(work.attachments).toEqual([
+      expect.objectContaining({ id: before, kind: 'BEFORE', workOrderId: wo }),
+    ]);
+    await as(u.tech2)
+      .get(myUrl(`${wo}/attachments/${before}/download`))
+      .expect(404);
+
+    const resident = (await as(u.tenant).get(unitUrl('U1', id)).expect(200)).body.attachments;
+    expect(resident.map((a: { fileName: string }) => a.fileName)).toEqual(['before.png']);
+    await as(u.tenant)
+      .get(unitUrl('U1', `${id}/attachments/${internal}/download`))
+      .expect(404);
+    const staffFiles = (
+      await as(u.mgr)
+        .get(mUrl(`requests/${id}`))
+        .expect(200)
+    ).body.attachments;
+    expect(staffFiles).toHaveLength(2);
+    await as(u.finance)
+      .get(mUrl(`attachments/${internal}/download`))
+      .expect(200);
+    await as(u.finance)
+      .post(mUrl(`attachments/${internal}/remove`))
+      .expect(403);
+  });
+
+  it('are removed by their uploader or a manager, and the file is deleted', async () => {
+    const id = (await as(u.tenant).post(unitUrl('U1')).send(report).expect(201)).body.request.id;
+    const mine = await attach(
+      () =>
+        as(u.tenant)
+          .post(unitUrl('U1', `${id}/attachments`))
+          .send(photo),
+      (a) => as(u.tenant).post(unitUrl('U1', `${id}/attachments/${a}/complete`)),
+    );
+    const notMine = await as(u.child)
+      .post(unitUrl('U1', `${id}/attachments/${mine}/remove`))
+      .expect(403);
+    expect(notMine.body.error.code).toBe('NOT_UPLOADER');
+    const before = storage.objects.size;
+    await as(u.tenant)
+      .post(unitUrl('U1', `${id}/attachments/${mine}/remove`))
+      .expect(204);
+    expect(storage.objects.size).toBe(before - 1);
+    expect((await as(u.tenant).get(unitUrl('U1', id)).expect(200)).body.attachments).toEqual([]);
+    await as(u.tenant)
+      .post(unitUrl('U1', `${id}/attachments/${mine}/remove`))
+      .expect(404);
+
+    const other = await attach(
+      () =>
+        as(u.child)
+          .post(unitUrl('U1', `${id}/attachments`))
+          .send(photo),
+      (a) => as(u.child).post(unitUrl('U1', `${id}/attachments/${a}/complete`)),
+    );
+    await as(u.mgr)
+      .post(mUrl(`attachments/${other}/remove`))
+      .expect(204);
+  });
+
+  it('allow at most 10 files per request, and none on a finished one', async () => {
+    const id = (await as(u.tenant).post(unitUrl('U1')).send(report).expect(201)).body.request.id;
+    for (let i = 0; i < 10; i++) {
+      await as(u.tenant)
+        .post(unitUrl('U1', `${id}/attachments`))
+        .send(photo)
+        .expect(201);
+    }
+    const full = await as(u.tenant)
+      .post(unitUrl('U1', `${id}/attachments`))
+      .send(photo)
+      .expect(409);
+    expect(full.body.error.code).toBe('ATTACHMENT_NOT_ALLOWED');
+    const done = (await as(u.tenant).post(unitUrl('U1')).send(report).expect(201)).body.request.id;
+    await as(u.tenant)
+      .post(unitUrl('U1', `${done}/cancel`))
+      .send({ reason: 'Never mind' })
+      .expect(200);
+    await as(u.tenant)
+      .post(unitUrl('U1', `${done}/attachments`))
+      .send(photo)
+      .expect(409);
   });
 });

@@ -31,5 +31,31 @@ services:
       timeout: 3s
       retries: 10
 
+  # S3-compatible object storage for uploaded files (ADR 0007). SeaweedFS checks request
+  # signatures with the development credentials in infra/seaweedfs/s3.json. S3 API on :8333.
+  storage:
+    image: chrislusf/seaweedfs:4.48
+    command: server -ip.bind=0.0.0.0 -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "8333:8333"
+    volumes:
+      - storage-data:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9333/cluster/status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the development bucket once storage is up, then exits.
+  storage-setup:
+    image: chrislusf/seaweedfs:4.48
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "echo 's3.bucket.create -name veyra-dev' | weed shell -master=storage:9333 -filer=storage:8888"
+
 volumes:
   postgres-data:
+  storage-data:

@@ -1322,18 +1322,69 @@ export interface WorkOrderCostDto {
   voidReason: string | null;
 }
 
+export type AttachmentContentType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'image/heic'
+  | 'application/pdf';
+
+/** A checked photo or PDF (Phase 7 Part 3). Download it through its download route. */
+export interface MaintenanceAttachmentDto {
+  id: string;
+  /** Set when it was added to a work order. */
+  workOrderId: string | null;
+  fileName: string;
+  contentType: AttachmentContentType;
+  sizeBytes: number;
+  kind: 'BEFORE' | 'AFTER' | 'OTHER';
+  visibility: 'RESIDENT' | 'INTERNAL';
+  uploadedBy: { userId: string; name: string };
+  createdAt: string;
+}
+
+/** Ask to upload a file; at most 10 MB. */
+export interface UploadAttachmentRequest {
+  fileName: string;
+  contentType: AttachmentContentType;
+  sizeBytes: number;
+  /** Staff and technicians only. */
+  kind?: 'BEFORE' | 'AFTER' | 'OTHER';
+  /** Staff and technicians only (default INTERNAL); residents' files are always RESIDENT. */
+  visibility?: 'RESIDENT' | 'INTERNAL';
+}
+
+/**
+ * PUT the file's bytes to `url` with exactly these headers before `expiresAt`, then call the
+ * attachment's `complete` route. Until then nobody sees it.
+ */
+export interface AttachmentUploadDto {
+  attachmentId: string;
+  upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
+}
+
+/** A link valid for a few minutes. */
+export interface AttachmentDownloadDto {
+  url: string;
+  expiresAt: string;
+}
+
 /** Staff: GET …/maintenance/requests/:id */
 export interface MaintenanceRequestDetailDto {
   request: MaintenanceRequestDto;
   workOrders: WorkOrderDto[];
   /** Every event, internal ones included. */
   events: MaintenanceEventDto[];
+  /** Including those added to its work orders. */
+  attachments: MaintenanceAttachmentDto[];
 }
 
 /** Residents: GET …/units/:unitId/maintenance-requests/:id (resident-visible history only). */
 export interface ResidentMaintenanceRequestDetailDto {
   request: MaintenanceRequestDto;
   events: MaintenanceEventDto[];
+  /** Resident-visible files only. */
+  attachments: MaintenanceAttachmentDto[];
 }
 
 export interface WorkOrderDetailDto {
@@ -1342,6 +1393,7 @@ export interface WorkOrderDetailDto {
   /** Sum of the costs not voided. */
   totalCost: MoneyDto;
   events: MaintenanceEventDto[];
+  attachments: MaintenanceAttachmentDto[];
 }
 
 export interface MaintenanceAssigneeDto {

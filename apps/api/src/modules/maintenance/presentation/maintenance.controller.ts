@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Inject,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -12,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
+  AttachmentDownloadDto,
+  AttachmentUploadDto,
   MaintenanceAssigneeDto,
   MaintenanceEventDto,
   MaintenanceRequestDetailDto,
@@ -24,6 +27,7 @@ import type { z } from 'zod';
 import { requestMeta } from '../../../platform/request-meta';
 import { ZodValidationPipe } from '../../../platform/validation/zod-validation.pipe';
 import { CurrentAccess, type OrganisationAccess, RequirePermission } from '../../access-control';
+import { AttachmentsService, type Viewer } from '../application/attachments.service';
 import { MaintenanceService } from '../application/maintenance.service';
 import {
   type AcceptInput,
@@ -42,12 +46,38 @@ import {
   requestListQuerySchema,
   type StaffRequestInput,
   staffRequestSchema,
+  type UploadInput,
   updateRequestSchema,
   updateWorkOrderSchema,
+  uploadSchema,
   voidCostSchema,
   workOrderListQuerySchema,
 } from '../domain/maintenance-rules';
-import { toEvent, toRequest, toWorkOrder, toWorkOrderDetail } from './maintenance-dto';
+import {
+  toAttachment,
+  toEvent,
+  toRequest,
+  toWorkOrder,
+  toWorkOrderDetail,
+} from './maintenance-dto';
+
+const staff = (access: OrganisationAccess): Viewer => ({
+  kind: 'staff',
+  manage: access.permissions.has('property.maintenance.manage'),
+});
+
+export const toUpload = (u: {
+  attachment: { id: string };
+  upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: Date };
+}): AttachmentUploadDto => ({
+  attachmentId: u.attachment.id,
+  upload: { ...u.upload, expiresAt: u.upload.expiresAt.toISOString() },
+});
+
+export const toDownload = (d: { url: string; expiresAt: Date }): AttachmentDownloadDto => ({
+  url: d.url,
+  expiresAt: d.expiresAt.toISOString(),
+});
 
 const uuid = new ParseUUIDPipe();
 const M = 'properties/:propertyId/maintenance';
@@ -61,7 +91,10 @@ const MINE = 'properties/:propertyId/my-work-orders';
 @ApiTags('maintenance')
 @Controller('organisations/:organisationId')
 export class MaintenanceController {
-  constructor(private readonly maintenance: MaintenanceService) {}
+  constructor(
+    private readonly maintenance: MaintenanceService,
+    @Inject(AttachmentsService) private readonly attachments: AttachmentsService,
+  ) {}
 
   // ------------------------------------------------------------------ requests
 
@@ -102,6 +135,7 @@ export class MaintenanceController {
       request: toRequest(d.request),
       workOrders: d.workOrders.map(toWorkOrder),
       events: d.events.map(toEvent),
+      attachments: d.attachments.filter((a) => a.status === 'READY').map(toAttachment),
     };
   }
 
@@ -194,6 +228,87 @@ export class MaintenanceController {
   ): Promise<{ data: MaintenanceEventDto[] }> {
     const events = await this.maintenance.addRequestNote(access, id, body, requestMeta(req));
     return { data: events.map(toEvent) };
+  }
+
+  // ------------------------------------------------------------------ attachments
+
+  @Post(`${M}/requests/:requestId/attachments`)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({
+    summary: 'Ask to upload a photo or PDF to a request (then PUT it and complete).',
+  })
+  async uploadToRequest(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('requestId', uuid) id: string,
+    @Body(new ZodValidationPipe(uploadSchema)) body: UploadInput,
+    @Req() req: Request,
+  ): Promise<AttachmentUploadDto> {
+    return toUpload(
+      await this.attachments.requestUpload(
+        access,
+        staff(access),
+        { requestId: id },
+        body,
+        requestMeta(req),
+      ),
+    );
+  }
+
+  @Post(`${M}/work-orders/:workOrderId/attachments`)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({ summary: 'Ask to upload a photo or PDF to a work order.' })
+  async uploadToWorkOrder(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('workOrderId', uuid) id: string,
+    @Body(new ZodValidationPipe(uploadSchema)) body: UploadInput,
+    @Req() req: Request,
+  ): Promise<AttachmentUploadDto> {
+    return toUpload(
+      await this.attachments.requestUpload(
+        access,
+        staff(access),
+        { workOrderId: id },
+        body,
+        requestMeta(req),
+      ),
+    );
+  }
+
+  @Post(`${M}/attachments/:attachmentId/complete`)
+  @HttpCode(200)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({ summary: 'The upload finished: check the file before it is shown.' })
+  async completeAttachment(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('attachmentId', uuid) id: string,
+    @Req() req: Request,
+  ) {
+    return toAttachment(
+      await this.attachments.complete(access, staff(access), id, requestMeta(req)),
+    );
+  }
+
+  @Get(`${M}/attachments/:attachmentId/download`)
+  @RequirePermission('property.maintenance.read')
+  @ApiOperation({ summary: 'A link to the file, valid for a few minutes.' })
+  async downloadAttachment(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('attachmentId', uuid) id: string,
+    @Req() req: Request,
+  ): Promise<AttachmentDownloadDto> {
+    return toDownload(await this.attachments.download(access, staff(access), id, requestMeta(req)));
+  }
+
+  @Post(`${M}/attachments/:attachmentId/remove`)
+  @HttpCode(204)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({ summary: 'Remove a file (it stays in the history; the file is deleted).' })
+  async removeAttachment(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('attachmentId', uuid) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
+    await this.attachments.remove(access, staff(access), id, requestMeta(req));
   }
 
   // ------------------------------------------------------------------ work orders
@@ -423,6 +538,83 @@ export class MaintenanceController {
     @Req() req: Request,
   ): Promise<WorkOrderDetailDto> {
     return toWorkOrderDetail(await this.maintenance.addMyNote(access, id, body, requestMeta(req)));
+  }
+
+  @Post(`${MINE}/:workOrderId/attachments`)
+  @RequirePermission('property.maintenance.work')
+  @ApiOperation({ summary: 'Ask to upload before/after photos to your work.' })
+  async myUpload(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('workOrderId', uuid) id: string,
+    @Body(new ZodValidationPipe(uploadSchema)) body: UploadInput,
+    @Req() req: Request,
+  ): Promise<AttachmentUploadDto> {
+    return toUpload(
+      await this.attachments.requestUpload(
+        access,
+        { kind: 'technician', workOrderId: id },
+        { workOrderId: id },
+        body,
+        requestMeta(req),
+      ),
+    );
+  }
+
+  @Post(`${MINE}/:workOrderId/attachments/:attachmentId/complete`)
+  @HttpCode(200)
+  @RequirePermission('property.maintenance.work')
+  @ApiOperation({ summary: 'Your upload finished: check the file.' })
+  async myComplete(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('workOrderId', uuid) workOrderId: string,
+    @Param('attachmentId', uuid) id: string,
+    @Req() req: Request,
+  ) {
+    return toAttachment(
+      await this.attachments.complete(
+        access,
+        { kind: 'technician', workOrderId },
+        id,
+        requestMeta(req),
+      ),
+    );
+  }
+
+  @Get(`${MINE}/:workOrderId/attachments/:attachmentId/download`)
+  @RequirePermission('property.maintenance.work')
+  @ApiOperation({ summary: 'A link to a file of your work.' })
+  async myDownload(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('workOrderId', uuid) workOrderId: string,
+    @Param('attachmentId', uuid) id: string,
+    @Req() req: Request,
+  ): Promise<AttachmentDownloadDto> {
+    return toDownload(
+      await this.attachments.download(
+        access,
+        { kind: 'technician', workOrderId },
+        id,
+        requestMeta(req),
+      ),
+    );
+  }
+
+  @Post(`${MINE}/:workOrderId/attachments/:attachmentId/remove`)
+  @HttpCode(204)
+  @RequirePermission('property.maintenance.work')
+  @ApiOperation({ summary: 'Remove a file you uploaded.' })
+  async myRemove(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('workOrderId', uuid) workOrderId: string,
+    @Param('attachmentId', uuid) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
+    await this.attachments.remove(
+      access,
+      { kind: 'technician', workOrderId },
+      id,
+      requestMeta(req),
+    );
   }
 
   @Post(`${MINE}/:workOrderId/costs`)

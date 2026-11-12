@@ -290,6 +290,23 @@ Technicians, under the property's `my-work-orders` (`property.maintenance.work`)
 `POST {id}/complete { note }` (what was done), `POST {id}/notes`, `POST {id}/costs`. Work assigned
 to someone else is 404. A transition that is not allowed is 409 `INVALID_STATE_TRANSITION`.
 
+**Attachments** (Phase 7 Part 3, ADR 0007). Three steps: ask (`POST …/attachments` with
+`{ fileName, contentType: image/jpeg | image/png | image/webp | image/heic | application/pdf,
+sizeBytes ≤ 10 MB, kind?, visibility? }`, 201 `{ attachmentId, upload: { url, method: PUT,
+headers, expiresAt } }`), PUT the bytes to `url` with exactly those headers within 10 minutes,
+then `POST …/attachments/{id}/complete` (200 with the attachment; 409 `UPLOAD_MISSING` before the
+bytes arrive, retryable; 422 `FILE_REJECTED` when the size or the real type differs, and the file
+is deleted). `GET …/attachments/{id}/download` returns `{ url, expiresAt }` valid for 5 minutes;
+`POST …/attachments/{id}/remove` (204) removes it. Detail responses list checked attachments.
+More than 10 files, or a finished request or cancelled work, is 409 `ATTACHMENT_NOT_ALLOWED`;
+without storage configured every file route is 409 `STORAGE_NOT_CONFIGURED`.
+
+| Who | Ask | Complete, download, remove |
+| --- | --- | -------------------------- |
+| Residents | `units/{unitId}/maintenance-requests/{id}/attachments` (always RESIDENT, kind OTHER) | `…/{id}/attachments/{attachmentId}/…`; they see RESIDENT files of their unit's request only; complete and remove their own uploads (403 `NOT_UPLOADER`) |
+| Staff | `maintenance/requests/{id}/attachments`, `maintenance/work-orders/{id}/attachments` (manage) | `maintenance/attachments/{attachmentId}/…`: download with read, complete and remove with manage (any file) |
+| Technicians | `my-work-orders/{id}/attachments` (their own work; RESIDENT only for work with a request) | `my-work-orders/{id}/attachments/{attachmentId}/…`; their own uploads |
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.
