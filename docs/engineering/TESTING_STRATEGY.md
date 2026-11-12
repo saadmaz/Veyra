@@ -857,6 +857,15 @@ expiry, rehash on sign-in, idempotent sign-out).
   occupancy, incident, finance and zero figures; a guard and a technician see only their areas
   and no sensitive incidents; people outside the property get 404.
 
+### Part 2: exports
+
+- `apps/api` unit (3, `test/reporting/export-rules.test.ts`): CSV escaping and formula
+  defusing, small-group suppression, default and maximum date ranges.
+- `apps/api` integration (1 more in `reporting.int.test.ts`): the exports a manager may download
+  and none for a guard; a formula-like building name defused, a two-unit group suppressed;
+  incidents without free text, ranges too long or reversed refused; an empty arrears file;
+  unknown export names refused.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

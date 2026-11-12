@@ -1,16 +1,25 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { PropertyDashboardDto } from '@veyra/api-contracts';
-import type { Request } from 'express';
+import type { ExportListDto, PropertyDashboardDto } from '@veyra/api-contracts';
+import type { Request, Response } from 'express';
+import { z } from 'zod';
 import { requestMeta } from '../../../platform/request-meta';
+import { ZodValidationPipe } from '../../../platform/validation/zod-validation.pipe';
 import { CurrentAccess, type OrganisationAccess, RequirePermission } from '../../access-control';
+import { ExportsService } from '../application/exports.service';
 import { ReportingService } from '../application/reporting.service';
+import { EXPORTS, type RangeInput, rangeSchema } from '../domain/export-rules';
+
+const exportName = new ZodValidationPipe(z.enum(EXPORTS));
 
 /** Role-scoped dashboards. */
 @ApiTags('reporting')
 @Controller('organisations/:organisationId')
 export class ReportingController {
-  constructor(private readonly reporting: ReportingService) {}
+  constructor(
+    private readonly reporting: ReportingService,
+    private readonly exports: ExportsService,
+  ) {}
 
   @Get('properties/:propertyId/dashboard')
   @RequirePermission('property.profile.read')
@@ -39,6 +48,32 @@ export class ReportingController {
       incidents: d.incidents,
       pendingApprovals: d.pendingApprovals,
     };
+  }
+
+  @Get('properties/:propertyId/exports')
+  @RequirePermission('property.profile.read')
+  @ApiOperation({ summary: 'The CSV exports you may download here.' })
+  available(@CurrentAccess() access: OrganisationAccess): ExportListDto {
+    return { data: this.exports.available(access) };
+  }
+
+  @Get('properties/:propertyId/exports/:name')
+  @RequirePermission('property.report.export')
+  @ApiOperation({
+    summary: "Download a CSV export (dates are the property's, at most 366 days; audited).",
+  })
+  async download(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('name', exportName) name: (typeof EXPORTS)[number],
+    @Query(new ZodValidationPipe(rangeSchema)) range: RangeInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<string> {
+    const file = await this.exports.export(access, name, range, requestMeta(req));
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return file.csv;
   }
 }
 

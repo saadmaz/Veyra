@@ -89,6 +89,8 @@ export const PERMISSIONS = [
   'property.approval.request',
   /** Decide requests that managers approve (committee requests: a current seat on the committee). */
   'property.approval.decide',
+  /** Download CSV exports of the areas you can read (each export is audited). */
+  'property.report.export',
   /** See the property's departments, shifts and handover notes. */
   'property.staff.read',
   /** Keep departments and their members; schedule, move and cancel shifts. */

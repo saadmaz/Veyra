@@ -14,7 +14,9 @@ import { InMemoryRateLimiter } from '../support/in-memory-rate-limiter';
 /**
  * Dashboards over HTTP (Phase 12 Part 1): each area of a property's dashboard appears only for
  * people who can see that area, figures are counts and totals, sensitive incidents count only for
- * incident managers, and people outside the property get nothing.
+ * incident managers, and people outside the property get nothing. Exports (Part 2) are CSV
+ * files for holders of the export permission and the area's read permission, with small groups
+ * suppressed and formulas defused.
  */
 
 const PASSWORD = 'correct horse battery staple';
@@ -49,6 +51,7 @@ let org: string;
 let P: string;
 const orgUrl = () => `/api/v1/organisations/${org}`;
 const dUrl = () => `${orgUrl()}/properties/${P}/dashboard`;
+const eUrl = (path = '') => `${orgUrl()}/properties/${P}/exports${path ? `/${path}` : ''}`;
 
 beforeAll(async () => {
   const env = loadApiEnv({
@@ -115,6 +118,18 @@ beforeAll(async () => {
         .id,
     );
   }
+  const tricky = (
+    await as(u.admin)
+      .post(`${pUrl}/buildings`)
+      .send({ name: '=HYPERLINK("x")', code: 'TRICK' })
+      .expect(201)
+  ).body.id;
+  for (const number of ['T1', 'T2', 'T3']) {
+    await as(u.admin)
+      .post(`${pUrl}/units`)
+      .send({ number, type: 'APARTMENT', buildingId: tricky })
+      .expect(201);
+  }
   const person = (
     await as(u.admin)
       .post(`${pUrl}/persons`)
@@ -149,7 +164,7 @@ describe('dashboards', () => {
   it('show a manager every area they run', async () => {
     const d = (await as(u.mgr).get(dUrl()).expect(200)).body;
     expect(d.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(d.occupancy).toEqual({ units: 2, withOwner: 0, tenanted: 1 });
+    expect(d.occupancy).toEqual({ units: 5, withOwner: 0, tenanted: 1 });
     expect(d.incidents).toEqual({ open: 2, openHighOrCritical: 1 });
     expect(d.finance).toEqual({
       outstanding: { amountMinor: '0', currency: 'PKR' },
@@ -169,7 +184,7 @@ describe('dashboards', () => {
     expect(guard.maintenance).toBeNull();
     expect(guard.visitors).toBeNull();
     expect(guard.pendingApprovals).toBeNull();
-    expect(guard.occupancy).toEqual({ units: 2, withOwner: 0, tenanted: 1 });
+    expect(guard.occupancy).toEqual({ units: 5, withOwner: 0, tenanted: 1 });
     expect(guard.incidents).toEqual({ open: 1, openHighOrCritical: 1 });
     const tech = (await as(u.tech).get(dUrl()).expect(200)).body;
     expect(tech.incidents).toEqual({ open: 1, openHighOrCritical: 1 });
@@ -178,5 +193,46 @@ describe('dashboards', () => {
 
   it('give nothing to people outside the property', async () => {
     await as(u.outsider).get(dUrl()).expect(404);
+  });
+
+  it('list and download exports of the areas a person can read, as CSV', async () => {
+    const list = (await as(u.mgr).get(eUrl()).expect(200)).body.data;
+    expect(list).toEqual([
+      'occupancy-by-building',
+      'arrears',
+      'maintenance-requests',
+      'visits',
+      'incidents',
+    ]);
+    expect((await as(u.guard).get(eUrl()).expect(200)).body.data).toEqual([]);
+    await as(u.guard).get(eUrl('incidents')).expect(403);
+    await as(u.mgr).get(eUrl('salaries')).expect(400);
+
+    const occupancy = await as(u.mgr).get(eUrl('occupancy-by-building')).expect(200);
+    expect(occupancy.headers['content-type']).toMatch(/^text\/csv/);
+    expect(occupancy.headers['content-disposition']).toMatch(
+      /^attachment; filename="RT-occupancy-by-building-\d{4}-\d{2}-\d{2}\.csv"$/,
+    );
+    expect(occupancy.text.split('\r\n')).toEqual([
+      'building,units,tenanted,with_owner,note',
+      `"'=HYPERLINK(""x"")",3,0,0,`,
+      '(no building),2,,,too few units to show',
+      '',
+    ]);
+
+    const incidents = await as(u.mgr).get(eUrl('incidents')).expect(200);
+    const lines = incidents.text.trim().split('\r\n');
+    expect(lines[0]).toBe('reference,category,severity,status,occurred,resolved,closed');
+    expect(lines).toHaveLength(3);
+    expect(lines.join('\n')).not.toMatch(/Assault|Gate open/);
+    await as(u.mgr)
+      .get(`${eUrl('incidents')}?from=2025-01-01&to=2026-06-30`)
+      .expect(422);
+    await as(u.mgr)
+      .get(`${eUrl('incidents')}?from=2026-06-30&to=2026-01-01`)
+      .expect(400);
+
+    const arrears = await as(u.mgr).get(eUrl('arrears')).expect(200);
+    expect(arrears.text).toBe('unit,outstanding_PKR,overdue_PKR,oldest_unpaid_due\r\n');
   });
 });
