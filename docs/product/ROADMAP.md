@@ -31,7 +31,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 7     | Maintenance and work orders              | Done. Exit review: [PHASE_7_REVIEW](../reviews/PHASE_7_REVIEW.md) |
 | 8     | Facilities and reservations              | Done. Exit review: [PHASE_8_REVIEW](../reviews/PHASE_8_REVIEW.md) |
 | 9     | Staff, vendors and assets                | Done. Exit review: [PHASE_9_REVIEW](../reviews/PHASE_9_REVIEW.md) |
-| 10    | Communications and documents             | |
+| 10    | Communications and documents             | Done. Exit review: [PHASE_10_REVIEW](../reviews/PHASE_10_REVIEW.md) |
 | 11    | Governance and incident management       | |
 | 12    | Analytics and integrations               | |
 | 13    | SaaS administration and subscriptions    | |
@@ -243,7 +243,7 @@ categories, audiences, versions and expiry dates, stored in the existing object 
 | 2 | Notifications: channels (in-app, email, SMS, push) behind adapters, delivery records with status and retries through the worker, and the first events (bookings, maintenance updates) | ✅ Done (email through a logging adapter; SMS and push need phone numbers and device tokens, still to come) |
 | 3 | Documents: categories, audience, versions, expiry reminders, short-lived download links | ✅ Done (expiry shown on each document; reminder notifications with the daily worker job) |
 | 4 | Console screens and browser journeys | ✅ Done (inbox and notifications, announcements with delivery status, documents for staff and residents) |
-| 5 | Phase 10 exit review | |
+| 5 | Phase 10 exit review | ✅ Done ([PHASE_10_REVIEW](../reviews/PHASE_10_REVIEW.md)) |
 
 ## Release gates
 
