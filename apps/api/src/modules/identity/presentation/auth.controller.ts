@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { Authenticated, Public } from '../../../platform/auth/route-access';
 import { API_ENV, type ApiEnv } from '../../../platform/config/env';
 import { ZodValidationPipe } from '../../../platform/validation/zod-validation.pipe';
+import { AccountService } from '../application/account.service';
 import {
   type AuthenticatedPrincipal,
   IDENTITY_PROVIDER,
@@ -43,6 +44,7 @@ export class AuthController {
 
   constructor(
     private readonly passwordAuth: PasswordAuthService,
+    private readonly account: AccountService,
     @Inject(IDENTITY_PROVIDER) private readonly identity: IdentityProvider,
     @Inject(API_ENV) env: ApiEnv,
   ) {
@@ -58,7 +60,9 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponse> {
-    return this.respond(await this.passwordAuth.signUp(body, requestMeta(req)), res);
+    const issued = await this.passwordAuth.signUp(body, requestMeta(req));
+    await this.account.welcome(issued.user.id);
+    return this.respond(issued, res);
   }
 
   @Public()
@@ -95,7 +99,12 @@ export class AuthController {
   @ApiOperation({ summary: 'The signed-in user and current session.' })
   session(@CurrentPrincipal() principal: AuthenticatedPrincipal): CurrentSessionResponse {
     return {
-      user: { id: principal.userId, email: principal.email, displayName: principal.displayName },
+      user: {
+        id: principal.userId,
+        email: principal.email,
+        displayName: principal.displayName,
+        emailVerified: principal.emailVerified,
+      },
       session: { client: toClient(principal.client) },
     };
   }
@@ -104,7 +113,12 @@ export class AuthController {
   private respond(issued: IssuedSession, res: Response): AuthResponse {
     const { user, session, token } = issued;
     const body: AuthResponse = {
-      user: { id: user.id, email: user.email, displayName: user.displayName },
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        emailVerified: user.emailVerified,
+      },
       session: {
         client: toClient(session.client),
         idleExpiresAt: session.idleExpiresAt.toISOString(),

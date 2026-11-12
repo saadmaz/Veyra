@@ -43,6 +43,9 @@ must not mean "simplified".
 - VEYRA owns password storage, so it also owns breach exposure for credentials. Mitigations:
   argon2id, no plaintext or hashes in logs or API responses, rate limiting, audit, dependency
   scanning, and penetration testing before commercial launch (Phase 14).
+- **Provided in Phase 14 Part 1:** email verification and password reset through one-time
+  links (only SHA-256 hashes stored, a day and an hour respectively; a reset ends every
+  session; the reset request answers the same whether or not the account exists).
 - **Not yet provided**, and required before a privileged customer goes live: MFA (TOTP or
   WebAuthn) for privileged roles, email verification, password reset, and breached-password
   checks. These are tracked in the roadmap. ACCESS_CONTROL's MFA requirement for privileged

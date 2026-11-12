@@ -932,6 +932,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   a support request and ends it; a property manager does not see the page. axe WCAG 2.2 AA. The
   admin tool has no browser journeys yet.
 
+## Phase 14 tests
+
+### Part 1: email verification and password reset
+
+- `packages/emails` unit (2, `test/account.test.ts`): links, expiry and escaping; HTTPS links
+  only (localhost in development).
+- `apps/api` integration (4, `account-recovery.int.test.ts`): the confirmation link works once,
+  only the newest link works, resending when confirmed sends nothing; reset requests answer the
+  same for unknown addresses and send nothing; a reset replaces the password, ends every
+  session, confirms the address and works once.
+- `apps/console-web` unit (1, `test/account.test.ts`) and browser journeys (2,
+  `e2e/account.spec.ts`): forgot password from sign-in, choosing a new password from the link
+  (mismatch refused, incomplete links explained); the reminder banner, sending the link again,
+  confirming from the link. axe WCAG 2.2 AA.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

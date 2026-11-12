@@ -8,6 +8,7 @@ export interface AuthenticatedPrincipal {
   client: SessionClientType;
   email: string;
   displayName: string;
+  emailVerified: boolean;
 }
 
 /** A token as presented on the wire, and the transport it arrived on. */

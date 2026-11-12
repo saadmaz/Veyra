@@ -307,6 +307,10 @@ export class FakeApi {
   governance = new FakeGovernance();
   reporting = new FakeReporting();
   platform = new FakePlatform();
+  /** Users who have not confirmed their email (everyone else has). */
+  unverified = new Set<string>();
+  /** Account requests the fake received (verify, reset), for assertions. */
+  accountCalls: { path: string; body: Record<string, unknown> }[] = [];
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -659,12 +663,32 @@ export class FakeApi {
       return this.reply(route, 200, this.authResponse(user));
     }
 
+    if (
+      method === 'POST' &&
+      ['/auth/password-reset', '/auth/password-reset/confirm', '/auth/verify-email'].includes(path)
+    ) {
+      this.accountCalls.push({ path, body });
+      if (path === '/auth/password-reset') return this.reply(route, 202);
+      if (body.token !== 'a'.repeat(43)) return this.error(route, 400, 'INVALID_OR_EXPIRED_LINK');
+      return this.reply(route, 204);
+    }
+
     const user = this.currentUser;
     if (!user) return this.error(route, 401, 'UNAUTHENTICATED');
 
+    if (method === 'POST' && path === '/auth/verify-email/resend') {
+      this.accountCalls.push({ path, body: {} });
+      return this.reply(route, 202);
+    }
+
     if (method === 'GET' && path === '/auth/session') {
       return this.reply(route, 200, {
-        user: { id: user.id, email: user.email, displayName: user.displayName },
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          emailVerified: !this.unverified.has(user.id),
+        },
         session: { client: 'web' },
       });
     }
@@ -2183,7 +2207,12 @@ export class FakeApi {
 
   private authResponse(user: FakeUser) {
     return {
-      user: { id: user.id, email: user.email, displayName: user.displayName },
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        emailVerified: !this.unverified.has(user.id),
+      },
       session: {
         client: 'web',
         idleExpiresAt: new Date(Date.now() + 1_800_000).toISOString(),

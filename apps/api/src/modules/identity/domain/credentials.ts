@@ -22,7 +22,7 @@ const emailSchema = z
   .transform(normaliseEmail);
 
 /** Unicode-normalised so the same password typed on different devices hashes identically. */
-const passwordSchema = z
+export const passwordSchema = z
   .string()
   .transform((value) => value.normalize('NFKC'))
   .refine((value) => [...value].length >= PASSWORD_MIN_LENGTH, {

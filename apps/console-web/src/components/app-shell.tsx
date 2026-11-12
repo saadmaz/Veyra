@@ -4,10 +4,11 @@ import type { MyOrganisationDto } from '@veyra/api-contracts';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
+import { api } from '@/lib/api-client';
 import { signInPath } from '@/lib/navigation';
 import { useSession } from '@/lib/session';
 import { useApiQuery } from '@/lib/use-api';
-import { Button, ErrorState, LoadingState } from './ui';
+import { Alert, Button, ErrorState, LoadingState } from './ui';
 
 /**
  * Signed-in layout: redirects to sign-in when there is no session, then renders the header
@@ -50,9 +51,42 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AccountMenu displayName={session.user.displayName} email={session.user.email} />
       </header>
       <main id="main" className="page" tabIndex={-1}>
+        {session.user.emailVerified ? null : <ConfirmEmailBanner />}
         {children}
       </main>
     </>
+  );
+}
+
+/** Reminds people to confirm their address, and sends the link again on request. */
+function ConfirmEmailBanner() {
+  const [state, setState] = useState<'idle' | 'busy' | 'sent' | 'failed'>('idle');
+  async function resend() {
+    setState('busy');
+    try {
+      await api.post('/auth/verify-email/resend');
+      setState('sent');
+    } catch {
+      setState('failed');
+    }
+  }
+  return (
+    <Alert tone="info" title="Confirm your email address">
+      {state === 'sent'
+        ? 'We have sent the link again. It works for a day.'
+        : 'Open the link we emailed you when you signed up.'}{' '}
+      {state === 'failed' ? 'Sending failed; try again later. ' : null}
+      {state === 'sent' ? null : (
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => void resend()}
+          disabled={state === 'busy'}
+        >
+          Send it again
+        </button>
+      )}
+    </Alert>
   );
 }
 

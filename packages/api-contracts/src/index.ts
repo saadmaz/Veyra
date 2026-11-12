@@ -64,6 +64,8 @@ export interface AuthUserDto {
   id: string;
   email: string;
   displayName: string;
+  /** Whether the email address has been confirmed through its link (Phase 14). */
+  emailVerified: boolean;
 }
 
 export interface AuthSessionDto {

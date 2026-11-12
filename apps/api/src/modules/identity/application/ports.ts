@@ -16,6 +16,7 @@ export interface IdentityUser {
   email: string;
   displayName: string;
   status: UserStatus;
+  emailVerified: boolean;
 }
 
 export interface IdentitySession extends SessionState {

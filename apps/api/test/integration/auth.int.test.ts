@@ -160,7 +160,7 @@ describe('web sign-up and session', () => {
     const cookie = cookiePair(sessionCookie(res));
     const session = await http().get('/api/v1/auth/session').set('Cookie', cookie).expect(200);
     expect(session.body).toEqual({
-      user: { id: res.body.user.id, email, displayName: 'Test Resident' },
+      user: { id: res.body.user.id, email, displayName: 'Test Resident', emailVerified: false },
       session: { client: 'web' },
     });
     const probe = await http().get('/api/v1/probe/whoami').set('Cookie', cookie).expect(200);
