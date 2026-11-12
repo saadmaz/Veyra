@@ -12,6 +12,7 @@ import type {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
+import { Exports, PropertyFigures } from '@/components/dashboard';
 import {
   Alert,
   Button,
@@ -201,6 +202,8 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      <PropertyFigures propertyPath={base} />
+      <Exports propertyPath={base} />
       {can('property.incident.read') ? (
         <Card title="Incidents">
           <p className="muted">Report incidents, follow the response and see whom to call.</p>
