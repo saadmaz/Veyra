@@ -35,7 +35,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 11    | Governance and incident management       | Done. Exit review: [PHASE_11_REVIEW](../reviews/PHASE_11_REVIEW.md) |
 | 12    | Analytics and integrations               | Done. Exit review: [PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md) |
 | 13    | SaaS administration and subscriptions    | Done. Exit review: [PHASE_13_REVIEW](../reviews/PHASE_13_REVIEW.md) |
-| 14    | Security hardening and commercial launch | |
+| 14    | Security hardening and commercial launch | Done. Exit review: [PHASE_14_REVIEW](../reviews/PHASE_14_REVIEW.md) |
 
 ## Stage 0 discovery still required
 
@@ -312,7 +312,7 @@ a provider.
 | 2 | Multi-factor authentication (TOTP) with recovery codes, required for privileged roles' changes and for platform administrators | ✅ Done (`MFA_ENFORCEMENT`, on by default in production) |
 | 3 | Operational hardening: structured JSON logging with redaction, secret scanning and dependency audit in CI, Content-Security-Policy, upload malware scanning adapter | ✅ Done (ClamAV adapter; the worker still logs plain text) |
 | 4 | Launch readiness: production database roles, backup and restore runbook, full-stack smoke test, launch checklist | ✅ Done (one image; smoke test and restore drill in CI) |
-| 5 | Phase 14 exit review | |
+| 5 | Phase 14 exit review | ✅ Done ([PHASE_14_REVIEW](../reviews/PHASE_14_REVIEW.md)) |
 
 ## Release gates
 
