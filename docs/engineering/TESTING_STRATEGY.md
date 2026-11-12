@@ -902,6 +902,17 @@ expiry, rehash on sign-in, idempotent sign-out).
   smaller plan turns routes off (403) and permissions away for everyone; limits answer 409
   `PLAN_LIMIT_REACHED`; an ended trial makes the organisation read-only until reactivated.
 
+### Part 2: platform administration
+
+- `packages/db` integration (3, `platform-admin.int.test.ts`): platform admins read
+  organisations and subscriptions across tenants but no properties, and usage as counts; plan and
+  status changes only through the functions, for admins only, with a reason, audited in the
+  tenant; only the owner grants; revocation takes effect at once.
+- `apps/api` integration (4, `platform-admin.int.test.ts`): routes hidden (404) from everyone but
+  platform admins; organisation list with plan and usage, no tenant data; plan changes with a
+  reason switch features at once and show in the customer's history; suspension makes the
+  organisation read-only until reactivated.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

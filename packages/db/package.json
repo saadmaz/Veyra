@@ -22,7 +22,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.mts"
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "platform-admin": "bun scripts/platform-admin.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

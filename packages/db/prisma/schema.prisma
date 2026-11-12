@@ -98,6 +98,7 @@ model User {
   approvalRequestsMade     ApprovalRequest[]        @relation("ApprovalRequestRequestedBy")
   approvalDecisionsMade    ApprovalDecision[]       @relation("ApprovalDecisionBy")
   subscriptionChanges      SubscriptionEvent[]      @relation("SubscriptionEventActor")
+  platformAdmin            PlatformAdmin?
   webhookEndpointsCreated  WebhookEndpoint[]        @relation("WebhookEndpointCreatedBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
@@ -3435,4 +3436,22 @@ model SubscriptionEvent {
 
   @@index([organisationId, createdAt])
   @@map("subscription_events")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Platform administration (Phase 13 Part 2). VEYRA staff who manage plans and suspend or
+// reactivate organisations. Granted and revoked only by an operator with the database owner's
+// credentials (packages/db/scripts/platform-admin.ts). They see organisations and subscriptions,
+// never tenant data. Rules are hand-written in migration 20261201090000_platform_admin.
+// ---------------------------------------------------------------------------------------------
+
+model PlatformAdmin {
+  userId    String    @id @map("user_id") @db.Uuid
+  note      String?
+  grantedAt DateTime  @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("platform_admins")
 }
