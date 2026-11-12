@@ -248,7 +248,10 @@ describe('cross-organisation isolation', () => {
 describe('permissions within an organisation', () => {
   it('lets a finance officer read the organisation but not members, settings or invitations', async () => {
     const detail = await as(carol).get(`/api/v1/organisations/${orgA}`).expect(200);
-    expect(detail.body.permissions).toEqual(['organisation.profile.read', 'organisation.vendor.read']);
+    expect(detail.body.permissions).toEqual([
+      'organisation.profile.read',
+      'organisation.vendor.read',
+    ]);
     for (const res of [
       await as(carol).get(`/api/v1/organisations/${orgA}/memberships`),
       await as(carol).patch(`/api/v1/organisations/${orgA}`).send({ name: 'Mine now' }),
