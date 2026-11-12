@@ -205,7 +205,7 @@ Decisions (owner, 2026-11-12, the recommended options):
 | 1 | Data foundation: facilities on common areas, weekly opening hours, closures, bookings in whole slots with notice/advance windows, per-unit limit and capacity checked under a per-facility lock, approval per facility, validated transitions with reasons, append-only history written by the database, RLS | ✅ Done |
 | 2 | Roles and API: facility setup and closures for managers; availability in the property's time zone; residents book, list and cancel (within the cancellation window) for their unit; staff book on behalf, approve, reject, cancel and mark used or no-show | ✅ Done (household members wait for delegation) |
 | 3 | Fees and deposits: per-slot fee and deposit charge types on a facility; an invoice to the unit when a booking is confirmed; deposit refunds and cancellation credits as credit notes | ✅ Done (in the booking's own transaction; paid amounts are refunded through finance) |
-| 4 | Console: residents' booking pages with availability, the manager's facility setup and booking queue; browser journeys | |
+| 4 | Console: residents' booking pages with availability, the manager's facility setup and booking queue; browser journeys | ✅ Done |
 | 5 | Phase 8 exit review | |
 
 ## Release gates

@@ -657,6 +657,17 @@ expiry, rehash on sign-in, idempotent sign-out).
   billed; the deposit is released only once the booking is used, once, by a credit note; a
   rejected booking is never charged.
 
+### Part 4: facilities console
+
+- `apps/console-web` unit (3, `test/facilities.test.ts`): today's date in the property's time
+  zone, durations, weekly hours merged by day, booking rules in plain words.
+- Browser journeys (2, `e2e/facilities.spec.ts`, desktop and phone, with an in-memory
+  `e2e/fake-facilities.ts`): a tenant opens Facilities from their home, picks a day and a free
+  slot, books it with a purpose, sees the slot turn unavailable and the booking confirmed, then
+  cancels it with a reason; the slot grid fits a 375px screen. A property manager makes a party
+  room bookable with approval; the tenant's booking waits; the manager approves it from the
+  queue and finds it under confirmed. axe WCAG 2.2 AA on each screen.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
