@@ -251,6 +251,8 @@ describe('a property manager of P1', () => {
       'property.facility.manage',
       'property.facility.read',
       'property.finance.read',
+      'property.governance.manage',
+      'property.governance.read',
       'property.incident.manage',
       'property.incident.read',
       'property.incident.report',

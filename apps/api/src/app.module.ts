@@ -10,6 +10,7 @@ import { PermissionGuard } from './modules/access-control/presentation/permissio
 import { CommunicationsModule } from './modules/communications/communications.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { FinanceModule } from './modules/finance/finance.module';
+import { GovernanceModule } from './modules/governance/governance.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AuthGuard } from './modules/identity/presentation/auth.guard';
 import { IncidentsModule } from './modules/incidents/incidents.module';
@@ -49,6 +50,7 @@ export class AppModule implements NestModule {
         StaffModule,
         CommunicationsModule,
         IncidentsModule,
+        GovernanceModule,
       ],
       controllers: [HealthController],
       providers: [

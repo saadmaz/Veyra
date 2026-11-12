@@ -75,6 +75,8 @@ export const ROLES = {
       'property.incident.read',
       'property.incident.report',
       'property.incident.manage',
+      'property.governance.read',
+      'property.governance.manage',
     ],
   },
   PROPERTY_MANAGER: {
@@ -115,6 +117,8 @@ export const ROLES = {
       'property.incident.read',
       'property.incident.report',
       'property.incident.manage',
+      'property.governance.read',
+      'property.governance.manage',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -211,6 +215,13 @@ export const ROLES = {
       // Vendors they pay (Phase 9).
       'organisation.vendor.read',
     ],
+  },
+  COMMITTEE_MEMBER: {
+    name: 'Committee member',
+    grantableAt: ['PROPERTY'],
+    // Sits on a property's committee (Phase 11): reads its committees, meetings, minutes and
+    // resolutions, and the property's documents. Managers keep the records.
+    permissions: ['property.profile.read', 'property.document.read', 'property.governance.read'],
   },
   // ------------------------------------------------------------------ derived resident roles
   OWNER: {

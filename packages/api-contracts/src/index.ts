@@ -2099,3 +2099,67 @@ export interface IncidentAssigneeDto {
   userId: string;
   name: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Governance (Phase 11 Part 2)
+// ---------------------------------------------------------------------------------------------
+
+export type CommitteePosition = 'CHAIR' | 'VICE_CHAIR' | 'SECRETARY' | 'TREASURER' | 'MEMBER';
+
+export interface CommitteeSeatDto {
+  id: string;
+  userId: string;
+  name: string;
+  position: CommitteePosition;
+  termStart: string;
+  termEnd: string | null;
+  /** Held on the property's local today. */
+  current: boolean;
+}
+
+export interface CommitteeDto {
+  id: string;
+  name: string;
+  purpose: string | null;
+  status: 'ACTIVE' | 'DISSOLVED';
+  dissolvedAt: string | null;
+  createdAt: string;
+  /** Newest term first. */
+  seats: CommitteeSeatDto[];
+}
+
+export interface ResolutionDto {
+  id: string;
+  /** e.g. RES-000012, per property. */
+  reference: string;
+  title: string;
+  text: string;
+  outcome: 'PASSED' | 'REJECTED' | 'DEFERRED';
+  votesFor: number | null;
+  votesAgainst: number | null;
+  abstentions: number | null;
+  document: { id: string; title: string } | null;
+  recordedBy: string;
+  createdAt: string;
+}
+
+export interface MeetingDto {
+  id: string;
+  committee: { id: string; name: string };
+  title: string;
+  scheduledAt: string;
+  location: string | null;
+  status: 'SCHEDULED' | 'HELD' | 'CANCELLED';
+  heldAt: string | null;
+  cancelReason: string | null;
+  minutes: string | null;
+  minutesApprovedAt: string | null;
+  minutesApprovedBy: string | null;
+  agenda: { id: string; position: number; title: string; details: string | null }[];
+  resolutions: ResolutionDto[];
+}
+
+export interface CommitteeCandidateDto {
+  userId: string;
+  name: string;
+}

@@ -79,6 +79,10 @@ export const PERMISSIONS = [
   'property.incident.report',
   /** Run the response: statuses, follow-up actions, sensitive records, escalation contacts. */
   'property.incident.manage',
+  /** See the property's committees, their members, meetings, minutes and resolutions. */
+  'property.governance.read',
+  /** Keep committees and seats; schedule, hold and cancel meetings; minutes and resolutions. */
+  'property.governance.manage',
   /** See the property's departments, shifts and handover notes. */
   'property.staff.read',
   /** Keep departments and their members; schedule, move and cancel shifts. */
