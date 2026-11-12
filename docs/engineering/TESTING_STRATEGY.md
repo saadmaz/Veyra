@@ -715,6 +715,19 @@ expiry, rehash on sign-in, idempotent sign-out).
   with a reason, and archiving or removing blocked by live shifts.
 - `apps/api` unit (access control): guards and technicians now work shifts.
 
+### Part 4: checklists
+
+- `packages/db` integration (4, `checklists.int.test.ts`): templates of 1-50 trimmed checks,
+  archived for good and then unusable; checks answered only while open, a failed check needs a
+  note, answer person and time from the database; submitting needs every answer; the assignee
+  cannot verify; returning needs a note and reopens; verified is final; a shift must belong to
+  the same person; wording never changes; cancelling needs a reason; isolation and no deletes.
+- `apps/api` integration (2, `checklists.int.test.ts`): a supervisor writes a template (guards
+  cannot) and gives it to a guard; a later template change leaves it as given; another guard gets
+  404; a failed check without a note is 400, submitting early 422, answering after submitting
+  409; returned with a note, fixed, resubmitted and verified; a supervisor's own checklist is 403
+  for them to verify; an archived template is 409.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

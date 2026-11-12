@@ -1823,3 +1823,48 @@ export interface CreateShiftRequest {
   startsAt: string;
   endsAt: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Checklists and inspections (Phase 9 Part 4)
+// ---------------------------------------------------------------------------------------------
+
+export type ChecklistStatus = 'OPEN' | 'SUBMITTED' | 'VERIFIED' | 'CANCELLED';
+export type ChecklistResult = 'PASS' | 'FAIL' | 'NOT_APPLICABLE';
+
+export interface ChecklistTemplateDto {
+  id: string;
+  title: string;
+  department: { id: string; name: string } | null;
+  /** The checks, in order. */
+  items: string[];
+  status: 'ACTIVE' | 'ARCHIVED';
+  createdAt: string;
+}
+
+export interface ChecklistItemDto {
+  position: number;
+  text: string;
+  result: ChecklistResult | null;
+  /** What was found; always given for a failed check. */
+  note: string | null;
+  answeredAt: string | null;
+}
+
+export interface ChecklistDto {
+  id: string;
+  templateId: string;
+  title: string;
+  assignedTo: { userId: string; name: string };
+  shiftId: string | null;
+  dueOn: string;
+  status: ChecklistStatus;
+  submittedAt: string | null;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
+  /** Why it was returned or cancelled. */
+  statusNote: string | null;
+  failures: number;
+  answered: number;
+  createdAt: string;
+  items: ChecklistItemDto[];
+}
