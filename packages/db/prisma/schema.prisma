@@ -82,6 +82,9 @@ model User {
   checklistsCreated       ChecklistRun[]           @relation("ChecklistRunCreatedBy")
   checklistsVerified      ChecklistRun[]           @relation("ChecklistRunVerifiedBy")
   checklistItemsAnswered  ChecklistRunItem[]       @relation("ChecklistRunItemAnsweredBy")
+  announcementsCreated    Announcement[]           @relation("AnnouncementCreatedBy")
+  announcementsPublished  Announcement[]           @relation("AnnouncementPublishedBy")
+  announcementsReceived   AnnouncementRecipient[]  @relation("AnnouncementRecipientUser")
   vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -393,19 +396,21 @@ model Property {
   maintenanceEvents      MaintenanceEvent[]
   maintenanceAttachments MaintenanceAttachment[]
 
-  facilities            Facility[]
-  assets                Asset[]
-  maintenanceSchedules  MaintenanceSchedule[]
-  departments           Department[]
-  departmentMembers     DepartmentMember[]
-  shifts                Shift[]
-  checklistTemplates    ChecklistTemplate[]
-  checklistRuns         ChecklistRun[]
-  checklistRunItems     ChecklistRunItem[]
-  facilityOpeningHours  FacilityOpeningHours[]
-  facilityClosures      FacilityClosure[]
-  facilityBookings      FacilityBooking[]
-  facilityBookingEvents FacilityBookingEvent[]
+  facilities             Facility[]
+  assets                 Asset[]
+  maintenanceSchedules   MaintenanceSchedule[]
+  departments            Department[]
+  departmentMembers      DepartmentMember[]
+  shifts                 Shift[]
+  checklistTemplates     ChecklistTemplate[]
+  checklistRuns          ChecklistRun[]
+  checklistRunItems      ChecklistRunItem[]
+  announcements          Announcement[]
+  announcementRecipients AnnouncementRecipient[]
+  facilityOpeningHours   FacilityOpeningHours[]
+  facilityClosures       FacilityClosure[]
+  facilityBookings       FacilityBooking[]
+  facilityBookingEvents  FacilityBookingEvent[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, code])
@@ -424,10 +429,11 @@ model Building {
   createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property    Property     @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  floors      Floor[]
-  units       Unit[]
-  commonAreas CommonArea[]
+  property      Property       @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  floors        Floor[]
+  units         Unit[]
+  commonAreas   CommonArea[]
+  announcements Announcement[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, code])
@@ -2598,4 +2604,86 @@ model ChecklistRunItem {
   @@unique([runId, position])
   @@index([organisationId, runId])
   @@map("checklist_run_items")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Announcements (Phase 10 Part 1). A manager drafts a message for an audience of a property and
+// publishes it; publishing fixes its content and delivers a copy to each recipient's inbox, where
+// they read it and, when asked, acknowledge it. Rules are hand-written in migration
+// 20261123090000_announcements.
+// ---------------------------------------------------------------------------------------------
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  /// Taken back with a reason; hidden from inboxes. Final.
+  WITHDRAWN
+}
+
+enum AnnouncementAudience {
+  /// Residents and staff of the property.
+  EVERYONE
+  /// Owners, tenants and household members of the property's units.
+  RESIDENTS
+  /// Residents of one building.
+  BUILDING_RESIDENTS
+  /// People who work at the property.
+  STAFF
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  /// An emergency broadcast.
+  URGENT
+}
+
+model Announcement {
+  id                      String               @id @default(uuid(7)) @db.Uuid
+  organisationId          String               @map("organisation_id") @db.Uuid
+  propertyId              String               @map("property_id") @db.Uuid
+  title                   String
+  body                    String
+  priority                AnnouncementPriority @default(NORMAL)
+  audience                AnnouncementAudience
+  /// Set for BUILDING_RESIDENTS only.
+  buildingId              String?              @map("building_id") @db.Uuid
+  requiresAcknowledgement Boolean              @default(false) @map("requires_acknowledgement")
+  status                  AnnouncementStatus   @default(DRAFT)
+  publishedAt             DateTime?            @map("published_at") @db.Timestamptz(3)
+  publishedByUserId       String?              @map("published_by_user_id") @db.Uuid
+  withdrawnAt             DateTime?            @map("withdrawn_at") @db.Timestamptz(3)
+  withdrawReason          String?              @map("withdraw_reason")
+  createdByUserId         String               @map("created_by_user_id") @db.Uuid
+  createdAt               DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property                @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  building    Building?               @relation(fields: [organisationId, propertyId, buildingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy   User                    @relation("AnnouncementCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  publishedBy User?                   @relation("AnnouncementPublishedBy", fields: [publishedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recipients  AnnouncementRecipient[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, status, publishedAt])
+  @@map("announcements")
+}
+
+/// One person's copy of a published announcement.
+model AnnouncementRecipient {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  propertyId     String    @map("property_id") @db.Uuid
+  announcementId String    @map("announcement_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  readAt         DateTime? @map("read_at") @db.Timestamptz(3)
+  acknowledgedAt DateTime? @map("acknowledged_at") @db.Timestamptz(3)
+
+  property     Property     @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  announcement Announcement @relation(fields: [organisationId, propertyId, announcementId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user         User         @relation("AnnouncementRecipientUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([announcementId, userId])
+  @@index([organisationId, userId, createdAt])
+  @@map("announcement_recipients")
 }

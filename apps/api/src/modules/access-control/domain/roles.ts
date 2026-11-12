@@ -65,6 +65,8 @@ export const ROLES = {
       'property.staff.read',
       'property.staff.manage',
       'property.staff.work',
+      'property.announcement.read',
+      'property.announcement.manage',
       'organisation.vendor.read',
       'organisation.vendor.manage',
     ],
@@ -99,6 +101,8 @@ export const ROLES = {
       'property.staff.read',
       'property.staff.manage',
       'property.staff.work',
+      'property.announcement.read',
+      'property.announcement.manage',
     ],
   },
   MAINTENANCE_MANAGER: {

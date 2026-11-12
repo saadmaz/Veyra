@@ -380,14 +380,29 @@ Migration `20261121090000_staff_shifts`.
 
 All six staff tables have RLS by organisation and no DELETE grant.
 
-## 11. Identity vs person vs relationship
+## 11. Communications (Phase 10, announcements implemented)
+
+Migration `20261123090000_announcements`.
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `announcements` | property, title, body, priority (`NORMAL`/`URGENT`), audience (`EVERYONE`/`RESIDENTS`/`BUILDING_RESIDENTS`/`STAFF`), building? (building audience only), requires_acknowledgement, status (`DRAFT`/`PUBLISHED`/`WITHDRAWN`), published_at?, published_by_user?, withdrawn_at?, withdraw_reason? | Start as drafts, edited freely. Published by a person (recorded by the database); then the content never changes. Withdrawn with a reason; withdrawn is final. |
+| `announcement_recipients` | announcement, user, read_at?, acknowledged_at? | One copy per person, only of a published announcement. Only the recipient reads or acknowledges their copy, each once; acknowledging also reads; acknowledging only where asked. |
+
+`app_property_resident_users(property, building)` lists the people with a login who live at the
+property (or building) today: owners, tenants and household members by the property's local
+date, the same rules as `app_resident_grants`. Publishing delivers to these residents and/or to
+everyone holding `property.profile.read` at the property (staff), as the audience says. Both
+tables have RLS by organisation and no DELETE grant.
+
+## 12. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
 holds the personal fields the product needs and may exist without a login. Relationships to
 units (ownership, tenancy, household membership) are separate, effective-dated records. One
 person may relate to many units and properties, and hold many roles.
 
-## 12. Conceptual entity catalogue (later phases)
+## 13. Conceptual entity catalogue (later phases)
 
 Starting point for discovery, not a final schema. Validate entities and cardinalities when the
 owning module is built.
@@ -406,7 +421,7 @@ File bytes live in object storage. The database stores metadata, ownership, acce
 checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
 server-side authorisation check.
 
-## 13. Data lifecycle
+## 14. Data lifecycle
 
 - Retention is defined per data category and jurisdiction.
 - Correction and deletion are supported where legally required.

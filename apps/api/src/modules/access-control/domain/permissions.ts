@@ -63,6 +63,10 @@ export const PERMISSIONS = [
   'property.maintenance.manage',
   /** Be assigned work orders and carry them out: only the work assigned to you. */
   'property.maintenance.work',
+  /** See the property's announcements and who received, read and acknowledged them. */
+  'property.announcement.read',
+  /** Draft, publish and withdraw the property's announcements. */
+  'property.announcement.manage',
   /** See the property's departments, shifts and handover notes. */
   'property.staff.read',
   /** Keep departments and their members; schedule, move and cancel shifts. */

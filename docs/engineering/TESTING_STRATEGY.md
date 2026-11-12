@@ -738,6 +738,22 @@ expiry, rehash on sign-in, idempotent sign-out).
   shift with a handover; the supervisor sees the answers and the handover and verifies it. axe
   WCAG 2.2 AA on each screen. Asset screens are covered by the API tests (no journey yet).
 
+## Phase 10 tests
+
+### Part 1: announcements
+
+- `packages/db` integration (4, `announcements.int.test.ts`): the resident audience lists
+  current residents with a login (not former tenants, not people without a login), and one
+  building's; drafts are edited, a building only for building audiences, copies only of published
+  announcements, publishing records the publisher and fixes the content, withdrawing needs a
+  reason and is final; only the recipient reads or acknowledges, acknowledging only where asked,
+  once, and also reads; one copy per person; isolation and no deletes.
+- `apps/api` integration (3, `announcements.int.test.ts`): an urgent announcement to residents
+  reaches the owner and the tenant only, who read and acknowledge it, and the manager sees the
+  figures; building, staff and everyone audiences; a building audience without a building is 400;
+  guards cannot publish, residents get 404 on manager routes; withdrawn announcements leave
+  inboxes; strangers see an empty inbox.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

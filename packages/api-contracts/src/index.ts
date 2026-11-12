@@ -1868,3 +1868,56 @@ export interface ChecklistDto {
   createdAt: string;
   items: ChecklistItemDto[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Announcements (Phase 10 Part 1)
+// ---------------------------------------------------------------------------------------------
+
+export type AnnouncementStatus = 'DRAFT' | 'PUBLISHED' | 'WITHDRAWN';
+export type AnnouncementAudience = 'EVERYONE' | 'RESIDENTS' | 'BUILDING_RESIDENTS' | 'STAFF';
+
+export interface AnnouncementDto {
+  id: string;
+  property: { id: string; name: string };
+  title: string;
+  body: string;
+  /** URGENT is an emergency broadcast. */
+  priority: 'NORMAL' | 'URGENT';
+  audience: AnnouncementAudience;
+  building: { id: string; name: string } | null;
+  requiresAcknowledgement: boolean;
+  status: AnnouncementStatus;
+  publishedAt: string | null;
+  publishedBy: string | null;
+  withdrawnAt: string | null;
+  withdrawReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  delivery: { recipients: number; read: number; acknowledged: number };
+}
+
+export interface AnnouncementDetailDto {
+  announcement: AnnouncementDto;
+  recipients: {
+    userId: string;
+    name: string;
+    readAt: string | null;
+    acknowledgedAt: string | null;
+  }[];
+}
+
+export interface InboxItemDto {
+  announcement: Omit<AnnouncementDto, 'delivery' | 'createdBy'>;
+  readAt: string | null;
+  acknowledgedAt: string | null;
+}
+
+export interface DraftAnnouncementRequest {
+  title: string;
+  body: string;
+  priority?: 'NORMAL' | 'URGENT';
+  audience: AnnouncementAudience;
+  /** For BUILDING_RESIDENTS only. */
+  buildingId?: string | null;
+  requiresAcknowledgement?: boolean;
+}

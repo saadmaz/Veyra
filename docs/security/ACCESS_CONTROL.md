@@ -143,6 +143,10 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   admins, property managers, maintenance managers and security supervisors) and
   `property.staff.work` (those roles plus security guards and technicians): a worker sees only
   their own shifts. Supervisors currently manage every department of their property.
+  For announcements (Phase 10) `property.announcement.read` and `.manage` (organisation admins
+  and property managers). The inbox needs only a signed-in user: a person sees only copies
+  delivered to them, enforced by the query and by the database (only the recipient may update a
+  copy).
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
