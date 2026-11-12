@@ -22,6 +22,7 @@ import type {
 import { FakeFacilities } from './fake-facilities';
 import { FakeFinance } from './fake-finance';
 import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
+import { FakeOps } from './fake-ops';
 
 /**
  * In-memory stand-in for the VEYRA API, answering the console's browser requests through
@@ -72,8 +73,13 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'organisation.property.create',
       'organisation.resident.read',
       'organisation.settings.manage',
+      'organisation.vendor.read',
+      'organisation.vendor.manage',
     ],
     property: [
+      'property.staff.read',
+      'property.staff.manage',
+      'property.staff.work',
       'property.lifecycle.manage',
       'property.profile.read',
       'property.resident.manage',
@@ -164,11 +170,19 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.visitor.check_in',
       'property.visitor.manage',
       'property.visitor.read',
+      'property.staff.read',
+      'property.staff.manage',
+      'property.staff.work',
     ],
   },
   SECURITY_GUARD: {
     organisation: [],
-    property: ['property.profile.read', 'property.structure.read', 'property.visitor.check_in'],
+    property: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.visitor.check_in',
+      'property.staff.work',
+    ],
   },
 };
 
@@ -242,6 +256,7 @@ export class FakeApi {
   finance = new FakeFinance();
   maintenance = new FakeMaintenance();
   facilities = new FakeFacilities();
+  ops = new FakeOps();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -654,6 +669,17 @@ export class FakeApi {
 
     if (rest === '' && method === 'GET')
       return this.reply(route, 200, { ...organisation, permissions });
+    if (rest.startsWith('/vendors')) {
+      const reply = this.ops.handleVendors({
+        method,
+        sub: rest,
+        body,
+        organisationId: organisation.id,
+        user,
+        can,
+      });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
     if (rest === '/memberships' && method === 'GET') {
       if (!can('organisation.member.read')) return this.error(route, 403, 'FORBIDDEN');
       const data: MembershipDto[] = this.memberships
@@ -928,6 +954,27 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    if (
+      sub.startsWith('/staff') ||
+      sub.startsWith('/my-shifts') ||
+      sub.startsWith('/my-checklists')
+    ) {
+      const reply = this.ops.handleStaff({
+        method,
+        sub,
+        body,
+        propertyId: property.id,
+        user,
+        permissions: pp,
+        people: this.users.filter((u) =>
+          (this.propertyPermissions(organisation.id, property.id, u.id) ?? []).includes(
+            'property.staff.work',
+          ),
+        ),
+      });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
 
     if (sub.startsWith('/facilities') || sub.startsWith('/facility-bookings')) {
       const reply = this.facilities.handleProperty({
