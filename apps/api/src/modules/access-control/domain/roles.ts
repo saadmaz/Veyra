@@ -77,6 +77,9 @@ export const ROLES = {
       'property.incident.manage',
       'property.governance.read',
       'property.governance.manage',
+      'property.approval.read',
+      'property.approval.request',
+      'property.approval.decide',
     ],
   },
   PROPERTY_MANAGER: {
@@ -119,6 +122,9 @@ export const ROLES = {
       'property.incident.manage',
       'property.governance.read',
       'property.governance.manage',
+      'property.approval.read',
+      'property.approval.request',
+      'property.approval.decide',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -142,6 +148,8 @@ export const ROLES = {
       'property.staff.work',
       'property.incident.read',
       'property.incident.report',
+      'property.approval.read',
+      'property.approval.request',
     ],
   },
   TECHNICIAN: {
@@ -214,6 +222,8 @@ export const ROLES = {
       'property.maintenance.read',
       // Vendors they pay (Phase 9).
       'organisation.vendor.read',
+      'property.approval.read',
+      'property.approval.request',
     ],
   },
   COMMITTEE_MEMBER: {
@@ -221,7 +231,13 @@ export const ROLES = {
     grantableAt: ['PROPERTY'],
     // Sits on a property's committee (Phase 11): reads its committees, meetings, minutes and
     // resolutions, and the property's documents. Managers keep the records.
-    permissions: ['property.profile.read', 'property.document.read', 'property.governance.read'],
+    permissions: [
+      'property.profile.read',
+      'property.document.read',
+      'property.governance.read',
+      // Decides requests sent to their committee (Phase 11).
+      'property.approval.read',
+    ],
   },
   // ------------------------------------------------------------------ derived resident roles
   OWNER: {

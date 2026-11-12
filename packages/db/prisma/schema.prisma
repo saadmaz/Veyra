@@ -95,6 +95,8 @@ model User {
   committeeSeats           CommitteeMember[]        @relation("CommitteeMemberUser")
   minutesApproved          Meeting[]                @relation("MeetingMinutesApprovedBy")
   resolutionsRecorded      Resolution[]             @relation("ResolutionRecordedBy")
+  approvalRequestsMade     ApprovalRequest[]        @relation("ApprovalRequestRequestedBy")
+  approvalDecisionsMade    ApprovalDecision[]       @relation("ApprovalDecisionBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided     WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -430,6 +432,9 @@ model Property {
   meetings               Meeting[]
   meetingAgendaItems     MeetingAgendaItem[]
   resolutions            Resolution[]
+  approvalPolicies       ApprovalPolicy[]
+  approvalRequests       ApprovalRequest[]
+  approvalDecisions      ApprovalDecision[]
   facilityOpeningHours   FacilityOpeningHours[]
   facilityClosures       FacilityClosure[]
   facilityBookings       FacilityBooking[]
@@ -2840,10 +2845,11 @@ model Document {
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property    Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  createdBy   User              @relation("DocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  versions    DocumentVersion[]
-  resolutions Resolution[]
+  property         Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy        User              @relation("DocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versions         DocumentVersion[]
+  resolutions      Resolution[]
+  approvalRequests ApprovalRequest[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId, status])
@@ -3072,9 +3078,11 @@ model Committee {
   createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  members  CommitteeMember[]
-  meetings Meeting[]
+  property         Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  members          CommitteeMember[]
+  meetings         Meeting[]
+  approvalPolicies ApprovalPolicy[]
+  approvalRequests ApprovalRequest[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId, status])
@@ -3173,4 +3181,118 @@ model Resolution {
   @@unique([propertyId, resolutionNumber])
   @@index([organisationId, meetingId])
   @@map("resolutions")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Approvals (Phase 11 Part 3). Requests for expenses, purchases, policy changes and the like are
+// decided under the property's approval policies: by request type and amount, how many approvals
+// are needed and from whom (managers, or the current members of a committee). The policy is
+// copied onto the request when it is made. Rules are hand-written in migration
+// 20261128090000_approvals.
+// ---------------------------------------------------------------------------------------------
+
+enum ApprovalRequestType {
+  EXPENSE
+  PURCHASE
+  POLICY
+  ACCESS
+  OTHER
+}
+
+enum ApproverGroup {
+  /// People holding property.approval.decide at the property.
+  MANAGERS
+  /// The current members of one committee.
+  COMMITTEE
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ApprovalDecisionKind {
+  APPROVE
+  REJECT
+}
+
+/// A rule: requests of this type from this amount up need this many approvals from these people.
+model ApprovalPolicy {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  organisationId    String              @map("organisation_id") @db.Uuid
+  propertyId        String              @map("property_id") @db.Uuid
+  requestType       ApprovalRequestType @map("request_type")
+  /// From this amount up (minor units of the property's currency); 0 for every request.
+  minAmountMinor    BigInt              @default(0) @map("min_amount_minor")
+  requiredApprovals Int                 @map("required_approvals")
+  approvers         ApproverGroup
+  committeeId       String?             @map("committee_id") @db.Uuid
+  active            Boolean             @default(true)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property  Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  committee Committee?        @relation(fields: [organisationId, propertyId, committeeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  requests  ApprovalRequest[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, requestType, active])
+  @@map("approval_policies")
+}
+
+model ApprovalRequest {
+  id                String                @id @default(uuid(7)) @db.Uuid
+  organisationId    String                @map("organisation_id") @db.Uuid
+  propertyId        String                @map("property_id") @db.Uuid
+  /// Sequential per property (AR-000042), set by the database.
+  requestNumber     BigInt?               @map("request_number")
+  requestType       ApprovalRequestType   @map("request_type")
+  title             String
+  description       String
+  amountMinor       BigInt?               @map("amount_minor")
+  currency          String?               @db.Char(3)
+  documentId        String?               @map("document_id") @db.Uuid
+  /// The policy that applied when the request was made (none: one manager approves).
+  policyId          String?               @map("policy_id") @db.Uuid
+  requiredApprovals Int                   @map("required_approvals")
+  approvers         ApproverGroup
+  committeeId       String?               @map("committee_id") @db.Uuid
+  status            ApprovalRequestStatus @default(PENDING)
+  requestedByUserId String                @map("requested_by_user_id") @db.Uuid
+  decidedAt         DateTime?             @map("decided_at") @db.Timestamptz(3)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property    Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  document    Document?          @relation(fields: [organisationId, propertyId, documentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  policy      ApprovalPolicy?    @relation(fields: [organisationId, propertyId, policyId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  committee   Committee?         @relation(fields: [organisationId, propertyId, committeeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy User               @relation("ApprovalRequestRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decisions   ApprovalDecision[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, requestNumber])
+  @@index([organisationId, propertyId, status])
+  @@map("approval_requests")
+}
+
+/// One person's decision on a request. Never changes.
+model ApprovalDecision {
+  id             String               @id @default(uuid(7)) @db.Uuid
+  organisationId String               @map("organisation_id") @db.Uuid
+  propertyId     String               @map("property_id") @db.Uuid
+  requestId      String               @map("request_id") @db.Uuid
+  userId         String               @map("user_id") @db.Uuid
+  decision       ApprovalDecisionKind
+  note           String?
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property        @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  request  ApprovalRequest @relation(fields: [organisationId, propertyId, requestId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user     User            @relation("ApprovalDecisionBy", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([requestId, userId])
+  @@map("approval_decisions")
 }

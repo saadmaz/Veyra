@@ -83,6 +83,12 @@ export const PERMISSIONS = [
   'property.governance.read',
   /** Keep committees and seats; schedule, hold and cancel meetings; minutes and resolutions. */
   'property.governance.manage',
+  /** See the property's approval requests, their decisions and the approval policies. */
+  'property.approval.read',
+  /** Ask for an approval (an expense, a purchase, a policy change). */
+  'property.approval.request',
+  /** Decide requests that managers approve (committee requests: a current seat on the committee). */
+  'property.approval.decide',
   /** See the property's departments, shifts and handover notes. */
   'property.staff.read',
   /** Keep departments and their members; schedule, move and cancel shifts. */

@@ -432,6 +432,18 @@ All four have RLS by organisation and no DELETE grant.
 
 All five have RLS by organisation and no DELETE grant.
 
+**Approvals** (Phase 11, migration `20261128090000_approvals`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `approval_policies` | request_type (`EXPENSE`/`PURCHASE`/`POLICY`/`ACCESS`/`OTHER`), min_amount_minor, required_approvals (1–10), approvers (`MANAGERS`/`COMMITTEE`), committee? (exactly for `COMMITTEE`, active), active | One active policy per type and threshold. A request takes the active policy of its type with the highest threshold at or below its amount; none means one manager. |
+| `approval_requests` | request_number (per property, AR-000042), request_type, title, description, amount_minor? + currency? (both or neither, the property's currency), document?, policy?, required_approvals, approvers, committee?, status (`PENDING`/`APPROVED`/`REJECTED`/`WITHDRAWN`), requested_by_user, decided_at? | The policy's rule is copied on; nothing changes afterwards. Only the requester withdraws, while pending. APPROVED and REJECTED are set only by the decision trigger. |
+| `approval_decisions` | request, user, decision (`APPROVE`/`REJECT`), note? (required to reject) | Only on pending requests, never by the requester, only by the person recorded, once per person; never changed. One rejection rejects; reaching the required approvals approves. |
+
+Who may decide (a holder of `property.approval.decide`, or a current seat on the committee) is
+checked by the application. Finance's own maker-checker approvals (`finance_approvals`, Phase 6)
+are separate and unchanged.
+
 ## 12. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)

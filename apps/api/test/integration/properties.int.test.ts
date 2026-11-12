@@ -246,6 +246,9 @@ describe('a property manager of P1', () => {
     expect(own.body.permissions).toEqual([
       'property.announcement.manage',
       'property.announcement.read',
+      'property.approval.decide',
+      'property.approval.read',
+      'property.approval.request',
       'property.document.manage',
       'property.document.read',
       'property.facility.manage',

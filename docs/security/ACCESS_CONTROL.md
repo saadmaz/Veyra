@@ -163,6 +163,12 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   managers) and `property.governance.read` (also the new **Committee member** role, granted per
   property, which also reads the property's documents). Seats go only to people holding
   `property.governance.read` at the property.
+  For approvals (Phase 11) `property.approval.read` (organisation admins, property managers,
+  maintenance managers, finance officers, committee members), `property.approval.request`
+  (organisation admins, property and maintenance managers, finance officers) and
+  `property.approval.decide` (organisation admins, property managers). A request sent to a
+  committee is decided only by people holding a current seat on it; nobody decides their own
+  request. Policies are kept with `property.governance.manage`.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
