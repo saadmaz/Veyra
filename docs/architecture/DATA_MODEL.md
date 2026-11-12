@@ -286,6 +286,19 @@ only (owner decision, 2026-11-11: never billed in Phase 7).
 | ----- | ---------- | ----- |
 | `maintenance_attachments` | request?, work_order?, storage_key, file_name, content_type, size_bytes, kind (`BEFORE`/`AFTER`/`OTHER`), visibility, status (`PENDING`/`READY`/`REJECTED`), uploaded_by_user, ready_at?, removed_at?, removed_by_user? | Photos (JPEG, PNG, WebP, HEIC) and PDFs up to 10 MB; file names without paths, quotes or control characters; the key is exactly `org/<organisation>/prop/<property>/maintenance/<id>`. Not on finished requests or cancelled work; a work order's attachment is also filed under its request; RESIDENT ones need a request. At most 10 not rejected and not removed per work order, or per request for its own (advisory lock). Checked once (`PENDING → READY \| REJECTED`), removed once (READY only; the row stays, the object is deleted); nothing else ever changes. RLS; no DELETE grant. |
 
+**SLA breaches** (migration `20261116090000_maintenance_slas`): `maintenance_requests` gains
+`response_breached_at` and `resolution_breached_at`, and history gains `SLA_BREACHED` (internal,
+`to_value` RESPONSE or RESOLUTION, written by the database). A breach is recorded on its own
+update, once, and only when true at that moment: the response target passed while the request
+is still SUBMITTED, or the resolution target passed while it is SUBMITTED or ACCEPTED. A priority
+change that moves a target into the future clears its breach. Whenever due times are set or
+change, the database writes a `maintenance.sla.due` outbox event per target (ids and the due time
+only) available at that time; the worker relays it to a tenant job that calls
+`app_maintenance_check_breach(request, target, due)` in the tenant's context. That function is a
+no-op for a met, moved or already recorded target, so duplicates and retries are harmless. The
+API also computes `overdue` from the due times on every read, so the queue is right even before
+(or without) the worker.
+
 All six maintenance tables have RLS by organisation; the application has no DELETE grant except on SLA
 targets.
 

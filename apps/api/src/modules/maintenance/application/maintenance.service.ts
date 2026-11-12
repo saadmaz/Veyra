@@ -17,7 +17,9 @@ import {
   type NoteInput,
   type Priority,
   parseCost,
+  queueOrder,
   type RequestStatus,
+  type SlaTargetsInput,
   type StaffRequestInput,
   type WorkOrderStatus,
 } from '../domain/maintenance-rules';
@@ -45,6 +47,31 @@ export class MaintenanceService {
     @Inject(MAINTENANCE_REPOSITORY) private readonly repository: MaintenanceRepository,
     private readonly accessControl: AccessControlService,
   ) {}
+
+  // ------------------------------------------------------------------ SLAs and queue (Part 4)
+
+  slaTargets(access: OrganisationAccess, meta: RequestMeta) {
+    return this.inProperty(access, meta, (uow) => uow.slaTargets());
+  }
+
+  /** Replaces the targets for new requests; existing requests keep their due times. */
+  replaceSlaTargets(access: OrganisationAccess, input: SlaTargetsInput, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => {
+      await uow.replaceSlaTargets(input.targets);
+      await uow.audit({
+        action: 'maintenance.sla_targets.replaced',
+        resourceType: 'property',
+        resourceId: this.propertyOf(access),
+        metadata: { targets: input.targets.length },
+      });
+      return uow.slaTargets();
+    });
+  }
+
+  /** New and accepted requests, overdue first, then by priority and the next due time. */
+  queue(access: OrganisationAccess, now: Date, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => queueOrder(await uow.openRequests(), now));
+  }
 
   // ------------------------------------------------------------------ requests
 

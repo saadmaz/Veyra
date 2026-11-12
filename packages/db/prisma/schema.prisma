@@ -1737,6 +1737,8 @@ enum MaintenanceEventType {
   PRIORITY_CHANGED
   /// A note or an update for the requester.
   NOTE
+  /// A response or resolution target was missed (written by the database only, Part 4).
+  SLA_BREACHED
 }
 
 enum MaintenanceEventVisibility {
@@ -1767,34 +1769,38 @@ model MaintenanceSlaTarget {
 /// A reported problem in a unit or a common area. The report itself never changes; its status
 /// moves only along the allowed transitions, each logged in maintenance_events.
 model MaintenanceRequest {
-  id                String                   @id @default(uuid(7)) @db.Uuid
-  organisationId    String                   @map("organisation_id") @db.Uuid
-  propertyId        String                   @map("property_id") @db.Uuid
+  id                   String                   @id @default(uuid(7)) @db.Uuid
+  organisationId       String                   @map("organisation_id") @db.Uuid
+  propertyId           String                   @map("property_id") @db.Uuid
   /// Exactly one of unit and common area.
-  unitId            String?                  @map("unit_id") @db.Uuid
-  commonAreaId      String?                  @map("common_area_id") @db.Uuid
+  unitId               String?                  @map("unit_id") @db.Uuid
+  commonAreaId         String?                  @map("common_area_id") @db.Uuid
   /// Sequential per property, assigned on insert (MR-000042).
-  requestNumber     BigInt?                  @map("request_number")
-  category          MaintenanceCategory
-  priority          MaintenancePriority
-  title             String
-  description       String
+  requestNumber        BigInt?                  @map("request_number")
+  category             MaintenanceCategory
+  priority             MaintenancePriority
+  title                String
+  description          String
   /// Where exactly, e.g. "Kitchen sink".
-  locationDetail    String?                  @map("location_detail")
-  status            MaintenanceRequestStatus @default(SUBMITTED)
+  locationDetail       String?                  @map("location_detail")
+  status               MaintenanceRequestStatus @default(SUBMITTED)
   /// The reason given with the latest status change that needs one (reject, cancel, reopen).
-  statusNote        String?                  @map("status_note")
-  submittedByUserId String                   @map("submitted_by_user_id") @db.Uuid
-  acceptedByUserId  String?                  @map("accepted_by_user_id") @db.Uuid
-  acceptedAt        DateTime?                @map("accepted_at") @db.Timestamptz(3)
+  statusNote           String?                  @map("status_note")
+  submittedByUserId    String                   @map("submitted_by_user_id") @db.Uuid
+  acceptedByUserId     String?                  @map("accepted_by_user_id") @db.Uuid
+  acceptedAt           DateTime?                @map("accepted_at") @db.Timestamptz(3)
   /// From the property's SLA target for the priority (null without a target).
-  responseDueAt     DateTime?                @map("response_due_at") @db.Timestamptz(3)
-  resolutionDueAt   DateTime?                @map("resolution_due_at") @db.Timestamptz(3)
-  resolvedAt        DateTime?                @map("resolved_at") @db.Timestamptz(3)
-  closedAt          DateTime?                @map("closed_at") @db.Timestamptz(3)
-  reopenCount       Int                      @default(0) @map("reopen_count")
-  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  responseDueAt        DateTime?                @map("response_due_at") @db.Timestamptz(3)
+  resolutionDueAt      DateTime?                @map("resolution_due_at") @db.Timestamptz(3)
+  /// When the response target was found missed (set once, only after it passed unmet).
+  responseBreachedAt   DateTime?                @map("response_breached_at") @db.Timestamptz(3)
+  /// When the resolution target was found missed (set once, only after it passed unmet).
+  resolutionBreachedAt DateTime?                @map("resolution_breached_at") @db.Timestamptz(3)
+  resolvedAt           DateTime?                @map("resolved_at") @db.Timestamptz(3)
+  closedAt             DateTime?                @map("closed_at") @db.Timestamptz(3)
+  reopenCount          Int                      @default(0) @map("reopen_count")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   property    Property                @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
   unit        Unit?                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)

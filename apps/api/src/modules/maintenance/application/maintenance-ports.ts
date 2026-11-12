@@ -30,6 +30,8 @@ export interface RequestRecord extends Place {
   acceptedAt: Date | null;
   responseDueAt: Date | null;
   resolutionDueAt: Date | null;
+  responseBreachedAt: Date | null;
+  resolutionBreachedAt: Date | null;
   resolvedAt: Date | null;
   closedAt: Date | null;
   reopenCount: number;
@@ -76,7 +78,7 @@ export interface EventRecord {
   requestId: string | null;
   workOrderId: string | null;
   workOrderNumber: bigint | null;
-  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE';
+  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE' | 'SLA_BREACHED';
   visibility: Visibility;
   fromValue: string | null;
   toValue: string | null;
@@ -102,6 +104,12 @@ export interface AttachmentRecord {
   createdAt: Date;
   readyAt: Date | null;
   removedAt: Date | null;
+}
+
+export interface SlaTargetRecord {
+  priority: Priority;
+  responseMinutes: number;
+  resolutionMinutes: number;
 }
 
 export interface MaintenanceAuditEvent {
@@ -137,6 +145,11 @@ export interface MaintenanceUnitOfWork {
   request(id: string): Promise<RequestRecord | null>;
   /** Newest first, at most 200. */
   requests(filter: { status?: RequestStatus; unitId?: string }): Promise<RequestRecord[]>;
+  /** Requests waiting for staff (new or accepted), at most 500, in no particular order. */
+  openRequests(): Promise<RequestRecord[]>;
+  slaTargets(): Promise<SlaTargetRecord[]>;
+  /** Replaces the property's targets (existing requests keep their due times). */
+  replaceSlaTargets(targets: readonly SlaTargetRecord[]): Promise<void>;
   updateRequest(
     id: string,
     patch: {

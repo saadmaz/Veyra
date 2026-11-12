@@ -65,7 +65,13 @@ describe('JobRouter', () => {
 
 describe('loadWorkerEnv', () => {
   it('validates configuration', () => {
-    expect(loadWorkerEnv({ REDIS_URL: 'redis://localhost:6379' }).WORKER_CONCURRENCY).toBe(5);
+    expect(
+      loadWorkerEnv({
+        REDIS_URL: 'redis://localhost:6379',
+        DATABASE_URL: 'postgresql://veyra_app@localhost:5432/veyra',
+      }),
+    ).toMatchObject({ WORKER_CONCURRENCY: 5, OUTBOX_POLL_MS: 15000 });
+    expect(() => loadWorkerEnv({ REDIS_URL: 'redis://localhost:6379' })).toThrow(/DATABASE_URL/);
     expect(() => loadWorkerEnv({})).toThrow(/REDIS_URL/);
   });
 });

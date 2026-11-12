@@ -10,6 +10,7 @@ import type {
   MaintenanceRepository,
   MaintenanceUnitOfWork,
   RequestRecord,
+  SlaTargetRecord,
   WorkOrderRecord,
 } from '../application/maintenance-ports';
 import type {
@@ -57,6 +58,8 @@ const REQUEST_SELECT = {
   acceptedAt: true,
   responseDueAt: true,
   resolutionDueAt: true,
+  responseBreachedAt: true,
+  resolutionBreachedAt: true,
   resolvedAt: true,
   closedAt: true,
   reopenCount: true,
@@ -78,6 +81,8 @@ type RequestRow = {
   acceptedAt: Date | null;
   responseDueAt: Date | null;
   resolutionDueAt: Date | null;
+  responseBreachedAt: Date | null;
+  resolutionBreachedAt: Date | null;
   resolvedAt: Date | null;
   closedAt: Date | null;
   reopenCount: number;
@@ -104,6 +109,8 @@ const toRequest = (row: RequestRow): RequestRecord => ({
   acceptedAt: row.acceptedAt,
   responseDueAt: row.responseDueAt,
   resolutionDueAt: row.resolutionDueAt,
+  responseBreachedAt: row.responseBreachedAt,
+  resolutionBreachedAt: row.resolutionBreachedAt,
   resolvedAt: row.resolvedAt,
   closedAt: row.closedAt,
   reopenCount: row.reopenCount,
@@ -311,6 +318,32 @@ class PrismaMaintenanceUnitOfWork implements MaintenanceUnitOfWork {
       take: 200,
     });
     return rows.map(toRequest);
+  }
+
+  async openRequests(): Promise<RequestRecord[]> {
+    const rows = await this.tx.maintenanceRequest.findMany({
+      where: { ...this.scope, status: { in: ['SUBMITTED', 'ACCEPTED'] } },
+      select: REQUEST_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 500,
+    });
+    return rows.map(toRequest);
+  }
+
+  async slaTargets(): Promise<SlaTargetRecord[]> {
+    return this.tx.maintenanceSlaTarget.findMany({
+      where: this.scope,
+      select: { priority: true, responseMinutes: true, resolutionMinutes: true },
+    });
+  }
+
+  async replaceSlaTargets(targets: readonly SlaTargetRecord[]): Promise<void> {
+    await this.tx.maintenanceSlaTarget.deleteMany({ where: this.scope });
+    if (targets.length > 0) {
+      await this.tx.maintenanceSlaTarget.createMany({
+        data: targets.map((t) => ({ ...this.scope, ...t })),
+      });
+    }
   }
 
   async updateRequest(

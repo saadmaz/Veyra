@@ -120,6 +120,7 @@
       "name": "@veyra/worker",
       "version": "0.0.0",
       "dependencies": {
+        "@veyra/db": "workspace:*",
         "@veyra/domain": "workspace:*",
         "bullmq": "^6.7.2",
         "ioredis": "^6.0.0",

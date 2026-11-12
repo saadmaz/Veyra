@@ -1271,6 +1271,11 @@ export interface MaintenanceRequestDto extends MaintenancePlaceDto {
   /** From the property's SLA target for the priority; null without one. */
   responseDueAt: string | null;
   resolutionDueAt: string | null;
+  /** Past a target not yet met, as of the response (computed, Phase 7 Part 4). */
+  overdue: { response: boolean; resolution: boolean };
+  /** When a missed target was recorded (by the worker, shortly after it fell due). */
+  responseBreachedAt: string | null;
+  resolutionBreachedAt: string | null;
   resolvedAt: string | null;
   closedAt: string | null;
   reopenCount: number;
@@ -1279,7 +1284,8 @@ export interface MaintenanceRequestDto extends MaintenancePlaceDto {
 
 export interface MaintenanceEventDto {
   id: string;
-  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE';
+  /** SLA_BREACHED: `to` is RESPONSE or RESOLUTION (internal). */
+  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE' | 'SLA_BREACHED';
   visibility: 'RESIDENT' | 'INTERNAL';
   /** e.g. a status, a priority, or a user id for assignee changes. */
   from: string | null;
@@ -1394,6 +1400,18 @@ export interface WorkOrderDetailDto {
   totalCost: MoneyDto;
   events: MaintenanceEventDto[];
   attachments: MaintenanceAttachmentDto[];
+}
+
+/** How fast a property promises to respond to and resolve requests of a priority. */
+export interface MaintenanceSlaTargetDto {
+  priority: MaintenancePriority;
+  responseMinutes: number;
+  resolutionMinutes: number;
+}
+
+/** PUT …/maintenance/sla-targets replaces all of them (at most one per priority). */
+export interface ReplaceSlaTargetsRequest {
+  targets: MaintenanceSlaTargetDto[];
 }
 
 export interface MaintenanceAssigneeDto {

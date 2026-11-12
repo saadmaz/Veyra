@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import pg from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { AppModule } from '../../src/app.module';
@@ -46,6 +47,7 @@ const as = (user: TestUser) => ({
   get: (url: string) => http().get(url).set('Cookie', user.cookie),
   post: (url: string) => http().post(url).set('Cookie', user.cookie),
   patch: (url: string) => http().patch(url).set('Cookie', user.cookie),
+  put: (url: string) => http().put(url).set('Cookie', user.cookie),
 });
 
 const NAMES = [
@@ -764,5 +766,131 @@ describe('attachments', () => {
       .post(unitUrl('U1', `${done}/attachments`))
       .send(photo)
       .expect(409);
+  });
+});
+
+describe('SLAs', () => {
+  const targets = [
+    { priority: 'URGENT', responseMinutes: 60, resolutionMinutes: 240 },
+    { priority: 'MEDIUM', responseMinutes: 1440, resolutionMinutes: 4320 },
+  ];
+
+  /** What the worker does when a due time arrives: the database check, in the tenant context. */
+  async function runBreachCheck(requestId: string) {
+    const su = new pg.Pool({ connectionString: inject('superuserDatabaseUrl'), max: 1 });
+    const appDb = new pg.Pool({ connectionString: inject('appDatabaseUrl'), max: 1 });
+    try {
+      // Test setup only: move the due times into the past without the triggers.
+      const c = await su.connect();
+      try {
+        await c.query('BEGIN');
+        await c.query('SET LOCAL session_replication_role = replica');
+        await c.query(
+          `UPDATE maintenance_requests SET response_due_at = now() - interval '5 minutes',
+                  resolution_due_at = now() + interval '1 day' WHERE id = $1`,
+          [requestId],
+        );
+        await c.query('COMMIT');
+      } finally {
+        c.release();
+      }
+      const { rows } = await su.query(
+        `SELECT response_due_at FROM maintenance_requests WHERE id = $1`,
+        [requestId],
+      );
+      const a = await appDb.connect();
+      try {
+        await a.query('BEGIN');
+        await a.query("SELECT set_config('app.organisation_id', $1, true)", [org]);
+        const hit = await a.query(
+          `SELECT app_maintenance_check_breach($1, 'RESPONSE', $2) AS hit`,
+          [requestId, rows[0].response_due_at],
+        );
+        await a.query('COMMIT');
+        return hit.rows[0].hit as boolean;
+      } finally {
+        a.release();
+      }
+    } finally {
+      await su.end();
+      await appDb.end();
+    }
+  }
+
+  it('are set per priority by managers and read by finance; at most one per priority', async () => {
+    await as(u.finance).put(mUrl('sla-targets')).send({ targets }).expect(403);
+    await as(u.mgr)
+      .put(mUrl('sla-targets'))
+      .send({ targets: [targets[0], targets[0]] })
+      .expect(400);
+    const saved = (await as(u.mgr).put(mUrl('sla-targets')).send({ targets }).expect(200)).body
+      .data;
+    expect(saved.map((t: { priority: string }) => t.priority)).toEqual(['URGENT', 'MEDIUM']);
+    const read = (await as(u.finance).get(mUrl('sla-targets')).expect(200)).body.data;
+    expect(read).toEqual(saved);
+  });
+
+  it('give new requests due times, recomputed when the priority changes', async () => {
+    const created = (
+      await as(u.tenant)
+        .post(unitUrl('U1'))
+        .send({ ...report, priority: 'URGENT' })
+        .expect(201)
+    ).body.request;
+    const minutes = (iso: string) => (Date.parse(iso) - Date.parse(created.createdAt)) / 60_000;
+    expect(minutes(created.responseDueAt)).toBe(60);
+    expect(minutes(created.resolutionDueAt)).toBe(240);
+    expect(created).toMatchObject({
+      overdue: { response: false, resolution: false },
+      responseBreachedAt: null,
+    });
+    const lowered = (
+      await as(u.mgr)
+        .patch(mUrl(`requests/${created.id}`))
+        .send({ priority: 'LOW' })
+        .expect(200)
+    ).body;
+    // No target for LOW.
+    expect(lowered).toMatchObject({ responseDueAt: null, resolutionDueAt: null });
+  });
+
+  it('records a missed target for staff only, and puts the request first in the queue', async () => {
+    const late = (
+      await as(u.tenant)
+        .post(unitUrl('U1'))
+        .send({ ...report, title: 'No hot water', priority: 'URGENT' })
+        .expect(201)
+    ).body.request;
+    const fresh = (
+      await as(u.tenant)
+        .post(unitUrl('U1'))
+        .send({ ...report, title: 'Squeaky door', priority: 'URGENT' })
+        .expect(201)
+    ).body.request;
+    expect(await runBreachCheck(late.id)).toBe(true);
+    // Done twice (a retried job): nothing more happens.
+    expect(await runBreachCheck(late.id)).toBe(false);
+
+    const staffView = (
+      await as(u.mgr)
+        .get(mUrl(`requests/${late.id}`))
+        .expect(200)
+    ).body;
+    expect(staffView.request.responseBreachedAt).not.toBeNull();
+    expect(staffView.request.overdue).toEqual({ response: true, resolution: false });
+    expect(staffView.events.filter((e: { type: string }) => e.type === 'SLA_BREACHED')).toEqual([
+      expect.objectContaining({ visibility: 'INTERNAL', to: 'RESPONSE', actor: null }),
+    ]);
+    const residentView = (await as(u.tenant).get(unitUrl('U1', late.id)).expect(200)).body;
+    expect(residentView.events.some((e: { type: string }) => e.type === 'SLA_BREACHED')).toBe(
+      false,
+    );
+
+    const queue = (await as(u.mgr).get(mUrl('queue')).expect(200)).body.data as { id: string }[];
+    const ids = queue.map((r) => r.id);
+    expect(ids.indexOf(late.id)).toBeLessThan(ids.indexOf(fresh.id));
+    expect(ids[0]).toBe(late.id);
+    // Finished requests are not in the queue; technicians cannot read it.
+    await as(u.tech).get(mUrl('queue')).expect(403);
   });
 });

@@ -236,3 +236,82 @@ export const uploadSchema = z.object({
   visibility: z.enum(['RESIDENT', 'INTERNAL']).default('INTERNAL'),
 });
 export type UploadInput = z.infer<typeof uploadSchema>;
+
+// ------------------------------------------------------------------ SLAs (Part 4)
+
+const PRIORITY_RANK: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+
+interface SlaView {
+  status: RequestStatus;
+  priority: Priority;
+  responseDueAt: Date | null;
+  resolutionDueAt: Date | null;
+  responseBreachedAt: Date | null;
+  resolutionBreachedAt: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * Whether a request is past a target it has not met, computed from its due times now. This is
+ * the answer of record: it does not wait for the worker that records breaches in the history.
+ */
+export function overdue(r: SlaView, now: Date): { response: boolean; resolution: boolean } {
+  const past = (due: Date | null) => due !== null && due.getTime() <= now.getTime();
+  return {
+    response: r.status === 'SUBMITTED' && past(r.responseDueAt),
+    resolution: (r.status === 'SUBMITTED' || r.status === 'ACCEPTED') && past(r.resolutionDueAt),
+  };
+}
+
+/**
+ * The manager's queue order: overdue first, then by priority, then the earliest target due
+ * (requests without one last), then the oldest.
+ */
+export function queueOrder<T extends SlaView>(requests: readonly T[], now: Date): T[] {
+  const key = (r: T) => {
+    const o = overdue(r, now);
+    const next =
+      r.status === 'SUBMITTED' ? (r.responseDueAt ?? r.resolutionDueAt) : r.resolutionDueAt;
+    return [
+      o.response || o.resolution ? 0 : 1,
+      PRIORITY_RANK[r.priority],
+      next?.getTime() ?? Number.MAX_SAFE_INTEGER,
+      r.createdAt.getTime(),
+    ];
+  };
+  return [...requests].sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    for (let i = 0; i < ka.length; i++) {
+      const d = (ka[i] as number) - (kb[i] as number);
+      if (d !== 0) return d;
+    }
+    return 0;
+  });
+}
+
+const MINUTES_IN_A_YEAR = 525_600;
+
+/** The property's targets, replaced as a whole: at most one per priority. */
+export const slaTargetsSchema = z
+  .object({
+    targets: z
+      .array(
+        z
+          .object({
+            priority: z.enum(PRIORITIES),
+            responseMinutes: z.number().int().min(1).max(MINUTES_IN_A_YEAR),
+            resolutionMinutes: z.number().int().min(1).max(MINUTES_IN_A_YEAR),
+          })
+          .refine((t) => t.resolutionMinutes >= t.responseMinutes, {
+            message: 'Resolution cannot be due before the response',
+            path: ['resolutionMinutes'],
+          }),
+      )
+      .max(PRIORITIES.length),
+  })
+  .refine((v) => new Set(v.targets.map((t) => t.priority)).size === v.targets.length, {
+    message: 'One target per priority',
+    path: ['targets'],
+  });
+export type SlaTargetsInput = z.infer<typeof slaTargetsSchema>;

@@ -9,6 +9,12 @@ export {
 } from './client';
 export * from './generated/prisma/enums';
 export {
+  claimOutboxEvents,
+  markOutboxFailed,
+  markOutboxPublished,
+  type OutboxEventRow,
+} from './outbox';
+export {
   type SqlExecutor,
   type TransactionRunner,
   withInvitationTokenTransaction,

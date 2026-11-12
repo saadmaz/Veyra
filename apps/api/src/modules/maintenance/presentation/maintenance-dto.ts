@@ -15,11 +15,17 @@ import type {
   RequestRecord,
   WorkOrderRecord,
 } from '../application/maintenance-ports';
-import { formatRequestNumber, formatWorkOrderNumber } from '../domain/maintenance-rules';
+import { formatRequestNumber, formatWorkOrderNumber, overdue } from '../domain/maintenance-rules';
 
 const iso = (date: Date | null) => date?.toISOString() ?? null;
 
-export const toRequest = (r: RequestRecord): MaintenanceRequestDto => ({
+/** A request as of `now`, which decides `overdue`: rows.map(requestAt(clock.now())). */
+export const requestAt = (now: Date) => (r: RequestRecord) => toRequestAt(r, now);
+
+/** A request as of the current time. */
+export const toRequest = (r: RequestRecord): MaintenanceRequestDto => toRequestAt(r, new Date());
+
+const toRequestAt = (r: RequestRecord, now: Date): MaintenanceRequestDto => ({
   id: r.id,
   number: formatRequestNumber(r.number),
   unitId: r.unitId,
@@ -37,6 +43,9 @@ export const toRequest = (r: RequestRecord): MaintenanceRequestDto => ({
   acceptedAt: iso(r.acceptedAt),
   responseDueAt: iso(r.responseDueAt),
   resolutionDueAt: iso(r.resolutionDueAt),
+  overdue: overdue(r, now),
+  responseBreachedAt: iso(r.responseBreachedAt),
+  resolutionBreachedAt: iso(r.resolutionBreachedAt),
   resolvedAt: iso(r.resolvedAt),
   closedAt: iso(r.closedAt),
   reopenCount: r.reopenCount,

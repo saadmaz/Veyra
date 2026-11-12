@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import {
+  claimOutboxEvents,
+  createDbClient,
+  markOutboxFailed,
+  markOutboxPublished,
+} from '../../src';
 
 /**
  * Maintenance (migration 20261114090000_maintenance): requests and work orders are numbered per
@@ -705,6 +711,181 @@ describe('attachments', () => {
     await expect(
       inTenant(ids.org, (c) => c.query(`DELETE FROM maintenance_attachments WHERE id = $1`, [id])),
     ).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('SLA breaches', () => {
+  /** Moves a request's due times into the past (test setup only: triggers off, as superuser). */
+  async function backdate(id: string, minutes = 5) {
+    const client = await superuser.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL session_replication_role = replica`);
+      await client.query(
+        `UPDATE maintenance_requests
+            SET response_due_at = now() - make_interval(mins => $2::int),
+                resolution_due_at = now() - make_interval(mins => $2::int)
+          WHERE id = $1`,
+        [id, minutes],
+      );
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+    const { rows } = await superuser.query(
+      `SELECT response_due_at, resolution_due_at FROM maintenance_requests WHERE id = $1`,
+      [id],
+    );
+    return rows[0] as { response_due_at: Date; resolution_due_at: Date };
+  }
+
+  const check = (c: pg.PoolClient, id: string, target: string, due: Date) =>
+    c
+      .query(`SELECT app_maintenance_check_breach($1, $2, $3) AS hit`, [id, target, due])
+      .then((r) => r.rows[0].hit as boolean);
+
+  it('schedules each due time in the outbox, with ids only', async () => {
+    const r = await inTenant(ids.org, (c) => request(c, { priority: 'URGENT' }));
+    const { rows } = await superuser.query(
+      `SELECT organisation_id, type, payload, available_at FROM outbox_events
+        WHERE payload->>'requestId' = $1 ORDER BY payload->>'target'`,
+      [r.id],
+    );
+    expect(rows.map((e) => [e.type, e.payload.target])).toEqual([
+      ['maintenance.sla.due', 'RESOLUTION'],
+      ['maintenance.sla.due', 'RESPONSE'],
+    ]);
+    expect(rows[0].organisation_id).toBe(ids.org);
+    expect(rows[1].available_at).toEqual(r.response_due_at);
+    expect(new Date(rows[1].payload.dueAt)).toEqual(r.response_due_at);
+    expect(Object.keys(rows[0].payload).sort()).toEqual([
+      'dueAt',
+      'propertyId',
+      'requestId',
+      'target',
+    ]);
+  });
+
+  it('records a missed target once, in the history, and never before it is due', async () => {
+    const r = await inTenant(ids.org, (c) => request(c, { priority: 'URGENT' }));
+    // Not due yet.
+    expect(
+      await inTenant(ids.org, (c) => check(c, r.id, 'RESPONSE', r.response_due_at), null),
+    ).toBe(false);
+    const due = await backdate(r.id);
+    expect(
+      await inTenant(ids.org, (c) => check(c, r.id, 'RESPONSE', due.response_due_at), null),
+    ).toBe(true);
+    expect(
+      await inTenant(ids.org, (c) => check(c, r.id, 'RESPONSE', due.response_due_at), null),
+    ).toBe(false);
+    // A stale due time (from before a change) does nothing.
+    expect(
+      await inTenant(ids.org, (c) => check(c, r.id, 'RESOLUTION', r.resolution_due_at), null),
+    ).toBe(false);
+    expect(
+      await inTenant(ids.org, (c) => check(c, r.id, 'RESOLUTION', due.resolution_due_at), null),
+    ).toBe(true);
+    const log = await inTenant(ids.org, (c) => events(c, 'request_id', r.id));
+    expect(
+      log.filter((e) => e.type === 'SLA_BREACHED').map((e) => [e.visibility, e.to_value]),
+    ).toEqual([
+      ['INTERNAL', 'RESPONSE'],
+      ['INTERNAL', 'RESOLUTION'],
+    ]);
+  });
+
+  it('does not record a target that was met', async () => {
+    const r = await inTenant(ids.org, async (c) => {
+      const created = await request(c, { priority: 'URGENT' });
+      await setRequest(c, created.id, 'ACCEPTED');
+      return created;
+    });
+    const due = await backdate(r.id);
+    // Accepted in time: the response target was met; resolution is still open.
+    expect(await inTenant(ids.org, (c) => check(c, r.id, 'RESPONSE', due.response_due_at))).toBe(
+      false,
+    );
+    expect(
+      await inTenant(ids.org, (c) => check(c, r.id, 'RESOLUTION', due.resolution_due_at)),
+    ).toBe(true);
+  });
+
+  it('refuses a breach that is not true, or recorded together with other changes', async () => {
+    const r = await inTenant(ids.org, (c) => request(c, { priority: 'URGENT' }));
+    await expect(
+      inTenant(ids.org, (c) =>
+        c.query(`UPDATE maintenance_requests SET response_breached_at = now() WHERE id = $1`, [
+          r.id,
+        ]),
+      ),
+    ).rejects.toThrow(/has not been missed/);
+    await backdate(r.id);
+    await expect(
+      inTenant(ids.org, (c) =>
+        c.query(
+          `UPDATE maintenance_requests SET response_breached_at = now(), status = 'ACCEPTED' WHERE id = $1`,
+          [r.id],
+        ),
+      ),
+    ).rejects.toThrow(/recorded on its own/);
+  });
+
+  it('clears a breach when a priority change moves the target into the future, and reschedules', async () => {
+    const r = await inTenant(ids.org, (c) => request(c, { priority: 'URGENT' }));
+    const due = await backdate(r.id);
+    await inTenant(ids.org, (c) => check(c, r.id, 'RESPONSE', due.response_due_at));
+    await inTenant(ids.org, (c) =>
+      c.query(`UPDATE maintenance_requests SET priority = 'MEDIUM' WHERE id = $1`, [r.id]),
+    );
+    const { rows } = await inTenant(ids.org, (c) =>
+      c.query(
+        `SELECT response_breached_at, response_due_at FROM maintenance_requests WHERE id = $1`,
+        [r.id],
+      ),
+    );
+    expect(rows[0].response_breached_at).toBeNull();
+    const scheduled = await superuser.query(
+      `SELECT count(*)::int AS n FROM outbox_events WHERE payload->>'requestId' = $1
+          AND available_at = $2`,
+      [r.id, rows[0].response_due_at],
+    );
+    expect(scheduled.rows[0].n).toBe(1);
+  });
+
+  it('relays due outbox events once, oldest first, and holds back failures', async () => {
+    const db = createDbClient(inject('appDatabaseUrl'));
+    try {
+      // Only this test's own events: a dedicated type.
+      const type = `test.${randomUUID()}`;
+      const insert = (minutesAgo: number) =>
+        app.query(
+          `INSERT INTO outbox_events (id, organisation_id, type, payload, available_at)
+           VALUES ($1, $2, $3, '{}', now() - make_interval(mins => $4::int)) RETURNING id`,
+          [randomUUID(), ids.org, type, minutesAgo],
+        );
+      const older = (await insert(10)).rows[0].id;
+      const newer = (await insert(5)).rows[0].id;
+      await app.query(
+        `INSERT INTO outbox_events (id, organisation_id, type, payload, available_at)
+         VALUES ($1, $2, $3, '{}', now() + interval '1 hour')`,
+        [randomUUID(), ids.org, type],
+      );
+      const claimed = await claimOutboxEvents(db, [type], 10);
+      expect(claimed.map((e) => e.id)).toEqual([older, newer]);
+      expect(claimed[0]?.attempts).toBe(1);
+      await markOutboxPublished(db, [older]);
+      await markOutboxFailed(db, newer, 'Redis unavailable');
+      // Published ones are gone; the failed one waits; the future one is not due.
+      expect(await claimOutboxEvents(db, [type], 10)).toEqual([]);
+      const { rows } = await app.query(
+        `SELECT last_error, available_at > now() AS later FROM outbox_events WHERE id = $1`,
+        [newer],
+      );
+      expect(rows[0]).toEqual({ last_error: 'Redis unavailable', later: true });
+    } finally {
+      await db.$disconnect();
+    }
   });
 });
 
