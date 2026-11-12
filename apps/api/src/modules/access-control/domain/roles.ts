@@ -59,6 +59,9 @@ export const ROLES = {
       'property.maintenance.read',
       'property.maintenance.manage',
       'property.maintenance.work',
+      'unit.facility.book',
+      'property.facility.read',
+      'property.facility.manage',
     ],
   },
   PROPERTY_MANAGER: {
@@ -85,6 +88,9 @@ export const ROLES = {
       'property.maintenance.read',
       'property.maintenance.manage',
       'property.maintenance.work',
+      'unit.facility.book',
+      'property.facility.read',
+      'property.facility.manage',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -121,6 +127,8 @@ export const ROLES = {
       'property.visitor.check_in',
       'property.visitor.read',
       'property.visitor.manage',
+      // Sees who has booked a facility, to let them in.
+      'property.facility.read',
     ],
   },
   SECURITY_GUARD: {
@@ -160,6 +168,7 @@ export const ROLES = {
       'unit.finance.read',
       'unit.finance.pay',
       'unit.maintenance.request',
+      'unit.facility.book',
     ],
   },
   TENANT: {
@@ -174,6 +183,7 @@ export const ROLES = {
       'unit.finance.read',
       'unit.finance.pay',
       'unit.maintenance.request',
+      'unit.facility.book',
     ],
   },
   HOUSEHOLD_MEMBER: {
@@ -181,7 +191,8 @@ export const ROLES = {
     grantableAt: ['UNIT'],
     derived: true,
     // Household members may register visitors and raise maintenance requests (owner decisions,
-    // 2026-11-11); bookings come later.
+    // 2026-11-11). Facility bookings only once delegated (owner decision, 2026-11-12); delegation
+    // is not built yet, so they do not book.
     permissions: ['unit.profile.read', 'unit.visitor.invite', 'unit.maintenance.request'],
   },
 } as const satisfies Record<string, RoleDefinition>;

@@ -625,6 +625,24 @@ expiry, rehash on sign-in, idempotent sign-out).
   application cannot delete bookings. Another organisation, and a connection without tenant
   context, see none of it.
 
+### Part 2: facilities API
+
+- `apps/api` unit (7, `test/facilities/facility-rules.test.ts`): transitions and reasons
+  matching the database, the residents' cancellation window, slot states (open with places
+  left, full, closed, too soon, too far), opening-hours parsing and overlap, input schemas.
+- `apps/api` integration (9, `test/integration/facilities.int.test.ts`): managers set up
+  facilities (one per common area; overlapping hours refused); a security supervisor reads but
+  changes nothing; finance has no access; another property's manager gets 404. Residents see a
+  property-local day of slots, book two slots and the times turn FULL; taken, off-grid, outside
+  hours, too many slots and too far ahead come back with their codes; household members cannot
+  book (403); another unit's bookings are 404; staff book on a resident's behalf. Residents
+  cancel before the window (default reason once confirmed), not inside it (409
+  `TOO_LATE_TO_CANCEL`); staff cancel later with a reason. A pending hall booking holds its
+  place; the manager approves (history names them) or rejects with a reason the resident sees.
+  Closures refuse to cover bookings unless told to cancel them, mark the day CLOSED and block
+  booking until lifted (once). Archiving needs nothing upcoming and hides the facility.
+- `apps/api` unit (access control): owners now hold `unit.facility.book`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

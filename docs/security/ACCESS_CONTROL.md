@@ -129,19 +129,25 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   the "my work orders" routes show only work assigned to the caller; anyone else's is 404).
   Work can be assigned only to someone who holds `property.maintenance.work` at the property
   right now (checked by the API with the same policy, 422 `ASSIGNEE_NOT_ALLOWED`).
+  For facilities (Phase 8) `unit.facility.book` (see the property's active facilities and their
+  availability, book, follow and cancel the unit's bookings; residents cancel only before the
+  facility's cancellation window, 409 `TOO_LATE_TO_CANCEL`), `property.facility.read` (every
+  facility, closure and booking of the property) and `property.facility.manage` (set up
+  facilities, opening hours and closures; approve, reject, cancel at any time, mark used or
+  no-show). Availability shows only places left, never who booked.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
   | ---- | ------------ | ----------------- |
   | `ORGANISATION_ADMIN` | Organisation | Every registered permission |
-  | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins), and `property.finance.read` (reads billing; does not run it), and all four maintenance permissions (runs maintenance, may do work) |
+  | `PROPERTY_MANAGER` | Property | `property.profile.read`, `property.settings.manage`, `property.structure.read`, `property.structure.manage` (not lifecycle: activating and archiving stay with organisation admins), and `property.finance.read` (reads billing; does not run it), and all four maintenance permissions (runs maintenance, may do work), and the three facility permissions (Phase 8) |
   | `MAINTENANCE_MANAGER` | Property | `property.profile.read`, `property.structure.read`, `property.resident.read`, `unit.profile.read`, `unit.residents.read`, `unit.maintenance.request`, `property.maintenance.read`, `property.maintenance.manage`, `property.maintenance.work` (Phase 7; sees who lives where to arrange access; no finance or visitors) |
   | `TECHNICIAN` | Property | `property.profile.read`, `property.structure.read`, `property.maintenance.work` (Phase 7; only work assigned to them; no resident data: a work order shows the place and the problem, not who reported it) |
   | `FINANCE_OFFICER` | Organisation or property | `organisation.profile.read`, `property.profile.read`, `property.structure.read`, `unit.profile.read`, `property.finance.read`, `property.finance.manage`, `property.finance.approve` (Phase 6), and `property.maintenance.read` (maintenance costs for reporting, Phase 7). Sees the names of the people an invoice is addressed to through finance views, not the resident directory or contact details |
-  | `SECURITY_SUPERVISOR` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in`, `property.visitor.read`, `property.visitor.manage` |
+  | `SECURITY_SUPERVISOR` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in`, `property.visitor.read`, `property.visitor.manage`, `property.facility.read` (Phase 8: sees bookings to let people in) |
   | `SECURITY_GUARD` | Property | `property.profile.read`, `property.structure.read`, `property.visitor.check_in` (no resident data, no visit log) |
-  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read`, `unit.visitor.invite`, `unit.maintenance.request`, `unit.finance.read`, `unit.finance.pay` (owner decision, 2026-11-11: their own account only; a tenant never sees the owners' account, an owner never a tenancy's) |
-  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read`, `unit.visitor.invite`, `unit.maintenance.request` (owner decisions, 2026-11-11); no finance |
+  | `OWNER`, `TENANT` | Unit (**derived**) | `unit.profile.read`, `unit.residents.read`, `unit.visitor.invite`, `unit.maintenance.request`, `unit.facility.book`, `unit.finance.read`, `unit.finance.pay` (owner decision, 2026-11-11: their own account only; a tenant never sees the owners' account, an owner never a tenancy's) |
+  | `HOUSEHOLD_MEMBER` | Unit (**derived**) | `unit.profile.read`, `unit.visitor.invite`, `unit.maintenance.request` (owner decisions, 2026-11-11); no finance; no facility bookings until delegation exists (owner decision, 2026-11-12: only if delegated) |
 
   Organisation admins and property managers also hold `unit.profile.read`,
   `unit.residents.read`, `property.resident.read` and `property.resident.manage` (admins also

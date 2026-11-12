@@ -63,6 +63,12 @@ export const PERMISSIONS = [
   'property.maintenance.manage',
   /** Be assigned work orders and carry them out: only the work assigned to you. */
   'property.maintenance.work',
+  /** Book, follow and cancel a unit's facility bookings (owners and tenants, and staff on their behalf). */
+  'unit.facility.book',
+  /** View the property's facilities, closures and every booking. */
+  'property.facility.read',
+  /** Set up facilities and closures; approve, reject, cancel and mark bookings used or not used. */
+  'property.facility.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

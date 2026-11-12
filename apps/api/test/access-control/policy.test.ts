@@ -302,6 +302,7 @@ describe('unit scope and derived resident roles', () => {
   it('an owner covers their unit only, never a sibling unit, the property or the organisation', () => {
     const owner = [resident('OWNER', U1)];
     expect([...permissionsAt(owner, 'ACTIVE', unitIn(U1), now)].sort()).toEqual([
+      'unit.facility.book',
       'unit.finance.pay',
       'unit.finance.read',
       'unit.maintenance.request',
