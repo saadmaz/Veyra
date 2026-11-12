@@ -849,6 +849,14 @@ expiry, rehash on sign-in, idempotent sign-out).
   maintenance manager asks for approval of an amount; the manager approves it and it leaves the
   waiting list. axe WCAG 2.2 AA.
 
+## Phase 12 tests
+
+### Part 1: dashboards
+
+- `apps/api` integration (3, `reporting.int.test.ts`): a manager sees every area with correct
+  occupancy, incident, finance and zero figures; a guard and a technician see only their areas
+  and no sensitive incidents; people outside the property get 404.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

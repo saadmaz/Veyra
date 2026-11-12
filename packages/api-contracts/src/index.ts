@@ -2211,3 +2211,25 @@ export interface ApprovalRequestDto {
   /** Whether the caller may decide it now. */
   canDecide: boolean;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Reporting (Phase 12 Part 1). A section is null when the caller may not see that area.
+// ---------------------------------------------------------------------------------------------
+
+export interface PropertyDashboardDto {
+  /** The property's local date the figures are for. */
+  asOf: string;
+  occupancy: { units: number; withOwner: number; tenanted: number } | null;
+  finance: {
+    outstanding: MoneyDto;
+    overdue: MoneyDto;
+    overdueInvoices: number;
+    collectedLast30Days: MoneyDto;
+  } | null;
+  maintenance: { openRequests: number; overdueRequests: number; openWorkOrders: number } | null;
+  visitors: { arrivedToday: number; onSiteNow: number; last7Days: number } | null;
+  facilities: { bookingsNext7Days: number; awaitingApproval: number } | null;
+  /** Sensitive incidents are counted only for incident managers. */
+  incidents: { open: number; openHighOrCritical: number } | null;
+  pendingApprovals: number | null;
+}

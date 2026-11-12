@@ -262,6 +262,23 @@ policies with thresholds. Voting waits for legal review (PRD 3.11).
 | 4 | Console screens and browser journeys | ✅ Done (incidents with timeline, follow-ups and contacts; committees, meetings, minutes and resolutions; approvals and policies) |
 | 5 | Phase 11 exit review | ✅ Done ([PHASE_11_REVIEW](../reviews/PHASE_11_REVIEW.md)) |
 
+## Phase 12 plan (Analytics and integrations)
+
+Decisions (2026-11-12, the recommended options): role-scoped dashboards computed live from the
+source tables (no separate warehouse yet); CSV exports with an audit record per export and
+small-group suppression for anything about people; outbound webhooks per organisation, signed
+with HMAC-SHA256, delivered and retried by the worker through the outbox, with a delivery log.
+Inbound integrations (accounting, access hardware) and a public API with keys wait for a
+customer need (Phase 13/14).
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Dashboards: a property's figures by area (occupancy, finance, maintenance, visitors, facilities, incidents, approvals), each only for people who can see that area | ✅ Done |
+| 2 | Exports: CSV reports per area with export permissions, an audit record per export and small-group suppression | |
+| 3 | Webhooks: endpoints per organisation, event subscriptions, signed deliveries retried by the worker, delivery log | |
+| 4 | Console screens and browser journeys | |
+| 5 | Phase 12 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,
