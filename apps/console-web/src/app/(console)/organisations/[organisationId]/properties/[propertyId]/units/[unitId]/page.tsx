@@ -152,6 +152,15 @@ export default function UnitPage() {
         </Card>
       ) : null}
 
+      {u.permissions.includes('unit.facility.book') && u.myRoles.length > 0 ? (
+        <Card title="Facilities">
+          <p className="muted">Book the pool, gym or function room for your home.</p>
+          <div className="form__actions">
+            <ButtonLink href={`${unitPath}/facilities`}>Book a facility</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
+
       {u.permissions.includes('unit.visitor.invite') ? (
         <>
           <WalkInRequestsCard

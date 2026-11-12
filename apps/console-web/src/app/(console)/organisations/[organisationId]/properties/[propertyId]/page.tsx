@@ -201,6 +201,16 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      {can('property.facility.read') ? (
+        <Card title="Facilities">
+          <p className="muted">
+            Bookable common areas, opening hours, closures and residents' bookings.
+          </p>
+          <div className="form__actions">
+            <ButtonLink href={`${base}/facilities`}>Open facilities</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
       {can('property.finance.read') ? (
         <Card title="Finance">
           <p className="muted">

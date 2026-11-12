@@ -19,6 +19,7 @@ import type {
   VisitorInvitationDto,
   WalkInRequestDto,
 } from '@veyra/api-contracts';
+import { FakeFacilities } from './fake-facilities';
 import { FakeFinance } from './fake-finance';
 import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
 
@@ -93,6 +94,9 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.maintenance.read',
       'property.maintenance.manage',
       'property.maintenance.work',
+      'unit.facility.book',
+      'property.facility.read',
+      'property.facility.manage',
     ],
   },
   FINANCE_OFFICER: {
@@ -129,6 +133,9 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.maintenance.read',
       'property.maintenance.manage',
       'property.maintenance.work',
+      'unit.facility.book',
+      'property.facility.read',
+      'property.facility.manage',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -234,6 +241,7 @@ export class FakeApi {
   emergencyContacts: (EmergencyContactDto & { personId: string })[] = [];
   finance = new FakeFinance();
   maintenance = new FakeMaintenance();
+  facilities = new FakeFacilities();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -782,7 +790,23 @@ export class FakeApi {
         if (roles.includes('OWNER') || roles.includes('TENANT'))
           permissions.push('unit.residents.read', 'unit.finance.read', 'unit.finance.pay');
         permissions.push('unit.maintenance.request');
+        if (roles.includes('OWNER') || roles.includes('TENANT'))
+          permissions.push('unit.facility.book');
         const usub = own[2] ?? '';
+        if (usub.startsWith('/facilities') || usub.startsWith('/facility-bookings')) {
+          if (!permissions.includes('unit.facility.book'))
+            return this.error(route, 403, 'FORBIDDEN');
+          const reply = this.facilities.handleUnit({
+            method,
+            sub: usub,
+            body,
+            url,
+            property,
+            user,
+            unit,
+          });
+          if (reply) return this.reply(route, reply.status, reply.body);
+        }
         if (usub === '/maintenance-requests' || usub.startsWith('/maintenance-requests/')) {
           const reply = this.maintenance.handleUnit({
             method,
@@ -904,6 +928,20 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    if (sub.startsWith('/facilities') || sub.startsWith('/facility-bookings')) {
+      const reply = this.facilities.handleProperty({
+        method,
+        sub,
+        body,
+        url,
+        property,
+        user,
+        permissions: pp,
+        commonAreas: mine(this.commonAreas),
+      });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
 
     if (sub.startsWith('/maintenance') || sub.startsWith('/my-work-orders')) {
       const reply = this.maintenance.handleProperty({
