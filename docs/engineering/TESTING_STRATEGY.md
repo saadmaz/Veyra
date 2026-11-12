@@ -700,6 +700,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   the asset's place and to its vendor, a second run raises nothing and the next date moves on;
   out-of-service assets are skipped; retiring waits for the schedule to be paused, then is final.
 
+### Part 3: departments, shifts and handovers
+
+- `packages/db` integration (6, `staff.int.test.ts`): department names unique among active
+  ones; members once at a time and removed once; archiving waits for live shifts and frees the
+  name; shifts only for current members, 15 minutes to 24 hours, never overlapping for a person
+  (back to back and other people are fine; two connections at once: the second is refused);
+  start then end with a handover note, times set by the database, moved only before starting,
+  cancelled only with a reason, final states never change; isolation and no deletes.
+- `apps/api` integration (4, `staff.int.test.ts`): supervisors create departments (duplicates
+  409) and add only people who work at the property, guards cannot manage; overlapping shifts
+  409, non-members 422, over 24 hours 400; staff see only their own shifts; a guard starts and
+  ends with a handover note the next guard sees; starting too early is 409; moving, cancelling
+  with a reason, and archiving or removing blocked by live shifts.
+- `apps/api` unit (access control): guards and technicians now work shifts.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

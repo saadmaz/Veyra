@@ -335,6 +335,7 @@ describe('unit scope and derived resident roles', () => {
     const guard = [managerOf(P1, { role: 'SECURITY_GUARD' })];
     expect([...permissionsAt(guard, 'ACTIVE', property(P1), now)].sort()).toEqual([
       'property.profile.read',
+      'property.staff.work',
       'property.structure.read',
       'property.visitor.check_in',
     ]);

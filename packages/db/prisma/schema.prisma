@@ -74,6 +74,9 @@ model User {
   workOrdersCreated       WorkOrder[]              @relation("WorkOrderCreatedBy")
   vendorDocumentsAdded    VendorDocument[]         @relation("VendorDocumentCreatedBy")
   schedulesCreated        MaintenanceSchedule[]    @relation("MaintenanceScheduleCreatedBy")
+  departmentMemberships   DepartmentMember[]       @relation("DepartmentMemberUser")
+  shiftsWorked            Shift[]                  @relation("ShiftWorker")
+  shiftsCreated           Shift[]                  @relation("ShiftCreatedBy")
   vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -388,6 +391,9 @@ model Property {
   facilities            Facility[]
   assets                Asset[]
   maintenanceSchedules  MaintenanceSchedule[]
+  departments           Department[]
+  departmentMembers     DepartmentMember[]
+  shifts                Shift[]
   facilityOpeningHours  FacilityOpeningHours[]
   facilityClosures      FacilityClosure[]
   facilityBookings      FacilityBooking[]
@@ -2379,4 +2385,95 @@ model MaintenanceSchedule {
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId, active, nextDueOn])
   @@map("maintenance_schedules")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Staff operations (Phase 9 Part 3). Departments of a property and their members; shifts of one
+// member at a time that never overlap for a person, started and ended by that person, ended with
+// a handover note for whoever comes next. Rules are hand-written in migration
+// 20261121090000_staff_shifts.
+// ---------------------------------------------------------------------------------------------
+
+enum DepartmentStatus {
+  ACTIVE
+  /// Kept for history. Final.
+  ARCHIVED
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  STARTED
+  /// Ended with a handover note. Final.
+  ENDED
+  /// Called off with a reason. Final.
+  CANCELLED
+}
+
+model Department {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organisationId String           @map("organisation_id") @db.Uuid
+  propertyId     String           @map("property_id") @db.Uuid
+  /// Unique (ignoring case) among the property's active departments, e.g. "Security".
+  name           String
+  status         DepartmentStatus @default(ACTIVE)
+  archivedAt     DateTime?        @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  members  DepartmentMember[]
+  shifts   Shift[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId])
+  @@map("departments")
+}
+
+/// Someone working in a department, from added_at until removed_at.
+model DepartmentMember {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  propertyId     String    @map("property_id") @db.Uuid
+  departmentId   String    @map("department_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  addedAt        DateTime  @default(now()) @map("added_at") @db.Timestamptz(3)
+  removedAt      DateTime? @map("removed_at") @db.Timestamptz(3)
+
+  property   Property   @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  department Department @relation(fields: [organisationId, propertyId, departmentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user       User       @relation("DepartmentMemberUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, departmentId])
+  @@index([organisationId, userId])
+  @@map("department_members")
+}
+
+model Shift {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  organisationId  String      @map("organisation_id") @db.Uuid
+  propertyId      String      @map("property_id") @db.Uuid
+  departmentId    String      @map("department_id") @db.Uuid
+  userId          String      @map("user_id") @db.Uuid
+  startsAt        DateTime    @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime    @map("ends_at") @db.Timestamptz(3)
+  status          ShiftStatus @default(SCHEDULED)
+  startedAt       DateTime?   @map("started_at") @db.Timestamptz(3)
+  endedAt         DateTime?   @map("ended_at") @db.Timestamptz(3)
+  /// What the next shift needs to know (required to end), or why it was cancelled.
+  handoverNote    String?     @map("handover_note")
+  cancelReason    String?     @map("cancel_reason")
+  createdByUserId String      @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property   @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  department Department @relation(fields: [organisationId, propertyId, departmentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user       User       @relation("ShiftWorker", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User       @relation("ShiftCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, startsAt])
+  @@index([organisationId, userId, startsAt])
+  @@index([organisationId, departmentId, endsAt])
+  @@map("shifts")
 }

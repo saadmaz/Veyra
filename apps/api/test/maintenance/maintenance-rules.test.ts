@@ -98,6 +98,7 @@ describe('maintenance roles', () => {
     expect([...ROLES.TECHNICIAN.permissions].sort()).toEqual([
       'property.maintenance.work',
       'property.profile.read',
+      'property.staff.work',
       'property.structure.read',
     ]);
     expect(ROLES.TECHNICIAN.grantableAt).toEqual(['PROPERTY']);

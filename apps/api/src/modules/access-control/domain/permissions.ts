@@ -63,6 +63,12 @@ export const PERMISSIONS = [
   'property.maintenance.manage',
   /** Be assigned work orders and carry them out: only the work assigned to you. */
   'property.maintenance.work',
+  /** See the property's departments, shifts and handover notes. */
+  'property.staff.read',
+  /** Keep departments and their members; schedule, move and cancel shifts. */
+  'property.staff.manage',
+  /** Work shifts at the property: see your own, start them and end them with a handover. */
+  'property.staff.work',
   /** View the organisation's vendors and their compliance documents. */
   'organisation.vendor.read',
   /** Register, edit, suspend and archive vendors; add and void their documents. */

@@ -360,14 +360,26 @@ when active, else open; due at the end of the due date), then the next date move
 interval past today (missed periods are skipped). Assets out of service are skipped. Both tables
 have RLS by organisation and no DELETE grant.
 
-## 10. Identity vs person vs relationship
+## 10. Staff operations (Phase 9, departments and shifts implemented)
+
+Migration `20261121090000_staff_shifts`.
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `departments` | property, name, status (`ACTIVE`/`ARCHIVED`), archived_at? | Name unique ignoring case among the property's active departments. Archived only without scheduled or started shifts; archived is final and takes no members or shifts. |
+| `department_members` | department, user, added_at, removed_at? | Of an active department; one current membership per person and department; removed once (then may rejoin). The API adds only people holding `property.staff.work` at the property. |
+| `shifts` | department, user, starts_at, ends_at, status (`SCHEDULED`/`STARTED`/`ENDED`/`CANCELLED`), started_at?, ended_at?, handover_note?, cancel_reason?, created_by_user | For a current member; 15 minutes to 24 hours; a person's scheduled and started shifts never overlap (checked under an advisory lock per person). `SCHEDULED → STARTED → ENDED` (handover note required) or `SCHEDULED → CANCELLED` (reason required); moved only before it starts; start and end times set by the database; ENDED and CANCELLED are final; department and person never change. |
+
+All three tables have RLS by organisation and no DELETE grant.
+
+## 11. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
 holds the personal fields the product needs and may exist without a login. Relationships to
 units (ownership, tenancy, household membership) are separate, effective-dated records. One
 person may relate to many units and properties, and hold many roles.
 
-## 11. Conceptual entity catalogue (later phases)
+## 12. Conceptual entity catalogue (later phases)
 
 Starting point for discovery, not a final schema. Validate entities and cardinalities when the
 owning module is built.
@@ -386,7 +398,7 @@ File bytes live in object storage. The database stores metadata, ownership, acce
 checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
 server-side authorisation check.
 
-## 12. Data lifecycle
+## 13. Data lifecycle
 
 - Retention is defined per data category and jurisdiction.
 - Correction and deletion are supported where legally required.
