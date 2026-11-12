@@ -302,14 +302,34 @@ API also computes `overdue` from the due times on every read, so the queue is ri
 All six maintenance tables have RLS by organisation; the application has no DELETE grant except on SLA
 targets.
 
-## 8. Identity vs person vs relationship
+## 8. Facilities (Phase 8, data foundation implemented)
+
+Migration `20261117090000_facilities`. A facility is the booking setup of one common area;
+residents (or staff for them) book it for a unit in whole slots. Owner decisions (2026-11-12):
+owners and tenants book, household members when delegated, staff on a resident's behalf; fees
+and deposits are charged to the unit's ledger (Part 3); approval is a per-facility setting;
+fixed-length slots.
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `facilities` | common area (one facility each), description?, status (`ACTIVE`/`ARCHIVED`), slot_minutes, capacity, approval_required, min_notice_minutes, max_advance_days, max_slots_per_booking, max_upcoming_per_unit?, cancellation_minutes | For an ACTIVE common area of a property that is not archived. Slots of 5 to 1440 minutes (multiples of 5); capacity 1 (exclusive use) to 1000 overlapping bookings. Archived only once no pending or confirmed booking is still to end; archived is final. The cancellation window binds residents only (enforced by the API). |
+| `facility_opening_hours` | facility, weekday (ISO 1-7), opens_at, closes_at (property-local, `24:00` = midnight) | Ranges of one weekday never overlap. Configuration: replaced (deleted and added); changing hours never touches bookings already made. |
+| `facility_closures` | facility, starts_at, ends_at, reason, created_by_user, lifted_at?, lifted_by_user? | Blocks booking while not lifted. Never overlaps a pending or confirmed booking (cancel those first, with a reason). Never edited or deleted: lifted once. |
+| `facility_bookings` | facility, unit, booking_number, starts_at, ends_at, slot_count, status, status_note?, purpose?, booked_by_user, decided_by_user?, decided_at?, cancelled_at? | Inside one opening range of the property-local day, starting on a slot boundary, whole slots up to the facility maximum (slot_count set by the database). Starts at least min_notice ahead and at most max_advance_days ahead; never in an unlifted closure; the unit holds at most max_upcoming_per_unit pending or confirmed bookings of the facility that have not ended; overlapping pending and confirmed bookings never exceed the capacity at any moment. All checked under an advisory lock per facility (shared with closures, hours and archiving), so concurrent requests cannot overbook. Status set by the database on insert: `PENDING` when the facility needs approval, else `CONFIRMED`. Then `PENDING → CONFIRMED \| REJECTED \| CANCELLED`, `CONFIRMED → CANCELLED \| COMPLETED \| NO_SHOW`; rejecting and cancelling a confirmed booking need a reason; approving needs a person (decided-by/at recorded) and a booking that has not ended; COMPLETED and NO_SHOW only once it has started. Place, time, unit and purpose never change (cancel and book again). Numbered per property (BK-000042). REJECTED, CANCELLED, COMPLETED and NO_SHOW are final. |
+| `facility_booking_events` | sequence, booking, from_status?, to_status, note?, actor_user? | Written only by the database on every insert and status change, with the current user as actor and the reason as note. **Append-only for every role**, the superuser included. |
+
+All five tables have RLS by organisation; the application has no DELETE grant except on opening
+hours. Daylight saving: slot boundaries and lengths are property-local wall-clock times; a booking
+across a daylight-saving change is as long on the clock as it looks, not in elapsed time.
+
+## 9. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
 holds the personal fields the product needs and may exist without a login. Relationships to
 units (ownership, tenancy, household membership) are separate, effective-dated records. One
 person may relate to many units and properties, and hold many roles.
 
-## 9. Conceptual entity catalogue (later phases)
+## 10. Conceptual entity catalogue (later phases)
 
 Starting point for discovery, not a final schema. Validate entities and cardinalities when the
 owning module is built.
@@ -320,7 +340,7 @@ owning module is built.
 | Visitors and access (beyond section 5) | `VehicleUnitAssignment` |
 | Maintenance and operations (section 7 holds requests and work orders; assignment is a column) | `Inspection`, `Task`, `Shift`, `Incident` |
 | Assets and vendors | `Asset`, `AssetMaintenancePlan`, `AssetServiceRecord`, `Vendor`, `VendorContract` |
-| Facilities | `FacilitySchedule`, `Reservation`, `ReservationPolicy`, `FacilityClosure` |
+| Facilities | Implemented in section 8: `Facility`, `FacilityOpeningHours`, `FacilityClosure`, `FacilityBooking`; waitlist later |
 | Governance | `Committee`, `CommitteeMembership`, `Meeting`, `MeetingAgendaItem`, `MeetingMinute`, `Resolution`, `ApprovalRequest`, `ApprovalStep`, `Vote` (only where legal requirements are validated) |
 | Documents and communications | `Document`, `DocumentVersion`, `DocumentAccessGrant`, `Announcement`, `AnnouncementAudience`, `Notification`, `NotificationDelivery`, `MessageTemplate` |
 
@@ -328,7 +348,7 @@ File bytes live in object storage. The database stores metadata, ownership, acce
 checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
 server-side authorisation check.
 
-## 10. Data lifecycle
+## 11. Data lifecycle
 
 - Retention is defined per data category and jurisdiction.
 - Correction and deletion are supported where legally required.

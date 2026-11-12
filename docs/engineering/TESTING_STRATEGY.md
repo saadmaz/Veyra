@@ -600,6 +600,31 @@ expiry, rehash on sign-in, idempotent sign-out).
   only their own work. A file whose content is not what it claims is refused, and a text file is
   refused before upload. axe WCAG 2.2 AA and no horizontal scroll on phones.
 
+## Phase 8 tests
+
+### Part 1: facilities data (`packages/db` integration, 14, `facilities.int.test.ts`)
+
+- Facilities only for an active common area, one each, with valid settings, starting active;
+  archived only when nothing upcoming is booked, then final and closed to bookings.
+- Opening hours of a day never overlap (touching ranges are fine) and are replaced by deleting.
+- Bookings are numbered per property and counted in slots; the facility decides PENDING or
+  CONFIRMED whatever the client sends, and the creation time is the database's; the first
+  history event names the booker.
+- Whole slots on a slot boundary inside opening hours, at most the facility maximum (half-hour
+  slots on another facility); notice and advance windows; no booking in the past.
+- No overbooking: exclusive use with back-to-back bookings allowed, shared capacity of two with
+  the third refused where they overlap, pending bookings hold their place until rejected; two
+  connections booking the same slot at once: the second is refused once the first commits.
+- The per-unit limit of upcoming bookings, per unit; a cancelled booking frees the allowance.
+- Closures block bookings until lifted, never cover a live booking (cancel it first), are never
+  edited and are lifted once.
+- Only the allowed status transitions, with reasons to reject and to cancel a confirmed booking;
+  approval records the decider and needs a person; used or no-show only once started; place and
+  time never change; final states never change; the history lists each change with its actor.
+- History is written only by the database and is append-only even for the superuser; the
+  application cannot delete bookings. Another organisation, and a connection without tenant
+  context, see none of it.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
