@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { SupportAccessDto } from '@veyra/api-contracts';
+import { MfaPolicy } from '../../platform/auth/mfa-policy';
 import { Authenticated } from '../../platform/auth/route-access';
 import { ZodValidationPipe } from '../../platform/validation/zod-validation.pipe';
 import { CurrentAccess, type OrganisationAccess, RequirePermission } from '../access-control';
@@ -84,7 +85,10 @@ export class OrganisationSupportAccessController {
 @ApiTags('platform')
 @Controller('platform')
 export class PlatformSupportAccessController {
-  constructor(private readonly support: SupportAccessService) {}
+  constructor(
+    private readonly support: SupportAccessService,
+    private readonly mfa: MfaPolicy,
+  ) {}
 
   @Get('support-access')
   @Authenticated()
@@ -103,6 +107,7 @@ export class PlatformSupportAccessController {
     @Param('organisationId', uuid) organisationId: string,
     @Body(new ZodValidationPipe(supportRequestSchema)) body: SupportRequestInput,
   ): Promise<SupportAccessDto> {
+    this.mfa.requireForPrivilegedChange(principal);
     return toDto(await this.support.request(principal.userId, organisationId, body));
   }
 }

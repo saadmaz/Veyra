@@ -10,6 +10,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'The email or password is incorrect.',
   EMAIL_ALREADY_REGISTERED: 'An account with this email already exists. Sign in instead.',
   INVALID_OR_EXPIRED_LINK: 'This link is invalid or has expired.',
+  MFA_REQUIRED:
+    'Confirm it is you with the code from your authenticator app first (see the box above).',
+  MFA_SETUP_REQUIRED:
+    'Your role needs two-step sign-in before you can make changes. Turn it on under "Two-step sign-in".',
+  INVALID_MFA_CODE: 'That code is not right. Try the current one.',
   RATE_LIMITED: 'Too many attempts. Wait a few minutes and try again.',
   SERVICE_UNAVAILABLE: 'VEYRA is temporarily unavailable. Try again shortly.',
   UNAUTHENTICATED: 'Your session has ended. Sign in again.',

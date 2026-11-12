@@ -23,6 +23,8 @@ const toUser = (row: UserRow): IdentityUser => ({
   displayName: row.displayName,
   status: row.status,
   emailVerified: row.emailVerifiedAt !== null,
+  mfaEnabled:
+    (row as { mfaFactor?: { confirmedAt: Date | null } | null }).mfaFactor?.confirmedAt != null,
 });
 
 const toSession = (row: SessionRow): IdentitySession => ({
@@ -33,6 +35,7 @@ const toSession = (row: SessionRow): IdentitySession => ({
   idleExpiresAt: row.idleExpiresAt,
   absoluteExpiresAt: row.absoluteExpiresAt,
   revokedAt: row.revokedAt,
+  mfaVerifiedAt: row.mfaVerifiedAt,
 });
 
 /** Request metadata is untrusted input: bound its size before storing it. */
@@ -115,7 +118,10 @@ export class PrismaIdentityRepository implements IdentityRepository {
   async findSessionByTokenHash(
     tokenHash: string,
   ): Promise<{ session: IdentitySession; user: IdentityUser } | null> {
-    const row = await this.db.session.findUnique({ where: { tokenHash }, include: { user: true } });
+    const row = await this.db.session.findUnique({
+      where: { tokenHash },
+      include: { user: { include: { mfaFactor: { select: { confirmedAt: true } } } } },
+    });
     if (!row) return null;
     return { session: toSession(row), user: toUser(row.user) };
   }

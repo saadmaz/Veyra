@@ -17,11 +17,14 @@ export interface IdentityUser {
   displayName: string;
   status: UserStatus;
   emailVerified: boolean;
+  /** Two-step sign-in is on (a confirmed factor exists). */
+  mfaEnabled: boolean;
 }
 
 export interface IdentitySession extends SessionState {
   id: string;
   userId: string;
+  mfaVerifiedAt: Date | null;
 }
 
 /** Where a request came from. Recorded on sessions and audit records; never trusted for auth. */

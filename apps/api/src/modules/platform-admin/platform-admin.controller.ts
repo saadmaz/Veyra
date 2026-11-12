@@ -6,6 +6,7 @@ import type {
   PlatformPlanDto,
 } from '@veyra/api-contracts';
 import { z } from 'zod';
+import { MfaPolicy } from '../../platform/auth/mfa-policy';
 import { Authenticated } from '../../platform/auth/route-access';
 import { ZodValidationPipe } from '../../platform/validation/zod-validation.pipe';
 import { type AuthenticatedPrincipal, CurrentPrincipal } from '../identity';
@@ -53,7 +54,10 @@ const toDetail = (
 @ApiTags('platform')
 @Controller('platform')
 export class PlatformAdminController {
-  constructor(private readonly platform: PlatformAdminService) {}
+  constructor(
+    private readonly platform: PlatformAdminService,
+    private readonly mfa: MfaPolicy,
+  ) {}
 
   @Get('me')
   @Authenticated()
@@ -103,6 +107,7 @@ export class PlatformAdminController {
     @Param('organisationId', uuid) id: string,
     @Body(new ZodValidationPipe(subscriptionChangeSchema)) body: SubscriptionChangeInput,
   ): Promise<PlatformOrganisationDetailDto> {
+    this.mfa.requireForPrivilegedChange(principal);
     return toDetail(await this.platform.changeSubscription(principal.userId, id, body));
   }
 
@@ -115,6 +120,7 @@ export class PlatformAdminController {
     @Param('organisationId', uuid) id: string,
     @Body(new ZodValidationPipe(reasonSchema)) body: { reason: string },
   ): Promise<PlatformOrganisationDetailDto> {
+    this.mfa.requireForPrivilegedChange(principal);
     return toDetail(await this.platform.setStatus(principal.userId, id, 'SUSPENDED', body.reason));
   }
 
@@ -127,6 +133,7 @@ export class PlatformAdminController {
     @Param('organisationId', uuid) id: string,
     @Body(new ZodValidationPipe(reasonSchema)) body: { reason: string },
   ): Promise<PlatformOrganisationDetailDto> {
+    this.mfa.requireForPrivilegedChange(principal);
     return toDetail(await this.platform.setStatus(principal.userId, id, 'ACTIVE', body.reason));
   }
 }

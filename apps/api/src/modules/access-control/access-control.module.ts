@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+import { MfaPolicy } from '../../platform/auth/mfa-policy';
 import { AccessControlService, GRANT_REPOSITORY } from './application/access-control.service';
 import { PrismaGrantRepository } from './infrastructure/prisma-grant.repository';
 import { PermissionGuard } from './presentation/permission.guard';
@@ -16,8 +17,9 @@ import { RouteAccessVerifier } from './presentation/route-access.verifier';
     AccessControlService,
     PermissionGuard,
     RouteAccessVerifier,
+    MfaPolicy,
     { provide: GRANT_REPOSITORY, useClass: PrismaGrantRepository },
   ],
-  exports: [AccessControlService, PermissionGuard],
+  exports: [AccessControlService, PermissionGuard, MfaPolicy],
 })
 export class AccessControlModule {}

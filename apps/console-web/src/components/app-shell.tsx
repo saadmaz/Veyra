@@ -8,6 +8,7 @@ import { api } from '@/lib/api-client';
 import { signInPath } from '@/lib/navigation';
 import { useSession } from '@/lib/session';
 import { useApiQuery } from '@/lib/use-api';
+import { VerifyMfa } from './mfa';
 import { Alert, Button, ErrorState, LoadingState } from './ui';
 
 /**
@@ -52,6 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
       <main id="main" className="page" tabIndex={-1}>
         {session.user.emailVerified ? null : <ConfirmEmailBanner />}
+        {session.user.mfaEnabled && !session.mfaVerified ? <VerifyMfa /> : null}
         {children}
       </main>
     </>
@@ -141,6 +143,9 @@ function AccountMenu({ displayName, email }: { displayName: string; email: strin
       <span className="account__name" title={email}>
         {displayName}
       </span>
+      <Link href="/account/security" className="account__link">
+        Two-step sign-in
+      </Link>
       <Button
         variant="secondary"
         busy={busy}

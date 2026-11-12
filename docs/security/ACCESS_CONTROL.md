@@ -333,9 +333,17 @@ organisation scope, which holds every `*.read` permission and nothing else (expo
 changes stay refused). Requests are listed under `/organisations/{org}/support-access` with
 `organisation.member.read`, so admins see them even while the organisation is read-only.
 
+### 6.4d Two-step sign-in for privileged changes (rule 7, Phase 14)
+
+A request is privileged when the caller holds an effective organisation admin or finance officer
+grant in the organisation, or acts as a platform administrator. Where `MFA_ENFORCEMENT` is
+`privileged` (the default in production), the permission guard refuses privileged changes (any
+method but GET, HEAD, OPTIONS) unless the session was verified with a TOTP or recovery code:
+403 `MFA_SETUP_REQUIRED` when two-step sign-in is off, 403 `MFA_REQUIRED` when the session is
+not verified yet. Reads are never blocked. Platform routes apply the same policy.
+
 ### 6.5 Not yet implemented
 
-- MFA for privileged mutations (rule 7) depends on MFA in authentication (ADR 0005 gap).
 - Building and unit scopes and derived owner/tenant grants: later Phase 3 parts and Phase 4.
 - Property managers cannot invite others to their property yet (organisation admins do).
 - Permission caching with invalidation events (not needed while reads are cheap).

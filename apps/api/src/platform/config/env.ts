@@ -35,6 +35,16 @@ export const apiEnvSchema = z
      * Development and test only: refused in production.
      */
     PAYMENT_SANDBOX_SECRET: z.string().min(32).optional(),
+    /**
+     * Two-step sign-in (Phase 14): the key that encrypts authenticator secrets (base64, at least
+     * 32 bytes; the first 32 are used). Without it, setting up MFA answers 409.
+     */
+    MFA_ENCRYPTION_KEY: z
+      .string()
+      .refine((v) => Buffer.from(v, 'base64').length >= 32, 'Use at least 32 bytes, base64')
+      .optional(),
+    /** "privileged" requires MFA for privileged changes; defaults to it in production only. */
+    MFA_ENFORCEMENT: z.enum(['off', 'privileged']).optional(),
     /** The console's address, for links in account emails (verification, password reset). */
     CONSOLE_URL: z.string().url().default('http://localhost:3000'),
     /**

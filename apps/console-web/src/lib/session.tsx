@@ -14,7 +14,7 @@ import { ApiRequestError, api } from './api-client';
 
 export type SessionState =
   | { status: 'loading' }
-  | { status: 'signed-in'; user: AuthUserDto }
+  | { status: 'signed-in'; user: AuthUserDto; mfaVerified: boolean }
   | { status: 'signed-out' }
   /** The API could not be asked (network or server error): neither signed in nor out. */
   | { status: 'error'; error: unknown };
@@ -31,7 +31,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 async function loadSession(): Promise<SessionState> {
   try {
     const response = await api.get<CurrentSessionResponse>('/auth/session');
-    return { status: 'signed-in', user: response.user };
+    return { status: 'signed-in', user: response.user, mfaVerified: response.session.mfaVerified };
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 401) return { status: 'signed-out' };
     return { status: 'error', error };

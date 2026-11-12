@@ -115,6 +115,11 @@ a {
   margin-left: auto;
 }
 
+.account__link {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
 .account__name {
   overflow: hidden;
   max-width: 14rem;
