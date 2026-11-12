@@ -229,6 +229,22 @@ Decisions (2026-11-12, the recommended options; the owner asked to proceed with 
 | 5 | Console screens and browser journeys | ✅ Done (vendors, assets and preventive work, staff planning, my shifts and checklists) |
 | 6 | Phase 9 exit review | ✅ Done ([PHASE_9_REVIEW](../reviews/PHASE_9_REVIEW.md)) |
 
+## Phase 10 plan (Communications and documents)
+
+Decisions (2026-11-12, the recommended options): announcements per property for everyone,
+residents, one building's residents or staff, with an urgent flag and optional acknowledgement;
+in-app inboxes first, then email, SMS and push through provider-neutral adapters (no real
+provider yet: a logging adapter in development, as with payments); documents per property with
+categories, audiences, versions and expiry dates, stored in the existing object storage.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Announcements: drafts, publishing to an audience, inbox copies, reads and acknowledgements, withdrawal | ✅ Done |
+| 2 | Notifications: channels (in-app, email, SMS, push) behind adapters, delivery records with status and retries through the worker, and the first events (bookings, maintenance updates) | |
+| 3 | Documents: categories, audience, versions, expiry reminders, short-lived download links | |
+| 4 | Console screens and browser journeys | |
+| 5 | Phase 10 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,

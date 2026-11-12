@@ -403,6 +403,18 @@ here), `GET checklists/{id}`, `POST checklists/{id}/verify` (403 `OWN_CHECKLIST`
 {id}/items/{position}` (`{ result, note? }`, a failed check needs a note) and `POST {id}/submit`
 (422 `INCOMPLETE` until every check is answered).
 
+## Announcements (Phase 10)
+
+Managers, under the property's `announcements` (`property.announcement.read` to read, `.manage`
+for the rest): `GET ?status=` (with delivery figures), `POST` (a draft), `GET {id}` (with each
+recipient's read and acknowledgement times), `PATCH {id}` (drafts only), `POST {id}/publish`
+(delivers to the audience as it is at that moment) and `POST {id}/withdraw` (reason).
+
+Everyone signed in, under `/organisations/{orgId}/inbox` (no permission needed; only one's own
+copies exist): `GET` (published announcements, newest first), `POST {id}/read` and `POST
+{id}/acknowledge` (409 when it does not ask for acknowledgement). Withdrawn announcements leave
+inboxes.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.
