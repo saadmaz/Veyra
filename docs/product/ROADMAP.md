@@ -34,7 +34,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 10    | Communications and documents             | Done. Exit review: [PHASE_10_REVIEW](../reviews/PHASE_10_REVIEW.md) |
 | 11    | Governance and incident management       | Done. Exit review: [PHASE_11_REVIEW](../reviews/PHASE_11_REVIEW.md) |
 | 12    | Analytics and integrations               | Done. Exit review: [PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md) |
-| 13    | SaaS administration and subscriptions    | |
+| 13    | SaaS administration and subscriptions    | Done. Exit review: [PHASE_13_REVIEW](../reviews/PHASE_13_REVIEW.md) |
 | 14    | Security hardening and commercial launch | |
 
 ## Stage 0 discovery still required
@@ -295,7 +295,7 @@ time-boxed, reason-logged, approved by the organisation and visible to it.
 | 2 | Platform administration: platform admins, organisation list without tenant data, plan and status changes, suspension, all audited | ✅ Done ([runbook](../operations/PLATFORM_ADMIN.md)) |
 | 3 | Support access: requested with a reason, approved by an organisation admin, time-boxed, read-only, visible and revocable | ✅ Done |
 | 4 | Console screens and browser journeys | ✅ Done (plan and support page in the console; organisations, plans, suspension and support requests in the admin tool) |
-| 5 | Phase 13 exit review | |
+| 5 | Phase 13 exit review | ✅ Done ([PHASE_13_REVIEW](../reviews/PHASE_13_REVIEW.md)) |
 
 ## Release gates
 
