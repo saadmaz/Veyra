@@ -394,6 +394,15 @@ Staff, under the property's `my-shifts` (`property.staff.work`): `GET` (from a w
 hour before until it is due to end, else 409 `NOT_YET`) and `POST {id}/end` with `{
 handoverNote }`. Other people's shifts are 404.
 
+**Checklists.** Supervisors, under `staff/`: `GET` and `POST checklist-templates`, `PATCH
+checklist-templates/{id}` (runs already given keep their checks), `POST
+checklist-templates/{id}/archive`, `GET checklists?status=&userId=`, `POST checklists` (`{
+templateId, assignedToUserId, dueOn, shiftId? }`, to someone holding `property.staff.work`
+here), `GET checklists/{id}`, `POST checklists/{id}/verify` (403 `OWN_CHECKLIST` for your own),
+`return` (reason) and `cancel` (reason). Staff, under `my-checklists`: `GET`, `GET {id}`, `PUT
+{id}/items/{position}` (`{ result, note? }`, a failed check needs a note) and `POST {id}/submit`
+(422 `INCOMPLETE` until every check is answered).
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

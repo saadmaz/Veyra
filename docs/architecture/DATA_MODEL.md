@@ -360,7 +360,7 @@ when active, else open; due at the end of the due date), then the next date move
 interval past today (missed periods are skipped). Assets out of service are skipped. Both tables
 have RLS by organisation and no DELETE grant.
 
-## 10. Staff operations (Phase 9, departments and shifts implemented)
+## 10. Staff operations (Phase 9, implemented)
 
 Migration `20261121090000_staff_shifts`.
 
@@ -370,7 +370,15 @@ Migration `20261121090000_staff_shifts`.
 | `department_members` | department, user, added_at, removed_at? | Of an active department; one current membership per person and department; removed once (then may rejoin). The API adds only people holding `property.staff.work` at the property. |
 | `shifts` | department, user, starts_at, ends_at, status (`SCHEDULED`/`STARTED`/`ENDED`/`CANCELLED`), started_at?, ended_at?, handover_note?, cancel_reason?, created_by_user | For a current member; 15 minutes to 24 hours; a person's scheduled and started shifts never overlap (checked under an advisory lock per person). `SCHEDULED → STARTED → ENDED` (handover note required) or `SCHEDULED → CANCELLED` (reason required); moved only before it starts; start and end times set by the database; ENDED and CANCELLED are final; department and person never change. |
 
-All three tables have RLS by organisation and no DELETE grant.
+**Checklists** (migration `20261122090000_checklists`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `checklist_templates` | title, department?, items (1-50 trimmed checks of up to 200 characters), status (`ACTIVE`/`ARCHIVED`) | Editable while active; archiving is final. Runs keep their own copy of the checks. |
+| `checklist_runs` | template, title (copied), assigned_to_user, shift?, due_on, status (`OPEN`/`SUBMITTED`/`VERIFIED`/`CANCELLED`), submitted_at?, verified_at?, verified_by_user?, status_note? | Created OPEN from an active template; a shift must be a live shift of the same person. `OPEN → SUBMITTED` only when every check is answered; `SUBMITTED → VERIFIED` by someone other than the assignee (recorded); `SUBMITTED → OPEN` (returned, note required); `OPEN/SUBMITTED → CANCELLED` (reason required). Template, title, person and shift never change; VERIFIED and CANCELLED are final. |
+| `checklist_run_items` | run, position, text, result? (`PASS`/`FAIL`/`NOT_APPLICABLE`), note?, answered_at?, answered_by_user? | Answered only while the run is OPEN; a failed check needs a note; wording and position never change; answer time and person set by the database. |
+
+All six staff tables have RLS by organisation and no DELETE grant.
 
 ## 11. Identity vs person vs relationship
 

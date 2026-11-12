@@ -77,6 +77,11 @@ model User {
   departmentMemberships   DepartmentMember[]       @relation("DepartmentMemberUser")
   shiftsWorked            Shift[]                  @relation("ShiftWorker")
   shiftsCreated           Shift[]                  @relation("ShiftCreatedBy")
+  checklistTemplatesMade  ChecklistTemplate[]      @relation("ChecklistTemplateCreatedBy")
+  checklistsAssigned      ChecklistRun[]           @relation("ChecklistRunAssignee")
+  checklistsCreated       ChecklistRun[]           @relation("ChecklistRunCreatedBy")
+  checklistsVerified      ChecklistRun[]           @relation("ChecklistRunVerifiedBy")
+  checklistItemsAnswered  ChecklistRunItem[]       @relation("ChecklistRunItemAnsweredBy")
   vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -394,6 +399,9 @@ model Property {
   departments           Department[]
   departmentMembers     DepartmentMember[]
   shifts                Shift[]
+  checklistTemplates    ChecklistTemplate[]
+  checklistRuns         ChecklistRun[]
+  checklistRunItems     ChecklistRunItem[]
   facilityOpeningHours  FacilityOpeningHours[]
   facilityClosures      FacilityClosure[]
   facilityBookings      FacilityBooking[]
@@ -2420,9 +2428,10 @@ model Department {
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  members  DepartmentMember[]
-  shifts   Shift[]
+  property           Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  members            DepartmentMember[]
+  shifts             Shift[]
+  checklistTemplates ChecklistTemplate[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -2466,14 +2475,127 @@ model Shift {
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property   Property   @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  department Department @relation(fields: [organisationId, propertyId, departmentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  user       User       @relation("ShiftWorker", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  createdBy  User       @relation("ShiftCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  property   Property       @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  department Department     @relation(fields: [organisationId, propertyId, departmentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user       User           @relation("ShiftWorker", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User           @relation("ShiftCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  checklists ChecklistRun[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId, startsAt])
   @@index([organisationId, userId, startsAt])
   @@index([organisationId, departmentId, endsAt])
   @@map("shifts")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Checklists and inspections (Phase 9 Part 4). A template lists the checks; a run copies them
+// for one person (optionally during a shift), who answers every item (a failed check needs a
+// note) and submits; a supervisor other than the submitter verifies it or returns it with a
+// note. Rules are hand-written in migration 20261122090000_checklists.
+// ---------------------------------------------------------------------------------------------
+
+enum ChecklistTemplateStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ChecklistRunStatus {
+  /// Being filled in (also after it was returned).
+  OPEN
+  /// Waiting for a supervisor.
+  SUBMITTED
+  /// Checked by a supervisor. Final.
+  VERIFIED
+  /// Called off with a reason. Final.
+  CANCELLED
+}
+
+enum ChecklistResult {
+  PASS
+  FAIL
+  NOT_APPLICABLE
+}
+
+model ChecklistTemplate {
+  id              String                  @id @default(uuid(7)) @db.Uuid
+  organisationId  String                  @map("organisation_id") @db.Uuid
+  propertyId      String                  @map("property_id") @db.Uuid
+  /// The department it is for, if any.
+  departmentId    String?                 @map("department_id") @db.Uuid
+  title           String
+  /// The checks, in order (1-50, each 1-200 characters). Runs keep their own copy.
+  items           String[]
+  status          ChecklistTemplateStatus @default(ACTIVE)
+  createdByUserId String                  @map("created_by_user_id") @db.Uuid
+  archivedAt      DateTime?               @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property       @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  department Department?    @relation(fields: [organisationId, propertyId, departmentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User           @relation("ChecklistTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  runs       ChecklistRun[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, status])
+  @@map("checklist_templates")
+}
+
+model ChecklistRun {
+  id               String             @id @default(uuid(7)) @db.Uuid
+  organisationId   String             @map("organisation_id") @db.Uuid
+  propertyId       String             @map("property_id") @db.Uuid
+  templateId       String             @map("template_id") @db.Uuid
+  /// Copied from the template.
+  title            String
+  assignedToUserId String             @map("assigned_to_user_id") @db.Uuid
+  /// The assignee's shift it belongs to, if any.
+  shiftId          String?            @map("shift_id") @db.Uuid
+  /// Property-local date it is due.
+  dueOn            DateTime           @map("due_on") @db.Date
+  status           ChecklistRunStatus @default(OPEN)
+  submittedAt      DateTime?          @map("submitted_at") @db.Timestamptz(3)
+  verifiedAt       DateTime?          @map("verified_at") @db.Timestamptz(3)
+  verifiedByUserId String?            @map("verified_by_user_id") @db.Uuid
+  /// Why it was returned (cleared when submitted again) or cancelled.
+  statusNote       String?            @map("status_note")
+  createdByUserId  String             @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  template   ChecklistTemplate  @relation(fields: [organisationId, propertyId, templateId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shift      Shift?             @relation(fields: [organisationId, propertyId, shiftId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignedTo User               @relation("ChecklistRunAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User               @relation("ChecklistRunCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  verifiedBy User?              @relation("ChecklistRunVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  items      ChecklistRunItem[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, status, dueOn])
+  @@index([organisationId, assignedToUserId, status])
+  @@map("checklist_runs")
+}
+
+model ChecklistRunItem {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  organisationId   String           @map("organisation_id") @db.Uuid
+  propertyId       String           @map("property_id") @db.Uuid
+  runId            String           @map("run_id") @db.Uuid
+  position         Int
+  text             String
+  result           ChecklistResult?
+  /// What was found; required for a failed check.
+  note             String?
+  answeredAt       DateTime?        @map("answered_at") @db.Timestamptz(3)
+  answeredByUserId String?          @map("answered_by_user_id") @db.Uuid
+
+  property   Property     @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  run        ChecklistRun @relation(fields: [organisationId, propertyId, runId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  answeredBy User?        @relation("ChecklistRunItemAnsweredBy", fields: [answeredByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([runId, position])
+  @@index([organisationId, runId])
+  @@map("checklist_run_items")
 }
