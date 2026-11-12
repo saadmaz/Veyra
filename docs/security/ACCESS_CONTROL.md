@@ -147,6 +147,11 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   and property managers). The inbox needs only a signed-in user: a person sees only copies
   delivered to them, enforced by the query and by the database (only the recipient may update a
   copy).
+  For documents (Phase 10) `property.document.manage` (organisation admins, property managers),
+  `property.document.read` (also maintenance managers, security supervisors and guards,
+  technicians and finance officers: documents for everyone or staff) and `unit.document.read`
+  (owners, tenants and household members: documents for everyone or residents, owners also those
+  for owners).
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

@@ -380,7 +380,7 @@ Migration `20261121090000_staff_shifts`.
 
 All six staff tables have RLS by organisation and no DELETE grant.
 
-## 11. Communications (Phase 10, announcements and notifications implemented)
+## 11. Communications (Phase 10, implemented)
 
 Migration `20261123090000_announcements`.
 
@@ -401,6 +401,13 @@ tables have RLS by organisation and no DELETE grant.
 | ----- | ---------- | ----- |
 | `notifications` | user, property?, kind (`facility.booking.approved` style), title, body, link? (a console path), urgent, read_at? | Never change; only the recipient marks one read, once. Written by the module that made the change, in the same transaction. |
 | `notification_deliveries` | notification, channel (`EMAIL`/`SMS`/`PUSH`), status (`PENDING`/`SENT`/`FAILED`), attempts, last_error?, provider_reference?, sent_at? | One per notification and channel; start PENDING and write a `notification.delivery.due` outbox event in the same transaction. The application role cannot update them: the worker records each attempt through `app_notification_delivery_result()` (runs as the owner, under RLS), which counts attempts, marks FAILED after the last one and leaves SENT and FAILED alone. |
+
+**Documents** (migration `20261125090000_documents`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `documents` | title, description?, category (`RULES`/`MINUTES`/`NOTICE`/`FORM`/`FINANCIAL`/`CONTRACT`/`INSURANCE`/`OTHER`), audience (`EVERYONE`/`RESIDENTS`/`OWNERS`/`STAFF`), expires_on?, status (`ACTIVE`/`ARCHIVED`) | Details editable while active; archiving is final and hides it from readers. |
+| `document_versions` | document, version_number, storage_key, file_name, content_type, size_bytes, note?, status (`PENDING`/`READY`/`REJECTED`), uploaded_by_user, ready_at? | Numbered 1, 2, 3 per document (advisory lock); only on active documents; key exactly `org/<organisation>/prop/<property>/documents/<id>`; photos or PDF up to 20 MB; checked once; nothing else changes. The newest READY version is the current one. |
 
 ## 12. Identity vs person vs relationship
 

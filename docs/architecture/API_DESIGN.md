@@ -426,6 +426,19 @@ maintenance request, and an urgent announcement notify the people concerned, in-
 The worker sends email deliveries through an `EmailSender` adapter (`EMAIL_ADAPTER`, only `log`
 for now: it accepts and logs the delivery id) with five attempts and backoff.
 
+## Documents (Phase 10)
+
+Staff, under the property's `documents` (`property.document.read`: managers holding
+`property.document.manage` see every document and version, other staff active documents for
+everyone or staff): `GET`, `POST` (details plus `file`; returns a signed upload), `GET {id}`,
+`PATCH {id}`, `POST {id}/archive`, `POST {id}/versions` (`{ file, note? }`), `POST
+{id}/versions/{versionId}/complete` (the stored file is checked; a false one is deleted, 422
+`FILE_REJECTED`) and `GET {id}/download` (a five-minute link to the current version; managers may
+add `?version=`). Residents, under `units/{unitId}/documents` (`unit.document.read`): active
+documents for everyone or residents, and for owners when they own the unit, with `GET
+{id}/download`. Each document shows `expiry` (`NONE`, `VALID`, `EXPIRING_SOON` within 30 days,
+`EXPIRED`).
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

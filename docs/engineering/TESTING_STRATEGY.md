@@ -769,6 +769,18 @@ expiry, rehash on sign-in, idempotent sign-out).
   notifies residents by email too; a stranger's feed is empty and cannot mark others' items read;
   read and read-all; managers see the deliveries, residents get 404.
 
+### Part 3: documents
+
+- `packages/db` integration (3, `documents.int.test.ts`): versions numbered per document, keys
+  under the tenant prefix, only allowed types and sizes; a version is checked once; archived
+  documents are final and take no versions; isolation and no deletes.
+- `apps/api` integration (2, `documents.int.test.ts`, with the in-memory storage fake): nothing
+  is shown before its file is checked; owners see documents for owners, tenants only those for
+  residents and everyone, guards those for staff and everyone, managers all; another unit's
+  documents are 404, as is a download of an owners' document by a tenant; managers see every
+  version and readers the newest; a file that is not a PDF is rejected and deleted; guards cannot
+  archive; archived documents disappear and take no new versions.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

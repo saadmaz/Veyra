@@ -67,6 +67,9 @@ export const ROLES = {
       'property.staff.work',
       'property.announcement.read',
       'property.announcement.manage',
+      'property.document.read',
+      'property.document.manage',
+      'unit.document.read',
       'organisation.vendor.read',
       'organisation.vendor.manage',
     ],
@@ -103,6 +106,9 @@ export const ROLES = {
       'property.staff.work',
       'property.announcement.read',
       'property.announcement.manage',
+      'property.document.read',
+      'property.document.manage',
+      'unit.document.read',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -112,6 +118,7 @@ export const ROLES = {
     // where (to arrange access), not finance or visitors.
     permissions: [
       'property.profile.read',
+      'property.document.read',
       'property.structure.read',
       'property.resident.read',
       'unit.profile.read',
@@ -135,6 +142,7 @@ export const ROLES = {
       'property.structure.read',
       'property.maintenance.work',
       'property.staff.work',
+      'property.document.read',
     ],
   },
   SECURITY_SUPERVISOR: {
@@ -143,6 +151,7 @@ export const ROLES = {
     // Runs the gate team: operates the gate, reads the visit log, revokes invitations.
     permissions: [
       'property.profile.read',
+      'property.document.read',
       'property.structure.read',
       'property.visitor.check_in',
       'property.visitor.read',
@@ -164,6 +173,8 @@ export const ROLES = {
       'property.structure.read',
       'property.visitor.check_in',
       'property.staff.work',
+      // Staff documents, e.g. gate procedures (Phase 10).
+      'property.document.read',
     ],
   },
   FINANCE_OFFICER: {
@@ -174,6 +185,7 @@ export const ROLES = {
     permissions: [
       'organisation.profile.read',
       'property.profile.read',
+      'property.document.read',
       'property.structure.read',
       'unit.profile.read',
       'property.finance.read',
@@ -198,6 +210,7 @@ export const ROLES = {
       'unit.finance.read',
       'unit.finance.pay',
       'unit.maintenance.request',
+      'unit.document.read',
       'unit.facility.book',
     ],
   },
@@ -213,6 +226,7 @@ export const ROLES = {
       'unit.finance.read',
       'unit.finance.pay',
       'unit.maintenance.request',
+      'unit.document.read',
       'unit.facility.book',
     ],
   },
@@ -223,7 +237,12 @@ export const ROLES = {
     // Household members may register visitors and raise maintenance requests (owner decisions,
     // 2026-11-11). Facility bookings only once delegated (owner decision, 2026-11-12); delegation
     // is not built yet, so they do not book.
-    permissions: ['unit.profile.read', 'unit.visitor.invite', 'unit.maintenance.request'],
+    permissions: [
+      'unit.profile.read',
+      'unit.visitor.invite',
+      'unit.maintenance.request',
+      'unit.document.read',
+    ],
   },
 } as const satisfies Record<string, RoleDefinition>;
 

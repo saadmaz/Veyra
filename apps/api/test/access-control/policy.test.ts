@@ -302,6 +302,7 @@ describe('unit scope and derived resident roles', () => {
   it('an owner covers their unit only, never a sibling unit, the property or the organisation', () => {
     const owner = [resident('OWNER', U1)];
     expect([...permissionsAt(owner, 'ACTIVE', unitIn(U1), now)].sort()).toEqual([
+      'unit.document.read',
       'unit.facility.book',
       'unit.finance.pay',
       'unit.finance.read',
@@ -325,6 +326,7 @@ describe('unit scope and derived resident roles', () => {
       now,
     );
     expect([...permissions].sort()).toEqual([
+      'unit.document.read',
       'unit.maintenance.request',
       'unit.profile.read',
       'unit.visitor.invite',
@@ -334,6 +336,7 @@ describe('unit scope and derived resident roles', () => {
   it('a security guard operates the gate of their property only, with no resident access', () => {
     const guard = [managerOf(P1, { role: 'SECURITY_GUARD' })];
     expect([...permissionsAt(guard, 'ACTIVE', property(P1), now)].sort()).toEqual([
+      'property.document.read',
       'property.profile.read',
       'property.staff.work',
       'property.structure.read',
@@ -384,6 +387,7 @@ describe('unit scope and derived resident roles', () => {
     );
     // Their statement stays readable; reporting a new transfer does not.
     expect([...permissions].sort()).toEqual([
+      'unit.document.read',
       'unit.finance.read',
       'unit.profile.read',
       'unit.residents.read',

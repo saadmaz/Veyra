@@ -67,6 +67,12 @@ export const PERMISSIONS = [
   'property.announcement.read',
   /** Draft, publish and withdraw the property's announcements. */
   'property.announcement.manage',
+  /** Read the property's documents meant for staff (managers: all of them). */
+  'property.document.read',
+  /** Add documents and versions, edit their details and archive them. */
+  'property.document.manage',
+  /** Read the documents meant for a unit's residents (owners also those for owners). */
+  'unit.document.read',
   /** See the property's departments, shifts and handover notes. */
   'property.staff.read',
   /** Keep departments and their members; schedule, move and cancel shifts. */

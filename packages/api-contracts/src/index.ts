@@ -1953,3 +1953,64 @@ export interface NotificationDeliveryDto {
   title: string;
   recipient: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Documents (Phase 10 Part 3)
+// ---------------------------------------------------------------------------------------------
+
+export type DocumentCategory =
+  | 'RULES'
+  | 'MINUTES'
+  | 'NOTICE'
+  | 'FORM'
+  | 'FINANCIAL'
+  | 'CONTRACT'
+  | 'INSURANCE'
+  | 'OTHER';
+export type DocumentAudience = 'EVERYONE' | 'RESIDENTS' | 'OWNERS' | 'STAFF';
+
+export interface DocumentDto {
+  id: string;
+  title: string;
+  description: string | null;
+  category: DocumentCategory;
+  audience: DocumentAudience;
+  expiresOn: string | null;
+  expiry: 'NONE' | 'VALID' | 'EXPIRING_SOON' | 'EXPIRED';
+  status: 'ACTIVE' | 'ARCHIVED';
+  archivedAt: string | null;
+  createdAt: string;
+  /** The newest checked version; null until one is ready. */
+  current: {
+    id: string;
+    versionNumber: number;
+    fileName: string;
+    contentType: AttachmentContentType;
+    sizeBytes: number;
+    readyAt: string;
+  } | null;
+}
+
+export interface DocumentVersionDto {
+  id: string;
+  versionNumber: number;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  note: string | null;
+  status: 'PENDING' | 'READY' | 'REJECTED';
+  uploadedBy: string;
+  createdAt: string;
+}
+
+export interface DocumentDetailDto {
+  document: DocumentDto;
+  /** Managers only: every version, newest first. */
+  versions: DocumentVersionDto[];
+}
+
+/** PUT the file to `upload.url` with its headers, then call the version's complete route. */
+export interface DocumentUploadDto extends DocumentDetailDto {
+  versionId: string;
+  upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
+}
