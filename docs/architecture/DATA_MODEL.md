@@ -346,6 +346,20 @@ Compliance (computed by the API, not stored): `EXPIRED` when a document not void
 expiry, `EXPIRING_SOON` when one expires within 30 days (organisation time zone), `NO_DOCUMENTS`
 without any, else `OK`. Both tables have RLS by organisation and no DELETE grant.
 
+**Assets and preventive maintenance** (migration `20261120090000_assets`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `assets` | tag (unique per property, upper-case), name, category (trade), unit **or** common area, manufacturer?, model?, serial_number?, installed_on?, warranty_expires_on?, supplier vendor?, notes?, status (`ACTIVE`/`OUT_OF_SERVICE`/`RETIRED`), status_note?, retired_at? | Exactly one ACTIVE place; may move to another. Start ACTIVE; out of service and retired need a note. Retired only with no active schedule and no open work order; retired is final. The supplier is never an archived vendor. |
+| `maintenance_schedules` | asset, title, description?, priority, interval (`DAY`/`WEEK`/`MONTH` x 1-366), next_due_on (property-local), lead_days (0-90), vendor?, active | Never moved to another asset; not active on a retired asset; vendor not archived. |
+| `work_orders.asset_id`, `schedule_id`, `scheduled_for` | the asset worked on; the schedule and due date that raised it | Work on an asset is at the asset's place, never on a retired asset; scheduled work is on the schedule's asset with its date; **one work order per schedule and date** (unique key); these links never change. |
+
+Raising due work (API): each active schedule within its lead time (or late) on an asset in use
+raises one work order (title, priority and the asset's trade and place; to the schedule's vendor
+when active, else open; due at the end of the due date), then the next date moves on by the
+interval past today (missed periods are skipped). Assets out of service are skipped. Both tables
+have RLS by organisation and no DELETE grant.
+
 ## 10. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)

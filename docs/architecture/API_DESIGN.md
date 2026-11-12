@@ -367,6 +367,17 @@ vendors` lists active vendors with their compliance; `POST work-orders/{id}/vend
 `{ vendorId: null }` takes the vendor off it (back to open when nobody is left and it has not
 started). Work orders show `vendor`; unassigning clears technician and vendor.
 
+## Assets and preventive maintenance (Phase 9)
+
+Under the property's `maintenance/` (`property.maintenance.read` to read, `.manage` for the rest):
+`GET assets?status=` and `POST assets` (tag upper-cased, 409 `TAG_TAKEN`), `GET` and `PATCH
+assets/{id}` (with schedules and service history), `POST assets/{id}/out-of-service` (reason),
+`back-in-service`, `retire` (reason; 409 while schedules are active or work is open), `POST
+assets/{id}/schedules`, `GET schedules` (active, soonest first, with `due`), `PATCH
+schedules/{id}` (change, pause with `active: false`, resume) and `POST schedules/raise-due`, which
+returns what it raised and skipped and is safe to repeat. A daily worker job calling the same
+logic is a follow-up; until then managers raise due work from the console.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

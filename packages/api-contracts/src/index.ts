@@ -1692,3 +1692,84 @@ export interface MaintenanceVendorDto {
   categories: MaintenanceCategory[];
   compliance: VendorCompliance;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Assets and preventive maintenance (Phase 9 Part 2)
+// ---------------------------------------------------------------------------------------------
+
+export type AssetStatus = 'ACTIVE' | 'OUT_OF_SERVICE' | 'RETIRED';
+
+export interface AssetDto {
+  id: string;
+  /** Unique within the property, e.g. "LIFT-01". */
+  tag: string;
+  name: string;
+  category: MaintenanceCategory;
+  unitId: string | null;
+  unitNumber: string | null;
+  commonAreaId: string | null;
+  commonAreaName: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  installedOn: string | null;
+  warrantyExpiresOn: string | null;
+  underWarranty: boolean;
+  supplier: { id: string; name: string } | null;
+  notes: string | null;
+  status: AssetStatus;
+  /** Why it is out of service or retired. */
+  statusNote: string | null;
+  retiredAt: string | null;
+  createdAt: string;
+}
+
+export interface MaintenanceScheduleDto {
+  id: string;
+  assetId: string;
+  title: string;
+  description: string | null;
+  priority: MaintenancePriority;
+  intervalUnit: 'DAY' | 'WEEK' | 'MONTH';
+  intervalCount: number;
+  /** Property-local date the next work is due. */
+  nextDueOn: string;
+  /** Work is raised this many days before. */
+  leadDays: number;
+  vendor: { id: string; name: string } | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface AssetWorkDto {
+  id: string;
+  number: string;
+  title: string;
+  status: WorkOrderStatus;
+  /** The due date of preventive work. */
+  scheduledFor: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface AssetDetailDto {
+  asset: AssetDto;
+  schedules: MaintenanceScheduleDto[];
+  /** Work orders on the asset, newest first (at most 100). */
+  history: AssetWorkDto[];
+}
+
+export interface ScheduleOverviewDto {
+  today: string;
+  data: {
+    schedule: MaintenanceScheduleDto;
+    asset: { id: string; tag: string; name: string } | null;
+    /** Within its lead time or late: raising due work creates it. */
+    due: boolean;
+  }[];
+}
+
+export interface RaiseDueWorkResultDto {
+  raised: { workOrderId: string; number: string; assetTag: string; scheduledFor: string }[];
+  skipped: { scheduleId: string; reason: string }[];
+}
