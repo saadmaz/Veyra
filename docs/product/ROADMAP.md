@@ -30,7 +30,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 6     | Finance and billing                      | Done. Exit review: [PHASE_6_REVIEW](../reviews/PHASE_6_REVIEW.md) |
 | 7     | Maintenance and work orders              | Done. Exit review: [PHASE_7_REVIEW](../reviews/PHASE_7_REVIEW.md) |
 | 8     | Facilities and reservations              | Done. Exit review: [PHASE_8_REVIEW](../reviews/PHASE_8_REVIEW.md) |
-| 9     | Staff, vendors and assets                | |
+| 9     | Staff, vendors and assets                | Done. Exit review: [PHASE_9_REVIEW](../reviews/PHASE_9_REVIEW.md) |
 | 10    | Communications and documents             | |
 | 11    | Governance and incident management       | |
 | 12    | Analytics and integrations               | |
@@ -227,7 +227,7 @@ Decisions (2026-11-12, the recommended options; the owner asked to proceed with 
 | 3 | Staff operations: departments and members, shifts that never overlap for a person, started and ended by the worker with a handover note for the next shift | ✅ Done |
 | 4 | Checklists and inspections: templates, runs filled in by staff with evidence notes, verification by a supervisor | ✅ Done |
 | 5 | Console screens and browser journeys | ✅ Done (vendors, assets and preventive work, staff planning, my shifts and checklists) |
-| 6 | Phase 9 exit review | |
+| 6 | Phase 9 exit review | ✅ Done ([PHASE_9_REVIEW](../reviews/PHASE_9_REVIEW.md)) |
 
 ## Release gates
 
