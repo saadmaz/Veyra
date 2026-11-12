@@ -88,6 +88,10 @@ model User {
   notifications            Notification[]           @relation("NotificationUser")
   documentsCreated         Document[]               @relation("DocumentCreatedBy")
   documentVersionsUploaded DocumentVersion[]        @relation("DocumentVersionUploadedBy")
+  incidentsReported        Incident[]               @relation("IncidentReportedBy")
+  incidentUpdatesWritten   IncidentUpdate[]         @relation("IncidentUpdateActor")
+  incidentActionsAssigned  IncidentAction[]         @relation("IncidentActionAssignee")
+  incidentActionsDone      IncidentAction[]         @relation("IncidentActionDoneBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided     WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -414,6 +418,10 @@ model Property {
   announcementRecipients AnnouncementRecipient[]
   documents              Document[]
   documentVersions       DocumentVersion[]
+  incidents              Incident[]
+  incidentUpdates        IncidentUpdate[]
+  incidentActions        IncidentAction[]
+  escalationContacts     EscalationContact[]
   facilityOpeningHours   FacilityOpeningHours[]
   facilityClosures       FacilityClosure[]
   facilityBookings       FacilityBooking[]
@@ -514,6 +522,7 @@ model Unit {
   maintenanceRequests MaintenanceRequest[]
   workOrders          WorkOrder[]
   facilityBookings    FacilityBooking[]
+  incidents           Incident[]
   assets              Asset[]
 
   @@unique([organisationId, propertyId, id])
@@ -542,6 +551,7 @@ model CommonArea {
   workOrders          WorkOrder[]
   facility            Facility?
   assets              Asset[]
+  incidents           Incident[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, name])
@@ -2858,4 +2868,154 @@ model DocumentVersion {
   @@unique([documentId, versionNumber])
   @@index([organisationId, documentId])
   @@map("document_versions")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Incidents (Phase 11 Part 1). Something that happened at a property (a break-in, a fire alarm, a
+// flood) recorded by staff: what, how serious, when and where; an append-only timeline of the
+// response; follow-up actions that must be done before the incident is closed; sensitive records
+// seen only by managers. Escalation contacts say whom to call for which kind of incident. VEYRA
+// does not replace emergency services. Rules are hand-written in migration 20261126090000_incidents.
+// ---------------------------------------------------------------------------------------------
+
+enum IncidentCategory {
+  SECURITY
+  FIRE
+  MEDICAL
+  FLOOD
+  POWER
+  LIFT
+  GAS
+  NOISE
+  DAMAGE
+  OTHER
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  RESPONDING
+  /// The situation is over; outcome recorded. Follow-up actions may still be open.
+  RESOLVED
+  /// Every follow-up action done. Final.
+  CLOSED
+}
+
+enum IncidentUpdateKind {
+  /// Written by the database on every status change.
+  STATUS_CHANGED
+  NOTE
+}
+
+model Incident {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  organisationId   String           @map("organisation_id") @db.Uuid
+  propertyId       String           @map("property_id") @db.Uuid
+  /// Sequential per property (IN-000042), set by the database.
+  incidentNumber   BigInt?          @map("incident_number")
+  category         IncidentCategory
+  severity         IncidentSeverity
+  title            String
+  description      String
+  occurredAt       DateTime         @map("occurred_at") @db.Timestamptz(3)
+  /// At most one place; a free-text detail may add to it or stand alone.
+  unitId           String?          @map("unit_id") @db.Uuid
+  commonAreaId     String?          @map("common_area_id") @db.Uuid
+  locationDetail   String?          @map("location_detail")
+  /// Seen only by people who manage incidents (and the reporter).
+  sensitive        Boolean          @default(false)
+  status           IncidentStatus   @default(OPEN)
+  /// What happened in the end; required to resolve.
+  outcome          String?
+  reportedByUserId String           @map("reported_by_user_id") @db.Uuid
+  resolvedAt       DateTime?        @map("resolved_at") @db.Timestamptz(3)
+  closedAt         DateTime?        @map("closed_at") @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property         @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit       Unit?            @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea CommonArea?      @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reportedBy User             @relation("IncidentReportedBy", fields: [reportedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updates    IncidentUpdate[]
+  actions    IncidentAction[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, incidentNumber])
+  @@index([organisationId, propertyId, status, occurredAt])
+  @@map("incidents")
+}
+
+/// The incident's timeline. Append-only.
+model IncidentUpdate {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  sequence       BigInt             @unique @default(autoincrement())
+  organisationId String             @map("organisation_id") @db.Uuid
+  propertyId     String             @map("property_id") @db.Uuid
+  incidentId     String             @map("incident_id") @db.Uuid
+  kind           IncidentUpdateKind
+  fromStatus     IncidentStatus?    @map("from_status")
+  toStatus       IncidentStatus?    @map("to_status")
+  body           String?
+  actorUserId    String?            @map("actor_user_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  incident Incident @relation(fields: [organisationId, propertyId, incidentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor    User?    @relation("IncidentUpdateActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, incidentId, sequence])
+  @@map("incident_updates")
+}
+
+/// A follow-up after an incident (fix the gate, review the CCTV). Done once.
+model IncidentAction {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  organisationId   String    @map("organisation_id") @db.Uuid
+  propertyId       String    @map("property_id") @db.Uuid
+  incidentId       String    @map("incident_id") @db.Uuid
+  description      String
+  assignedToUserId String?   @map("assigned_to_user_id") @db.Uuid
+  dueOn            DateTime? @map("due_on") @db.Date
+  doneAt           DateTime? @map("done_at") @db.Timestamptz(3)
+  doneByUserId     String?   @map("done_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property   Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  incident   Incident @relation(fields: [organisationId, propertyId, incidentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignedTo User?    @relation("IncidentActionAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  doneBy     User?    @relation("IncidentActionDoneBy", fields: [doneByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, incidentId])
+  @@map("incident_actions")
+}
+
+/// Whom to call for which kinds of incident, in order.
+model EscalationContact {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  organisationId String             @map("organisation_id") @db.Uuid
+  propertyId     String             @map("property_id") @db.Uuid
+  name           String
+  /// e.g. "Fire brigade", "Building engineer on call".
+  role           String
+  phone          String
+  email          String?
+  /// The kinds of incident they are for; empty means all.
+  categories     IncidentCategory[]
+  /// Lower is called first.
+  position       Int                @default(0)
+  active         Boolean            @default(true)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, propertyId, active])
+  @@map("escalation_contacts")
 }

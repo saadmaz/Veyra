@@ -2014,3 +2014,88 @@ export interface DocumentUploadDto extends DocumentDetailDto {
   versionId: string;
   upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Incidents (Phase 11 Part 1)
+// ---------------------------------------------------------------------------------------------
+
+export type IncidentCategory =
+  | 'SECURITY'
+  | 'FIRE'
+  | 'MEDICAL'
+  | 'FLOOD'
+  | 'POWER'
+  | 'LIFT'
+  | 'GAS'
+  | 'NOISE'
+  | 'DAMAGE'
+  | 'OTHER';
+export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type IncidentStatus = 'OPEN' | 'RESPONDING' | 'RESOLVED' | 'CLOSED';
+
+export interface IncidentDto {
+  id: string;
+  /** e.g. IN-000042, per property. */
+  reference: string;
+  category: IncidentCategory;
+  severity: IncidentSeverity;
+  title: string;
+  description: string;
+  occurredAt: string;
+  unit: { id: string; number: string } | null;
+  commonArea: { id: string; name: string } | null;
+  locationDetail: string | null;
+  sensitive: boolean;
+  status: IncidentStatus;
+  outcome: string | null;
+  reportedBy: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  openActions: number;
+}
+
+export interface IncidentUpdateDto {
+  id: string;
+  kind: 'STATUS_CHANGED' | 'NOTE';
+  fromStatus: IncidentStatus | null;
+  toStatus: IncidentStatus | null;
+  body: string | null;
+  actor: string | null;
+  createdAt: string;
+}
+
+export interface IncidentActionDto {
+  id: string;
+  description: string;
+  assignedTo: { userId: string; name: string } | null;
+  dueOn: string | null;
+  doneAt: string | null;
+  doneBy: string | null;
+  createdAt: string;
+}
+
+export interface EscalationContactDto {
+  id: string;
+  name: string;
+  role: string;
+  phone: string;
+  email: string | null;
+  /** Empty: every kind of incident. */
+  categories: IncidentCategory[];
+  position: number;
+  active: boolean;
+}
+
+export interface IncidentDetailDto {
+  incident: IncidentDto;
+  updates: IncidentUpdateDto[];
+  actions: IncidentActionDto[];
+  /** Whom to call for this kind of incident, in order. */
+  contacts: EscalationContactDto[];
+}
+
+export interface IncidentAssigneeDto {
+  userId: string;
+  name: string;
+}

@@ -12,6 +12,7 @@ import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AuthGuard } from './modules/identity/presentation/auth.guard';
+import { IncidentsModule } from './modules/incidents/incidents.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { OrganisationsModule } from './modules/organisations/organisations.module';
 import { PropertiesModule } from './modules/properties/properties.module';
@@ -47,6 +48,7 @@ export class AppModule implements NestModule {
         VendorsModule,
         StaffModule,
         CommunicationsModule,
+        IncidentsModule,
       ],
       controllers: [HealthController],
       providers: [

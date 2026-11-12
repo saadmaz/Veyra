@@ -791,6 +791,23 @@ expiry, rehash on sign-in, idempotent sign-out).
   the manager sees it reached, read and acknowledged by one person. The tenant opens Documents from
   their home and sees the document for everyone but not the owners' one. axe WCAG 2.2 AA.
 
+## Phase 11 tests
+
+### Part 1: incidents
+
+- `packages/db` integration (5, `incidents.int.test.ts`): numbering per property, open at start,
+  never in the future, the report never changes; the status machine, outcome to resolve, reopen,
+  every action done to close, closed is final, the timeline written by the database in order; no
+  notes on closed incidents, status rows only from the trigger, no edits; isolation and no
+  deletes; escalation contact checks.
+- `apps/api` unit (5, `test/incidents/incident-rules.test.ts`): moves, visibility of sensitive
+  incidents, alerting severities, contacts per kind, input checks.
+- `apps/api` integration (4, `incidents.int.test.ts`): a guard's critical report alerts the
+  manager and not the reporter, future times refused; sensitive incidents hidden (404) from other
+  staff and outsiders; only managers change status, resolve with an outcome, close only when the
+  technician given the follow-up has done it (others cannot mark it), notes refused once closed,
+  open vs all lists; escalation contacts managed by managers, filtered by kind and retired.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

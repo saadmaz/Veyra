@@ -97,6 +97,8 @@ describe('maintenance roles', () => {
   it('technicians only work, with no resident data or request queue', () => {
     expect([...ROLES.TECHNICIAN.permissions].sort()).toEqual([
       'property.document.read',
+      'property.incident.read',
+      'property.incident.report',
       'property.maintenance.work',
       'property.profile.read',
       'property.staff.work',

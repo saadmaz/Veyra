@@ -73,6 +73,12 @@ export const PERMISSIONS = [
   'property.document.manage',
   /** Read the documents meant for a unit's residents (owners also those for owners). */
   'unit.document.read',
+  /** See the property's incidents (sensitive ones only if you reported them) and whom to call. */
+  'property.incident.read',
+  /** Report incidents and add notes to the ones you can see. */
+  'property.incident.report',
+  /** Run the response: statuses, follow-up actions, sensitive records, escalation contacts. */
+  'property.incident.manage',
   /** See the property's departments, shifts and handover notes. */
   'property.staff.read',
   /** Keep departments and their members; schedule, move and cancel shifts. */
