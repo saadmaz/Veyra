@@ -823,6 +823,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   change, guards see nothing; cancelling, no early holding, dissolving only without scheduled
   meetings.
 
+### Part 3: approval policies
+
+- `packages/db` integration (5, `approvals.int.test.ts`): requests numbered per property, in its
+  currency, never changed, settled only by decisions; approved at the required number, never
+  decided by the requester or for someone else, once per person; rejected at the first rejection
+  with a reason; withdrawn only by the requester; one active policy per threshold, committees only
+  for committee approval and not dissolved; decisions never change; isolation and no deletes.
+- `apps/api` unit (3, `test/governance/approval-rules.test.ts`): choosing the policy by type and
+  threshold, committee shape, rejection reasons and amounts.
+- `apps/api` integration (3, `approvals.int.test.ts`): one manager approves without a policy and
+  both sides are notified; a policy sends large expenses to the committee needing two
+  approvals (managers refused, one decision per person, amounts in the property's decimals);
+  rejection with a reason, withdrawal only by the requester, pending vs all lists.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

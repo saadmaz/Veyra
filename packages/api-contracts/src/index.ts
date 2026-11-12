@@ -2163,3 +2163,51 @@ export interface CommitteeCandidateDto {
   userId: string;
   name: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Approvals (Phase 11 Part 3). Amounts sent by clients are decimal strings in the property's
+// currency.
+// ---------------------------------------------------------------------------------------------
+
+export type ApprovalRequestType = 'EXPENSE' | 'PURCHASE' | 'POLICY' | 'ACCESS' | 'OTHER';
+export type ApproverGroup = 'MANAGERS' | 'COMMITTEE';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
+
+export interface ApprovalPolicyDto {
+  id: string;
+  requestType: ApprovalRequestType;
+  /** Applies from this amount up. */
+  minAmount: MoneyDto;
+  requiredApprovals: number;
+  approvers: ApproverGroup;
+  committee: { id: string; name: string } | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface ApprovalRequestDto {
+  id: string;
+  /** e.g. AR-000042, per property. */
+  reference: string;
+  requestType: ApprovalRequestType;
+  title: string;
+  description: string;
+  amount: MoneyDto | null;
+  document: { id: string; title: string } | null;
+  requiredApprovals: number;
+  approvers: ApproverGroup;
+  committee: { id: string; name: string } | null;
+  status: ApprovalStatus;
+  requestedBy: { userId: string; name: string };
+  decidedAt: string | null;
+  createdAt: string;
+  approvals: number;
+  decisions: {
+    name: string;
+    decision: 'APPROVE' | 'REJECT';
+    note: string | null;
+    createdAt: string;
+  }[];
+  /** Whether the caller may decide it now. */
+  canDecide: boolean;
+}
