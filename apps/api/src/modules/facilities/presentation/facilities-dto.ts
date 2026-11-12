@@ -15,7 +15,12 @@ import type {
 } from '../application/facility-ports';
 import { formatBookingNumber, residentMayCancel, timeOf } from '../domain/facility-rules';
 
-export const toFacility = (f: FacilityRecord, timeZone: string): FacilityDto => ({
+const money = (amountMinor: bigint, currency: string) => ({
+  amountMinor: amountMinor.toString(),
+  currency,
+});
+
+export const toFacility = (f: FacilityRecord, timeZone: string, currency: string): FacilityDto => ({
   id: f.id,
   commonAreaId: f.commonAreaId,
   name: f.name,
@@ -32,6 +37,14 @@ export const toFacility = (f: FacilityRecord, timeZone: string): FacilityDto => 
   cancellationMinutes: f.cancellationMinutes,
   openingHours: f.openingHours,
   timeZone,
+  fee:
+    f.feeChargeTypeId && f.feePerSlotMinor !== null
+      ? { chargeTypeId: f.feeChargeTypeId, perSlot: money(f.feePerSlotMinor, currency) }
+      : null,
+  deposit:
+    f.depositChargeTypeId && f.depositMinor !== null
+      ? { chargeTypeId: f.depositChargeTypeId, amount: money(f.depositMinor, currency) }
+      : null,
 });
 
 export const toClosure = (c: ClosureRecord): FacilityClosureDto => ({
@@ -47,8 +60,9 @@ export const toFacilityDetail = (d: {
   facility: FacilityRecord;
   closures: ClosureRecord[];
   timeZone: string;
+  currency: string;
 }): FacilityDetailDto => ({
-  facility: toFacility(d.facility, d.timeZone),
+  facility: toFacility(d.facility, d.timeZone, d.currency),
   closures: d.closures.map(toClosure),
 });
 
@@ -88,6 +102,10 @@ export const toBooking = (b: BookingRecord, now = new Date()): FacilityBookingDt
   decidedAt: b.decidedAt?.toISOString() ?? null,
   cancelledAt: b.cancelledAt?.toISOString() ?? null,
   createdAt: b.createdAt.toISOString(),
+  fee: money(b.feeMinor, b.currency),
+  deposit: money(b.depositMinor, b.currency),
+  invoiceId: b.invoiceId,
+  depositReleasedAt: b.depositReleasedAt?.toISOString() ?? null,
   cancellable:
     (b.status === 'PENDING' || b.status === 'CONFIRMED') &&
     residentMayCancel(b.startsAt, b.cancellationMinutes, now),

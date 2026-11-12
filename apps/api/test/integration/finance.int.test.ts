@@ -245,15 +245,19 @@ describe('access', () => {
       'GATEWAY_CLEARING',
       'RECEIVABLES',
       'UNIT_CREDIT',
+      'DEPOSITS_HELD',
       'OPENING_BALANCE',
       'SERVICE_CHARGE_INCOME',
       'UTILITY_INCOME',
+      'FACILITY_INCOME',
       'OTHER_INCOME',
       'BAD_DEBT',
     ]);
     const second = await as(finance).post(fUrl('setup')).expect(200);
-    expect(second.body.accounts).toHaveLength(10);
+    expect(second.body.accounts).toHaveLength(12);
     expect(second.body.chargeTypes.map((c: { code: string }) => c.code)).toEqual([
+      'DEPOSIT',
+      'FACILITY',
       'SERVICE',
       'UTILITIES',
     ]);

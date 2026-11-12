@@ -1158,7 +1158,7 @@ model ChargeType {
   code            String
   name            String
   liableParty     ChargeLiableParty @map("liable_party")
-  /// An INCOME account of the same property.
+  /// An INCOME account of the same property, or a LIABILITY for money held (facility deposits).
   incomeAccountId String            @map("income_account_id") @db.Uuid
   status          ChargeTypeStatus  @default(ACTIVE)
   archivedAt      DateTime?         @map("archived_at") @db.Timestamptz(3)
@@ -1169,6 +1169,8 @@ model ChargeType {
   incomeAccount    LedgerAccount     @relation(fields: [organisationId, propertyId, incomeAccountId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   recurringCharges RecurringCharge[]
   invoiceLines     InvoiceLine[]
+  facilityFees     Facility[]        @relation("FacilityFeeChargeType")
+  facilityDeposits Facility[]        @relation("FacilityDepositChargeType")
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, code])
@@ -1249,6 +1251,8 @@ model Invoice {
 
   credits   InvoiceCredit[]
   approvals FinanceApproval[]
+
+  facilityBooking FacilityBooking?
 
   @@unique([organisationId, propertyId, id])
   @@unique([organisationId, propertyId, id, unitId, billingMonth])
@@ -2038,15 +2042,23 @@ model Facility {
   maxUpcomingPerUnit  Int?           @map("max_upcoming_per_unit")
   /// Residents cannot cancel later than this before the start (staff can).
   cancellationMinutes Int            @default(0) @map("cancellation_minutes")
+  /// Charged per slot to the unit's account when a booking is confirmed (Part 3); both or neither.
+  feeChargeTypeId     String?        @map("fee_charge_type_id") @db.Uuid
+  feePerSlotMinor     BigInt?        @map("fee_per_slot_minor")
+  /// Charged once per booking with the fee; books to a liability (deposits held); both or neither.
+  depositChargeTypeId String?        @map("deposit_charge_type_id") @db.Uuid
+  depositMinor        BigInt?        @map("deposit_minor")
   archivedAt          DateTime?      @map("archived_at") @db.Timestamptz(3)
   createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property     Property               @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  commonArea   CommonArea             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  openingHours FacilityOpeningHours[]
-  closures     FacilityClosure[]
-  bookings     FacilityBooking[]
+  property          Property               @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea        CommonArea             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  feeChargeType     ChargeType?            @relation("FacilityFeeChargeType", fields: [organisationId, propertyId, feeChargeTypeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  depositChargeType ChargeType?            @relation("FacilityDepositChargeType", fields: [organisationId, propertyId, depositChargeTypeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  openingHours      FacilityOpeningHours[]
+  closures          FacilityClosure[]
+  bookings          FacilityBooking[]
 
   @@unique([organisationId, propertyId, commonAreaId])
   @@unique([organisationId, propertyId, id])
@@ -2102,32 +2114,40 @@ model FacilityClosure {
 /// A reservation of a facility for a unit. Where and when never change; the status moves only
 /// along the allowed transitions, each logged in facility_booking_events.
 model FacilityBooking {
-  id              String                @id @default(uuid(7)) @db.Uuid
-  organisationId  String                @map("organisation_id") @db.Uuid
-  propertyId      String                @map("property_id") @db.Uuid
-  facilityId      String                @map("facility_id") @db.Uuid
-  unitId          String                @map("unit_id") @db.Uuid
+  id                String                @id @default(uuid(7)) @db.Uuid
+  organisationId    String                @map("organisation_id") @db.Uuid
+  propertyId        String                @map("property_id") @db.Uuid
+  facilityId        String                @map("facility_id") @db.Uuid
+  unitId            String                @map("unit_id") @db.Uuid
   /// Sequential per property, assigned on insert (BK-000042).
-  bookingNumber   BigInt?               @map("booking_number")
-  startsAt        DateTime              @map("starts_at") @db.Timestamptz(3)
-  endsAt          DateTime              @map("ends_at") @db.Timestamptz(3)
+  bookingNumber     BigInt?               @map("booking_number")
+  startsAt          DateTime              @map("starts_at") @db.Timestamptz(3)
+  endsAt            DateTime              @map("ends_at") @db.Timestamptz(3)
   /// Whole slots booked; set by the database.
-  slotCount       Int                   @default(0) @map("slot_count")
+  slotCount         Int                   @default(0) @map("slot_count")
   /// Set by the database on insert: PENDING when the facility needs approval, else CONFIRMED.
-  status          FacilityBookingStatus @default(PENDING)
+  status            FacilityBookingStatus @default(PENDING)
   /// The reason given with the latest status change that needs one (reject, cancel once confirmed).
-  statusNote      String?               @map("status_note")
+  statusNote        String?               @map("status_note")
   /// What the booking is for, e.g. "Birthday party".
-  purpose         String?
-  bookedByUserId  String                @map("booked_by_user_id") @db.Uuid
+  purpose           String?
+  bookedByUserId    String                @map("booked_by_user_id") @db.Uuid
   /// Who approved or rejected a pending booking, and when.
-  decidedByUserId String?               @map("decided_by_user_id") @db.Uuid
-  decidedAt       DateTime?             @map("decided_at") @db.Timestamptz(3)
-  cancelledAt     DateTime?             @map("cancelled_at") @db.Timestamptz(3)
-  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  decidedByUserId   String?               @map("decided_by_user_id") @db.Uuid
+  decidedAt         DateTime?             @map("decided_at") @db.Timestamptz(3)
+  cancelledAt       DateTime?             @map("cancelled_at") @db.Timestamptz(3)
+  /// The fee (slots x the facility's fee per slot) and deposit when booked, minor units; set by the database.
+  feeMinor          BigInt                @default(0) @map("fee_minor")
+  depositMinor      BigInt                @default(0) @map("deposit_minor")
+  /// The invoice issued when the booking was confirmed (set once).
+  invoiceId         String?               @map("invoice_id") @db.Uuid
+  /// When the deposit was credited back (set once).
+  depositReleasedAt DateTime?             @map("deposit_released_at") @db.Timestamptz(3)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   property  Property               @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoice   Invoice?               @relation(fields: [organisationId, propertyId, invoiceId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   facility  Facility               @relation(fields: [organisationId, propertyId, facilityId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   unit      Unit                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   bookedBy  User                   @relation("FacilityBookingBookedBy", fields: [bookedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -2136,6 +2156,7 @@ model FacilityBooking {
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, bookingNumber])
+  @@unique([organisationId, propertyId, invoiceId])
   @@index([organisationId, facilityId, startsAt])
   @@index([organisationId, unitId, startsAt])
   @@map("facility_bookings")

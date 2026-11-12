@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { FinanceModule } from '../finance/finance.module';
 import { FacilitiesService } from './application/facilities.service';
 import { FACILITY_REPOSITORY } from './application/facility-ports';
 import { PrismaFacilityRepository } from './infrastructure/prisma-facility.repository';
@@ -12,7 +13,7 @@ import { UnitFacilitiesController } from './presentation/unit-facilities.control
  * facility tables.
  */
 @Module({
-  imports: [AccessControlModule],
+  imports: [AccessControlModule, FinanceModule],
   controllers: [FacilitiesController, UnitFacilitiesController],
   providers: [
     FacilitiesService,

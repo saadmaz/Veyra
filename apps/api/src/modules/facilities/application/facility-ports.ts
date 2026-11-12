@@ -1,4 +1,5 @@
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type { BookingStatus, FacilityStatus, OpeningRange } from '../domain/facility-rules';
 
 export interface FacilitySettings {
@@ -11,6 +12,10 @@ export interface FacilitySettings {
   maxSlotsPerBooking: number;
   maxUpcomingPerUnit: number | null;
   cancellationMinutes: number;
+  feeChargeTypeId: string | null;
+  feePerSlotMinor: bigint | null;
+  depositChargeTypeId: string | null;
+  depositMinor: bigint | null;
 }
 
 export interface FacilityRecord extends FacilitySettings {
@@ -52,6 +57,12 @@ export interface BookingRecord {
   createdAt: Date;
   /** The facility's cancellation window, for residents. */
   cancellationMinutes: number;
+  /** What the booking costs, in the property's currency (minor units); 0 when free. */
+  feeMinor: bigint;
+  depositMinor: bigint;
+  currency: string;
+  invoiceId: string | null;
+  depositReleasedAt: Date | null;
 }
 
 export interface BookingEventRecord {
@@ -93,7 +104,15 @@ export interface FacilityAuditEvent {
  * by organisation and property explicitly as well.
  */
 export interface FacilityUnitOfWork {
-  property(): Promise<{ timeZone: string; status: 'ONBOARDING' | 'ACTIVE' | 'ARCHIVED' }>;
+  property(): Promise<{
+    timeZone: string;
+    currency: string;
+    status: 'ONBOARDING' | 'ACTIVE' | 'ARCHIVED';
+  }>;
+  /** The open transaction, for work other modules do in the same commit (finance charges). */
+  transaction(): TransactionHandle;
+  /** An active charge type of the property and whether it books to income or a liability. */
+  chargeType(id: string): Promise<{ id: string; accountType: string; status: string } | null>;
   unit(id: string): Promise<{ id: string; status: 'ACTIVE' | 'ARCHIVED' } | null>;
   commonArea(id: string): Promise<{ id: string; status: 'ACTIVE' | 'ARCHIVED' } | null>;
 
@@ -130,6 +149,8 @@ export interface FacilityUnitOfWork {
     purpose: string | null;
   }): Promise<string>;
   setBookingStatus(id: string, status: BookingStatus, note: string | null): Promise<void>;
+  setBookingInvoice(id: string, invoiceId: string): Promise<void>;
+  markDepositReleased(id: string): Promise<void>;
   bookingEvents(id: string): Promise<BookingEventRecord[]>;
 
   audit(event: FacilityAuditEvent): Promise<void>;

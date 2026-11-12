@@ -643,6 +643,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   booking until lifted (once). Archiving needs nothing upcoming and hides the facility.
 - `apps/api` unit (access control): owners now hold `unit.facility.book`.
 
+### Part 3: fees and deposits
+
+- `packages/db` integration (+2 in `facilities.int.test.ts`): a fee only through an active
+  income charge type and a deposit only through a liability one, each with a positive amount; a
+  booking keeps the fee (slots x fee) and deposit it was made with whatever the client sends,
+  and they never change; only an issued invoice links to a booking; the deposit is not released
+  without an invoice; a finished booking still refuses status changes.
+- `apps/api` integration (+3 in `facilities.int.test.ts`): finance set-up provides FACILITY and
+  DEPOSIT charge types; wrong or half-given charges are 422; a confirmed booking is invoiced to
+  the tenants at once (two lines, total, outstanding) and cancelling credits all of it; with
+  approval nothing is charged until approved, then the owners of a unit without tenancy are
+  billed; the deposit is released only once the booking is used, once, by a credit note; a
+  rejected booking is never charged.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

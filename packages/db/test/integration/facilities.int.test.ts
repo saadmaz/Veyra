@@ -573,6 +573,114 @@ describe('history', () => {
   });
 });
 
+describe('fees and deposits', () => {
+  const money = {
+    income: randomUUID(),
+    held: randomUUID(),
+    feeType: randomUUID(),
+    depositType: randomUUID(),
+    area: randomUUID(),
+    facility: randomUUID(),
+  };
+
+  beforeAll(async () => {
+    await asManager(async (c) => {
+      for (const [id, code, type] of [
+        [money.income, '4200', 'INCOME'],
+        [money.held, '2200', 'LIABILITY'],
+      ] as const) {
+        await c.query(
+          `INSERT INTO ledger_accounts (id, organisation_id, property_id, code, name, type, updated_at)
+           VALUES ($1, $2, $3, $4, 'Account', $5, now())`,
+          [id, ids.org, ids.prop, code, type],
+        );
+      }
+      // A charge type may now book to a liability: money held, such as deposits.
+      for (const [id, code, account] of [
+        [money.feeType, 'FACILITY', money.income],
+        [money.depositType, 'DEPOSIT', money.held],
+      ] as const) {
+        await c.query(
+          `INSERT INTO charge_types (id, organisation_id, property_id, code, name, liable_party, income_account_id, updated_at)
+           VALUES ($1, $2, $3, $4, 'Charge', 'OCCUPANT', $5, now())`,
+          [id, ids.org, ids.prop, code, account],
+        );
+      }
+      await c.query(
+        `INSERT INTO common_areas (id, organisation_id, property_id, name, type, updated_at)
+         VALUES ($1, $2, $3, 'Squash', 'SPORTS_FACILITY', now())`,
+        [money.area, ids.org, ids.prop],
+      );
+    });
+  });
+
+  const setCharges = (
+    fee: string | null,
+    feeMinor: number | null,
+    dep: string | null,
+    depMinor: number | null,
+  ) =>
+    asManager((c) =>
+      c.query(
+        `UPDATE facilities SET fee_charge_type_id = $2, fee_per_slot_minor = $3, deposit_charge_type_id = $4,
+           deposit_minor = $5 WHERE id = $1`,
+        [money.facility, fee, feeMinor, dep, depMinor],
+      ),
+    );
+
+  it('charge a fee to income and a deposit to a liability, both with an amount', async () => {
+    await asManager(async (c) => {
+      await facility(c, { id: money.facility, area: money.area });
+      for (let day = 1; day <= 7; day++) await hours(c, money.facility, day, '00:00', '24:00');
+    });
+    await expect(setCharges(money.depositType, 500, null, null)).rejects.toThrow(/books to income/);
+    await expect(setCharges(null, null, money.feeType, 500)).rejects.toThrow(/to a liability/);
+    await expect(setCharges(money.feeType, null, null, null)).rejects.toThrow(/facilities_charges/);
+    await expect(setCharges(money.feeType, 0, null, null)).rejects.toThrow(/facilities_charges/);
+    await setCharges(money.feeType, 50_000, money.depositType, 200_000);
+  });
+
+  it('keep the fee and deposit a booking was made with', async () => {
+    const b = await inTenant(ids.org, async (c) => {
+      const id = randomUUID();
+      await c.query(
+        `INSERT INTO facility_bookings (id, organisation_id, property_id, facility_id, unit_id, starts_at, ends_at,
+           booked_by_user_id, fee_minor, deposit_minor, invoice_id, updated_at)
+         VALUES ($1, $2, $3, $4, $5, ${at(15, 600)}, ${at(15, 780)}, $6, 1, 1, NULL, now())`,
+        [id, ids.org, ids.prop, money.facility, ids.unit3, ids.resident],
+      );
+      const { rows } = await c.query(
+        `SELECT fee_minor, deposit_minor FROM facility_bookings WHERE id = $1`,
+        [id],
+      );
+      return { id, ...rows[0] };
+    });
+    // Three slots at 500.00 and one deposit of 2,000.00, whatever the client sent.
+    expect(b).toMatchObject({ fee_minor: '150000', deposit_minor: '200000' });
+    await setCharges(money.feeType, 90_000, money.depositType, 200_000);
+    await expect(
+      asManager((c) => c.query(`UPDATE facility_bookings SET fee_minor = 1 WHERE id = $1`, [b.id])),
+    ).rejects.toThrow(/never change/);
+
+    // Only an issued invoice of the unit links to it, once; the deposit is released only after.
+    await expect(
+      asManager((c) =>
+        c.query(`UPDATE facility_bookings SET invoice_id = $2 WHERE id = $1`, [b.id, randomUUID()]),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      asManager((c) =>
+        c.query(`UPDATE facility_bookings SET deposit_released_at = now() WHERE id = $1`, [b.id]),
+      ),
+    ).rejects.toThrow(/facility_bookings_money/);
+    // A finished booking refuses status changes but not a later deposit release (checked above).
+    await asManager((c) => setBooking(c, b.id, 'CANCELLED', 'Plans changed'));
+    await expect(asManager((c) => setBooking(c, b.id, 'CONFIRMED'))).rejects.toThrow(
+      /no longer changes/,
+    );
+  });
+});
+
 describe('isolation', () => {
   it('shows another organisation nothing and refuses its writes', async () => {
     const counts = await inTenant(ids.otherOrg, (c) =>

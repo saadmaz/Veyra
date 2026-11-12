@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { API_ENV, type ApiEnv } from '../../platform/config/env';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { BookingChargesService } from './application/booking-charges.service';
 import { ControlsService } from './application/controls.service';
 import { FinanceService } from './application/finance.service';
 import { FINANCE_REPOSITORY } from './application/finance-ports';
@@ -44,8 +45,10 @@ function paymentGateways(env: ApiEnv): ReadonlyMap<string, PaymentGateway> {
     PaymentsService,
     ControlsService,
     ResidentFinanceService,
+    BookingChargesService,
     { provide: FINANCE_REPOSITORY, useClass: PrismaFinanceRepository },
     { provide: PAYMENT_GATEWAYS, useFactory: paymentGateways, inject: [API_ENV] },
   ],
+  exports: [BookingChargesService],
 })
 export class FinanceModule {}

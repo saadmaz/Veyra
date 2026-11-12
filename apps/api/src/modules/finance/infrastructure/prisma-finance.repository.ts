@@ -10,6 +10,7 @@ import {
 } from '@veyra/db';
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import {
   type AccountingPeriodRecord,
   type AllocationRecord,
@@ -1580,6 +1581,17 @@ class PrismaFinanceUnitOfWork implements FinanceUnitOfWork {
 @Injectable()
 export class PrismaFinanceRepository implements FinanceRepository {
   constructor(@Inject(DB_CLIENT) private readonly db: DbClient) {}
+
+  within(
+    transaction: TransactionHandle,
+    organisationId: string,
+    propertyId: string,
+    userId: string,
+    meta: RequestMeta,
+  ): FinanceUnitOfWork {
+    const tx = transaction as unknown as DbTransaction;
+    return new PrismaFinanceUnitOfWork(tx, organisationId, propertyId, userId, meta);
+  }
 
   inProperty<T>(
     organisationId: string,

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import pg from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { AppModule } from '../../src/app.module';
@@ -535,5 +536,182 @@ describe('archiving', () => {
     await as(u.tenant)
       .get(unitUrl('U1', `facilities/${court}/availability?date=${localDate(2)}`))
       .expect(404);
+  });
+});
+
+describe('fees and deposits', () => {
+  const finUrl = (path: string) => `${pUrl()}/finance/${path}`;
+  let studio: string;
+  let types: Record<string, string>;
+
+  /** Test setup only: moves a booking into the past without the triggers, as the superuser. */
+  async function backdate(id: string) {
+    const su = new pg.Pool({ connectionString: inject('superuserDatabaseUrl'), max: 1 });
+    try {
+      const c = await su.connect();
+      try {
+        await c.query('BEGIN');
+        await c.query('SET LOCAL session_replication_role = replica');
+        await c.query(
+          `UPDATE facility_bookings SET starts_at = now() - interval '2 hours',
+                  ends_at = now() - interval '1 hour' WHERE id = $1`,
+          [id],
+        );
+        await c.query('COMMIT');
+      } finally {
+        c.release();
+      }
+    } finally {
+      await su.end();
+    }
+  }
+
+  const invoice = async (id: string) =>
+    (
+      await as(u.admin)
+        .get(finUrl(`invoices/${id}`))
+        .expect(200)
+    ).body;
+
+  beforeAll(async () => {
+    await as(u.admin).post(finUrl('setup')).expect(200);
+    const list = (await as(u.admin).get(finUrl('charge-types')).expect(200)).body.data as {
+      id: string;
+      code: string;
+    }[];
+    types = Object.fromEntries(list.map((t) => [t.code, t.id]));
+    expect(types.FACILITY && types.DEPOSIT).toBeTruthy();
+    const area = (
+      await as(u.admin)
+        .post(`${pUrl()}/common-areas`)
+        .send({ name: 'Studio', type: 'FUNCTION_ROOM' })
+        .expect(201)
+    ).body.id;
+    // A fee must book to income and a deposit to a liability.
+    await as(u.mgr)
+      .post(fUrl())
+      .send({
+        commonAreaId: area,
+        slotMinutes: 60,
+        depositChargeTypeId: types.FACILITY,
+        deposit: '2000.00',
+      })
+      .expect(422);
+    await as(u.mgr)
+      .post(fUrl())
+      .send({ commonAreaId: area, slotMinutes: 60, feeChargeTypeId: types.FACILITY })
+      .expect(422);
+    const created = await as(u.mgr)
+      .post(fUrl())
+      .send({
+        commonAreaId: area,
+        slotMinutes: 60,
+        maxSlotsPerBooking: 3,
+        feeChargeTypeId: types.FACILITY,
+        feePerSlot: '500.00',
+        depositChargeTypeId: types.DEPOSIT,
+        deposit: '2000.00',
+        openingHours: everyDay('08:00', '22:00'),
+      })
+      .expect(201);
+    studio = created.body.facility.id;
+    expect(created.body.facility.fee.perSlot).toEqual({ amountMinor: '50000', currency: 'PKR' });
+    expect(created.body.facility.deposit.amount).toEqual({
+      amountMinor: '200000',
+      currency: 'PKR',
+    });
+  });
+
+  it('invoice the unit when confirmed, and credit what is unpaid when cancelled', async () => {
+    const booked = (
+      await book(u.tenant, 'U1', {
+        facilityId: studio,
+        startsAt: at(11, '10:00'),
+        slots: 2,
+      }).expect(201)
+    ).body.booking;
+    expect(booked).toMatchObject({
+      status: 'CONFIRMED',
+      fee: { amountMinor: '100000', currency: 'PKR' },
+      deposit: { amountMinor: '200000', currency: 'PKR' },
+    });
+    expect(booked.invoiceId).toBeTruthy();
+    const issued = await invoice(booked.invoiceId);
+    expect(issued).toMatchObject({
+      status: 'ISSUED',
+      billTo: 'TENANTS',
+      total: { amountMinor: '300000' },
+      outstanding: { amountMinor: '300000' },
+    });
+    expect(issued.lines.map((l: { description: string }) => l.description)).toEqual([
+      `Studio booking ${booked.number} (2 slots)`,
+      `Studio deposit ${booked.number}`,
+    ]);
+
+    const cancelled = (
+      await as(u.tenant)
+        .post(unitUrl('U1', `facility-bookings/${booked.id}/cancel`))
+        .send({})
+        .expect(200)
+    ).body.booking;
+    expect(cancelled.depositReleasedAt).not.toBeNull();
+    const credited = await invoice(booked.invoiceId);
+    expect(credited.credited.amountMinor).toBe('300000');
+    expect(credited.outstanding.amountMinor).toBe('0');
+  });
+
+  it('wait for approval before charging, and release the deposit after use, once', async () => {
+    await as(u.mgr).patch(fUrl(studio)).send({ approvalRequired: true }).expect(200);
+    const pending = (
+      await book(u.neighbour, 'U2', { facilityId: studio, startsAt: at(12, '10:00') }).expect(201)
+    ).body.booking;
+    expect(pending).toMatchObject({ status: 'PENDING', invoiceId: null });
+    const approved = (
+      await as(u.mgr)
+        .post(bUrl(`${pending.id}/approve`))
+        .expect(200)
+    ).body.booking;
+    expect(approved.invoiceId).toBeTruthy();
+    // The unit has an owner and no tenancy: billed to the owners.
+    expect((await invoice(approved.invoiceId)).billTo).toBe('OWNERS');
+
+    await as(u.mgr)
+      .post(bUrl(`${pending.id}/release-deposit`))
+      .expect(409);
+    await backdate(pending.id);
+    await as(u.mgr)
+      .post(bUrl(`${pending.id}/complete`))
+      .expect(200);
+    await as(u.neighbour)
+      .post(`${pUrl()}/units/${units.U2}/facility-bookings/${pending.id}/cancel`)
+      .send({})
+      .expect(409);
+    const released = (
+      await as(u.mgr)
+        .post(bUrl(`${pending.id}/release-deposit`))
+        .expect(200)
+    ).body.booking;
+    expect(released.depositReleasedAt).not.toBeNull();
+    await as(u.mgr)
+      .post(bUrl(`${pending.id}/release-deposit`))
+      .expect(409);
+    const after = await invoice(approved.invoiceId);
+    expect(after.credited.amountMinor).toBe('200000');
+    expect(after.outstanding.amountMinor).toBe('50000');
+    await as(u.mgr).patch(fUrl(studio)).send({ approvalRequired: false }).expect(200);
+  });
+
+  it('rejecting a pending booking charges nothing', async () => {
+    await as(u.mgr).patch(fUrl(studio)).send({ approvalRequired: true }).expect(200);
+    const pending = (
+      await book(u.tenant, 'U1', { facilityId: studio, startsAt: at(13, '10:00') }).expect(201)
+    ).body.booking;
+    const rejected = (
+      await as(u.mgr)
+        .post(bUrl(`${pending.id}/reject`))
+        .send({ reason: 'Booked out' })
+        .expect(200)
+    ).body.booking;
+    expect(rejected).toMatchObject({ status: 'REJECTED', invoiceId: null });
   });
 });

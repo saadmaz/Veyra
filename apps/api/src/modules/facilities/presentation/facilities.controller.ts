@@ -69,8 +69,8 @@ export class FacilitiesController {
     @CurrentAccess() access: OrganisationAccess,
     @Req() req: Request,
   ): Promise<{ data: FacilityDto[] }> {
-    const { facilities, timeZone } = await this.facilities.list(access, requestMeta(req));
-    return { data: facilities.map((f) => toFacility(f, timeZone)) };
+    const { facilities, timeZone, currency } = await this.facilities.list(access, requestMeta(req));
+    return { data: facilities.map((f) => toFacility(f, timeZone, currency)) };
   }
 
   @Post(F)
@@ -260,6 +260,18 @@ export class FacilitiesController {
     @Req() req: Request,
   ): Promise<FacilityBookingDetailDto> {
     return this.decide(access, id, 'NO_SHOW', undefined, req);
+  }
+
+  @Post(`${B}/:bookingId/release-deposit`)
+  @HttpCode(200)
+  @RequirePermission('property.facility.manage')
+  @ApiOperation({ summary: 'Give the unpaid deposit back after the booking (a credit note).' })
+  async releaseDeposit(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('bookingId', uuid) id: string,
+    @Req() req: Request,
+  ): Promise<FacilityBookingDetailDto> {
+    return toBookingDetail(await this.facilities.releaseDeposit(access, id, requestMeta(req)));
   }
 
   private async decide(

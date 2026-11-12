@@ -101,8 +101,14 @@ export class FinanceService {
   createChargeType(access: OrganisationAccess, input: CreateChargeTypeInput, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) => {
       const account = (await uow.accounts()).find((a) => a.id === input.incomeAccountId);
-      if (account?.type !== 'INCOME' || account.status !== 'ACTIVE') {
-        throw invalid('Choose an active income account of this property');
+      // Income, or a liability for money held such as deposits (never the units' credit).
+      const bookable =
+        account?.type === 'INCOME' ||
+        (account?.type === 'LIABILITY' && account.systemKey !== 'UNIT_CREDIT');
+      if (!account || !bookable || account.status !== 'ACTIVE') {
+        throw invalid(
+          'Choose an active income account (or a liability for money held) of this property',
+        );
       }
       if (await uow.chargeTypeByCode(input.code)) {
         throw new ApiError(409, 'CODE_TAKEN', 'A charge type with this code already exists');
@@ -313,63 +319,89 @@ export class FinanceService {
   createInvoice(access: OrganisationAccess, input: CreateInvoiceInput, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) => {
       const property = await uow.property();
-      if (input.dueDate < property.today) throw invalid('The due date cannot be in the past');
-      const unit = await uow.unit(input.unitId);
-      if (!unit) throw notFound('Unit');
-      if (unit.status === 'ARCHIVED') throw new ApiError(409, 'ARCHIVED', 'This unit is archived');
-      const parties = (await uow.parties([unit.id], property.today)).get(unit.id) ?? {
-        owners: [],
-        tenancy: null,
-      };
-
-      let target: BillTo | null = null;
-      const lines: InvoiceDraftLine[] = [];
-      for (const line of input.lines) {
-        const chargeType = await uow.chargeType(line.chargeTypeId);
-        if (!chargeType) throw notFound('Charge type');
-        if (chargeType.status === 'ARCHIVED') {
-          throw new ApiError(409, 'ARCHIVED', `Charge type ${chargeType.code} is archived`);
-        }
-        const lineTarget = resolveBillTo(chargeType.liableParty, parties);
-        if (!lineTarget) {
-          throw new ApiError(
-            409,
-            'NO_ONE_TO_BILL',
-            'This unit has nobody to bill for these charges',
-          );
-        }
-        if (target && billToKey(target) !== billToKey(lineTarget)) {
-          throw invalid('These charges are billed to different people; create separate invoices');
-        }
-        target = lineTarget;
-        lines.push({
-          chargeTypeId: chargeType.id,
-          description: line.description ?? chargeType.name,
+      const id = await this.draftWithin(
+        uow,
+        property,
+        input.unitId,
+        input.lines.map((line) => ({
+          chargeTypeId: line.chargeTypeId,
+          description: line.description,
           amountMinor: parsePositiveAmount(line.amount, property.currency),
-          recurringChargeId: null,
-        });
-      }
-      if (!target) throw invalid('Add at least one line');
-
-      const id = await uow.createInvoice({
-        unitId: unit.id,
-        billTo: target.billTo,
-        tenancyId: target.tenancyId,
-        billingMonth: null,
-        billingDate: property.today,
-        dueDate: input.dueDate,
-        currency: property.currency,
-        lines,
-        recipients: recipientsOf(target),
-      });
-      await uow.audit({
-        action: 'invoice.created',
-        resourceType: 'invoice',
-        resourceId: id,
-        metadata: { unitId: unit.id, lines: lines.length },
-      });
+        })),
+        input.dueDate,
+      );
       return this.mustFind(uow, id);
     });
+  }
+
+  /**
+   * Drafts a one-off invoice inside a finance unit of work (also used for facility bookings):
+   * billed to the party the charge types name as of today, in the property's currency.
+   */
+  async draftWithin(
+    uow: FinanceUnitOfWork,
+    property: PropertyFinanceInfo,
+    unitId: string,
+    inputLines: readonly {
+      chargeTypeId: string;
+      description?: string | undefined;
+      amountMinor: bigint;
+    }[],
+    dueDate: IsoDate,
+  ): Promise<string> {
+    const input = { unitId, dueDate, lines: inputLines };
+    if (input.dueDate < property.today) throw invalid('The due date cannot be in the past');
+    const unit = await uow.unit(input.unitId);
+    if (!unit) throw notFound('Unit');
+    if (unit.status === 'ARCHIVED') throw new ApiError(409, 'ARCHIVED', 'This unit is archived');
+    const parties = (await uow.parties([unit.id], property.today)).get(unit.id) ?? {
+      owners: [],
+      tenancy: null,
+    };
+
+    let target: BillTo | null = null;
+    const lines: InvoiceDraftLine[] = [];
+    for (const line of input.lines) {
+      const chargeType = await uow.chargeType(line.chargeTypeId);
+      if (!chargeType) throw notFound('Charge type');
+      if (chargeType.status === 'ARCHIVED') {
+        throw new ApiError(409, 'ARCHIVED', `Charge type ${chargeType.code} is archived`);
+      }
+      const lineTarget = resolveBillTo(chargeType.liableParty, parties);
+      if (!lineTarget) {
+        throw new ApiError(409, 'NO_ONE_TO_BILL', 'This unit has nobody to bill for these charges');
+      }
+      if (target && billToKey(target) !== billToKey(lineTarget)) {
+        throw invalid('These charges are billed to different people; create separate invoices');
+      }
+      target = lineTarget;
+      lines.push({
+        chargeTypeId: chargeType.id,
+        description: line.description ?? chargeType.name,
+        amountMinor: line.amountMinor,
+        recurringChargeId: null,
+      });
+    }
+    if (!target) throw invalid('Add at least one line');
+
+    const id = await uow.createInvoice({
+      unitId: unit.id,
+      billTo: target.billTo,
+      tenancyId: target.tenancyId,
+      billingMonth: null,
+      billingDate: property.today,
+      dueDate: input.dueDate,
+      currency: property.currency,
+      lines,
+      recipients: recipientsOf(target),
+    });
+    await uow.audit({
+      action: 'invoice.created',
+      resourceType: 'invoice',
+      resourceId: id,
+      metadata: { unitId: unit.id, lines: lines.length },
+    });
+    return id;
   }
 
   invoices(access: OrganisationAccess, filter: InvoiceListQuery, meta: RequestMeta) {
@@ -419,7 +451,7 @@ export class FinanceService {
    * accounting period is opened if no period covers today; the entry debits the unit's receivables
    * with the total and credits each charge type's income account with its lines.
    */
-  private async issueWithin(
+  async issueWithin(
     uow: FinanceUnitOfWork,
     property: PropertyFinanceInfo,
     id: string,

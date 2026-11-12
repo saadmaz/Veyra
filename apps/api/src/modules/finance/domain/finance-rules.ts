@@ -31,6 +31,7 @@ export const DEFAULT_ACCOUNTS: readonly AccountDefinition[] = [
   { code: '1050', name: 'Payment gateway clearing', type: 'ASSET', systemKey: 'GATEWAY_CLEARING' },
   { code: '1100', name: 'Receivables from units', type: 'ASSET', systemKey: 'RECEIVABLES' },
   { code: '2100', name: 'Unit credit (overpayments)', type: 'LIABILITY', systemKey: 'UNIT_CREDIT' },
+  { code: '2200', name: 'Facility deposits held', type: 'LIABILITY', systemKey: 'DEPOSITS_HELD' },
   { code: '3000', name: 'Opening balances', type: 'EQUITY', systemKey: 'OPENING_BALANCE' },
   {
     code: '4000',
@@ -39,11 +40,12 @@ export const DEFAULT_ACCOUNTS: readonly AccountDefinition[] = [
     systemKey: 'SERVICE_CHARGE_INCOME',
   },
   { code: '4100', name: 'Utility income', type: 'INCOME', systemKey: 'UTILITY_INCOME' },
+  { code: '4200', name: 'Facility income', type: 'INCOME', systemKey: 'FACILITY_INCOME' },
   { code: '4900', name: 'Other income', type: 'INCOME', systemKey: 'OTHER_INCOME' },
   { code: '5100', name: 'Bad debts written off', type: 'EXPENSE', systemKey: 'BAD_DEBT' },
 ];
 
-/** The two charge types of the owner's decision: service charges to owners, utilities to occupants. */
+/** Service charges to owners and utilities to occupants (owner decision), and facility fees and deposits (Phase 8). */
 export const DEFAULT_CHARGE_TYPES: readonly {
   code: string;
   name: string;
@@ -61,6 +63,19 @@ export const DEFAULT_CHARGE_TYPES: readonly {
     name: 'Utilities',
     liableParty: 'OCCUPANT',
     incomeSystemKey: 'UTILITY_INCOME',
+  },
+  // Phase 8: facility fees to whoever lives there, deposits held as a liability until released.
+  {
+    code: 'FACILITY',
+    name: 'Facility booking',
+    liableParty: 'OCCUPANT',
+    incomeSystemKey: 'FACILITY_INCOME',
+  },
+  {
+    code: 'DEPOSIT',
+    name: 'Facility deposit',
+    liableParty: 'OCCUPANT',
+    incomeSystemKey: 'DEPOSITS_HELD',
   },
 ];
 
