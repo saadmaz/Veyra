@@ -62,6 +62,9 @@ export const ROLES = {
       'unit.facility.book',
       'property.facility.read',
       'property.facility.manage',
+      'property.staff.read',
+      'property.staff.manage',
+      'property.staff.work',
       'organisation.vendor.read',
       'organisation.vendor.manage',
     ],
@@ -93,6 +96,9 @@ export const ROLES = {
       'unit.facility.book',
       'property.facility.read',
       'property.facility.manage',
+      'property.staff.read',
+      'property.staff.manage',
+      'property.staff.work',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -110,6 +116,9 @@ export const ROLES = {
       'property.maintenance.read',
       'property.maintenance.manage',
       'property.maintenance.work',
+      'property.staff.read',
+      'property.staff.manage',
+      'property.staff.work',
     ],
   },
   TECHNICIAN: {
@@ -117,7 +126,12 @@ export const ROLES = {
     grantableAt: ['PROPERTY'],
     // Only the work assigned to them (ACCESS_CONTROL section 4: O). No resident data: a work
     // order shows the unit or common area and the problem, not who reported it.
-    permissions: ['property.profile.read', 'property.structure.read', 'property.maintenance.work'],
+    permissions: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.maintenance.work',
+      'property.staff.work',
+    ],
   },
   SECURITY_SUPERVISOR: {
     name: 'Security supervisor',
@@ -129,6 +143,9 @@ export const ROLES = {
       'property.visitor.check_in',
       'property.visitor.read',
       'property.visitor.manage',
+      'property.staff.read',
+      'property.staff.manage',
+      'property.staff.work',
       // Sees who has booked a facility, to let them in.
       'property.facility.read',
     ],
@@ -138,7 +155,12 @@ export const ROLES = {
     grantableAt: ['PROPERTY'],
     // Gate work only. Sees unit numbers and the visitor in front of them, never resident contact
     // details or the full visit log (PRD 3.3: the minimum necessary).
-    permissions: ['property.profile.read', 'property.structure.read', 'property.visitor.check_in'],
+    permissions: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.visitor.check_in',
+      'property.staff.work',
+    ],
   },
   FINANCE_OFFICER: {
     name: 'Finance officer',

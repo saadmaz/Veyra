@@ -139,6 +139,10 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   organisation-level: organisation admins hold both, finance officers read. Property staff never
   see the register; maintenance managers see active vendors to give work to through their
   property's maintenance routes.
+  For staff operations (Phase 9) `property.staff.read`, `property.staff.manage` (organisation
+  admins, property managers, maintenance managers and security supervisors) and
+  `property.staff.work` (those roles plus security guards and technicians): a worker sees only
+  their own shifts. Supervisors currently manage every department of their property.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

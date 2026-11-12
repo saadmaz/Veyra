@@ -1773,3 +1773,53 @@ export interface RaiseDueWorkResultDto {
   raised: { workOrderId: string; number: string; assetTag: string; scheduledFor: string }[];
   skipped: { scheduleId: string; reason: string }[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Staff operations (Phase 9 Part 3)
+// ---------------------------------------------------------------------------------------------
+
+export type ShiftStatus = 'SCHEDULED' | 'STARTED' | 'ENDED' | 'CANCELLED';
+
+export interface DepartmentDto {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'ARCHIVED';
+  archivedAt: string | null;
+  createdAt: string;
+  /** Current members. */
+  members: { userId: string; name: string; addedAt: string }[];
+}
+
+/** Someone who can work shifts at the property. */
+export interface StaffPersonDto {
+  userId: string;
+  name: string;
+}
+
+export interface ShiftDto {
+  id: string;
+  department: { id: string; name: string };
+  person: { userId: string; name: string };
+  startsAt: string;
+  endsAt: string;
+  status: ShiftStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  /** Written when it ended, for the next shift. */
+  handoverNote: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+}
+
+export interface MyShiftDetailDto {
+  shift: ShiftDto;
+  /** The last handover of the department before this shift. */
+  previousHandover: { note: string; by: string; endedAt: string } | null;
+}
+
+export interface CreateShiftRequest {
+  departmentId: string;
+  userId: string;
+  startsAt: string;
+  endsAt: string;
+}

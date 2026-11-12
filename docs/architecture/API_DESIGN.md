@@ -378,6 +378,22 @@ schedules/{id}` (change, pause with `active: false`, resume) and `POST schedules
 returns what it raised and skipped and is safe to repeat. A daily worker job calling the same
 logic is a follow-up; until then managers raise due work from the console.
 
+## Staff operations (Phase 9)
+
+Supervisors and managers, under the property's `staff/` (`property.staff.read` to read,
+`.manage` for the rest): `GET` and `POST departments` (409 `NAME_TAKEN`), `PATCH
+departments/{id}` (rename), `POST departments/{id}/archive` (409 `SHIFTS_IN_THE_WAY`), `GET
+people` (who can work shifts here), `POST departments/{id}/members` (422 unless they hold
+`property.staff.work` here), `POST departments/{id}/members/{userId}/remove`, `GET
+departments/{id}/handovers`, `GET shifts?from=&to=&departmentId=&userId=`, `POST shifts` (409
+`SHIFT_OVERLAP`), `PATCH shifts/{id}` (move before it starts) and `POST shifts/{id}/cancel`
+(reason).
+
+Staff, under the property's `my-shifts` (`property.staff.work`): `GET` (from a week ago), `GET
+{id}` with `previousHandover` (the department's last note before it), `POST {id}/start` (from an
+hour before until it is due to end, else 409 `NOT_YET`) and `POST {id}/end` with `{
+handoverNote }`. Other people's shifts are 404.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.
