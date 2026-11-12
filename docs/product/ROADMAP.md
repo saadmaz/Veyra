@@ -259,7 +259,7 @@ policies with thresholds. Voting waits for legal review (PRD 3.11).
 | 1 | Incidents: reports, timeline, follow-up actions, sensitive records, escalation contacts, manager alerts | ✅ Done |
 | 2 | Committees and meetings: members and terms, meetings, agendas, minutes, resolutions with supporting documents | ✅ Done (a Committee member role; managers keep the records; no voting in the application) |
 | 3 | Approval policies: thresholds and approvers for expenses, purchases and other requests | ✅ Done (managers or a committee's current members; finance's maker-checker approvals stay as they are) |
-| 4 | Console screens and browser journeys | |
+| 4 | Console screens and browser journeys | ✅ Done (incidents with timeline, follow-ups and contacts; committees, meetings, minutes and resolutions; approvals and policies) |
 | 5 | Phase 11 exit review | |
 
 ## Release gates

@@ -837,6 +837,18 @@ expiry, rehash on sign-in, idempotent sign-out).
   approvals (managers refused, one decision per person, amounts in the property's decimals);
   rejection with a reason, withdrawal only by the requester, pending vs all lists.
 
+### Part 4: governance console
+
+- `apps/console-web` unit (2, `test/governance.test.ts`): the incident moves offered (closing
+  only with every follow-up done) and approval progress wording.
+- Browser journeys (3, `e2e/governance.spec.ts`, desktop and phone, with an in-memory
+  `e2e/fake-governance.ts`): a guard reports a critical incident (managers alerted, whom to call
+  shown); the manager responds, is told an outcome is needed, resolves and closes it. The manager
+  schedules a committee meeting with an agenda, holds it, records a resolution, writes and
+  approves the minutes (then final); a committee member reads them without the controls. A
+  maintenance manager asks for approval of an amount; the manager approves it and it leaves the
+  waiting list. axe WCAG 2.2 AA.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

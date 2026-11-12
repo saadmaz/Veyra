@@ -22,6 +22,7 @@ import type {
 import { FakeComms } from './fake-comms';
 import { FakeFacilities } from './fake-facilities';
 import { FakeFinance } from './fake-finance';
+import { FakeGovernance } from './fake-governance';
 import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
 import { FakeOps } from './fake-ops';
 
@@ -78,6 +79,14 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'organisation.vendor.manage',
     ],
     property: [
+      'property.incident.read',
+      'property.incident.report',
+      'property.incident.manage',
+      'property.governance.read',
+      'property.governance.manage',
+      'property.approval.read',
+      'property.approval.request',
+      'property.approval.decide',
       'property.announcement.read',
       'property.announcement.manage',
       'property.document.read',
@@ -126,6 +135,14 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
   PROPERTY_MANAGER: {
     organisation: [],
     property: [
+      'property.incident.read',
+      'property.incident.report',
+      'property.incident.manage',
+      'property.governance.read',
+      'property.governance.manage',
+      'property.approval.read',
+      'property.approval.request',
+      'property.approval.decide',
       'property.announcement.read',
       'property.announcement.manage',
       'property.document.read',
@@ -156,6 +173,10 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
   MAINTENANCE_MANAGER: {
     organisation: [],
     property: [
+      'property.incident.read',
+      'property.incident.report',
+      'property.approval.read',
+      'property.approval.request',
       'property.profile.read',
       'property.structure.read',
       'property.resident.read',
@@ -184,9 +205,20 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.staff.work',
     ],
   },
+  COMMITTEE_MEMBER: {
+    organisation: [],
+    property: [
+      'property.profile.read',
+      'property.document.read',
+      'property.governance.read',
+      'property.approval.read',
+    ],
+  },
   SECURITY_GUARD: {
     organisation: [],
     property: [
+      'property.incident.read',
+      'property.incident.report',
       'property.profile.read',
       'property.structure.read',
       'property.visitor.check_in',
@@ -267,6 +299,7 @@ export class FakeApi {
   facilities = new FakeFacilities();
   ops = new FakeOps();
   comms = new FakeComms();
+  governance = new FakeGovernance();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -977,6 +1010,25 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    const governed = this.governance.handleProperty({
+      method,
+      sub,
+      body,
+      property,
+      user,
+      permissions: pp,
+      all: url.searchParams.get('status') === 'all',
+      holders: (permission) =>
+        this.users
+          .filter((u) =>
+            (this.propertyPermissions(organisation.id, property.id, u.id) ?? []).includes(
+              permission,
+            ),
+          )
+          .map((u) => ({ userId: u.id, name: u.displayName })),
+    });
+    if (governed) return this.reply(route, governed.status, governed.body);
 
     if (
       sub.startsWith('/announcements') ||
