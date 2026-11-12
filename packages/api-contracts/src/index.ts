@@ -2347,3 +2347,21 @@ export interface PlatformOrganisationDetailDto {
   usage: { properties: number; units: number; members: number };
   history: SubscriptionDto['history'];
 }
+
+/** Support access (Phase 13 Part 3): read-only access for VEYRA staff, approved by the organisation. */
+export interface SupportAccessDto {
+  id: string;
+  organisation: { id: string; name: string };
+  reason: string;
+  hours: number;
+  status: 'REQUESTED' | 'APPROVED' | 'DENIED' | 'REVOKED';
+  /** Approved and within its window now. */
+  active: boolean;
+  requestedBy: { name: string; email: string };
+  decidedBy: string | null;
+  decidedAt: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}

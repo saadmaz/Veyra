@@ -913,6 +913,16 @@ expiry, rehash on sign-in, idempotent sign-out).
   reason switch features at once and show in the customer's history; suspension makes the
   organisation read-only until reactivated.
 
+### Part 3: support access
+
+- `packages/db` integration (3, `support-access.int.test.ts`): asked only by platform admins
+  through the function (reason, at most 24 hours, no direct inserts); decided by the
+  organisation, never the requester; the window; revocation; audit of every step; visible to the
+  organisation and the requester only.
+- `apps/api` integration (3, `support-access.int.test.ts`): nothing before approval; property
+  managers cannot decide; approval gives reads only (no changes, no exports, no deciding);
+  revocation ends access at once and is final.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

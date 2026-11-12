@@ -293,7 +293,7 @@ time-boxed, reason-logged, approved by the organisation and visible to it.
 | ---- | ----- | ------ |
 | 1 | Plans, subscriptions and entitlements: features per plan enforced on every request, limits enforced by the database, read-only when lapsed, history | ✅ Done |
 | 2 | Platform administration: platform admins, organisation list without tenant data, plan and status changes, suspension, all audited | ✅ Done ([runbook](../operations/PLATFORM_ADMIN.md)) |
-| 3 | Support access: requested with a reason, approved by an organisation admin, time-boxed, read-only, visible and revocable | |
+| 3 | Support access: requested with a reason, approved by an organisation admin, time-boxed, read-only, visible and revocable | ✅ Done |
 | 4 | Console screens and browser journeys | |
 | 5 | Phase 13 exit review | |
 

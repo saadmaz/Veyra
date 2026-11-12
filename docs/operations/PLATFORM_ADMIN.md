@@ -36,6 +36,14 @@ Until MFA exists (ACCESS_CONTROL rule 7), keep the list short and review it mont
 Every change needs a reason and is written by the database into the customer's own subscription
 history and audit log, so they can see who changed what and why.
 
+## Support access
+
+To look at a customer's data, ask them: `POST /api/v1/platform/organisations/{id}/support-access`
+with `{ reason, hours }` (1 to 24). An organisation admin approves or denies it in the console;
+once approved you can read everything in that organisation, and change nothing, until the hours
+end or they revoke it. Every step is in their audit log. `GET /api/v1/platform/support-access`
+lists your requests.
+
 ## Subscription states
 
 | Status | Effect |

@@ -1,4 +1,4 @@
-import type { Permission } from './permissions';
+import { isReadOnlyPermission, PERMISSIONS, type Permission } from './permissions';
 
 export type ScopeType = 'ORGANISATION' | 'PROPERTY' | 'BUILDING' | 'UNIT';
 
@@ -291,6 +291,15 @@ export const ROLES = {
       'unit.maintenance.request',
       'unit.document.read',
     ],
+  },
+  // ------------------------------------------------------------------ platform support
+  SUPPORT_AGENT: {
+    name: 'VEYRA support (read-only)',
+    grantableAt: ['ORGANISATION'],
+    derived: true,
+    // From approved support access only (Phase 13 Part 3): every read, nothing else, for the
+    // approved window. Never assignable.
+    permissions: PERMISSIONS.filter(isReadOnlyPermission),
   },
 } as const satisfies Record<string, RoleDefinition>;
 
