@@ -542,6 +542,30 @@ expiry, rehash on sign-in, idempotent sign-out).
   report problems, change priority, and void a cost once. A finance officer reads but cannot
   write; another property is 404.
 
+### Part 3: file storage
+
+- `packages/db` integration (+5 in `maintenance.int.test.ts`): only allowed types and sizes, safe
+  names and a key under the tenant's prefix; checked once and removed once (READY only), nothing
+  else changes; a work order's file is filed under its request, and resident files need one; none
+  on finished requests or cancelled work; at most 10 (a rejected upload frees its place); another
+  organisation sees none; no DELETE.
+- `apps/api` contract test (3, `s3-object-storage.int.test.ts`) against a real S3-compatible
+  server that checks signatures (SeaweedFS; started by CI with `infra/seaweedfs/start-ci.sh`,
+  skipped without `STORAGE_TEST_ENDPOINT`): a signed upload works for exactly the signed type and
+  size and is refused for any other; stat, first bytes, download with our disposition, delete;
+  unsigned access refused.
+- `apps/api` unit (+6, `test/maintenance/attachments.test.ts`): content sniffing (JPEG, PNG,
+  WebP, HEIC, PDF; not SVG, HTML or executables), safe file names, upload limits, no storage
+  configured, storage settings.
+- `apps/api` integration (+5 in `maintenance.int.test.ts`, with an in-memory storage fake): a
+  resident's photo appears only once checked (409 before the bytes arrive), is always
+  resident-visible, and is reachable by the unit's residents and staff but not another unit; a
+  file whose bytes are not what it declared, or not its size, is rejected and deleted; bad types
+  and sizes are 400; internal files never reach residents; technicians add evidence to their own
+  work only (resident-visible ones reach the requester); a finance officer downloads but cannot
+  remove; only the uploader or a manager removes, and the object is deleted; at most 10 per
+  request, none on a cancelled request.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

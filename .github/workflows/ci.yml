@@ -61,7 +61,11 @@ jobs:
       - run: bun run test
       # Starts its own throwaway PostgreSQL 17 (embedded-postgres), creates the veyra_owner /
       # veyra_app roles and applies the real migrations. Does not use the service container.
+      # Throwaway S3-compatible storage (SeaweedFS) for the object storage contract test.
+      - run: sh infra/seaweedfs/start-ci.sh
       - run: bun run test:integration
+        env:
+          STORAGE_TEST_ENDPOINT: http://localhost:8333
       - run: bun run build
       # Console browser journeys (Playwright, Chromium only) against the production build.
       - run: bunx playwright install --with-deps --no-shell chromium

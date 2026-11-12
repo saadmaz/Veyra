@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { AttachmentsService } from './application/attachments.service';
 import { MaintenanceService } from './application/maintenance.service';
 import { MAINTENANCE_REPOSITORY } from './application/maintenance-ports';
 import { ResidentMaintenanceService } from './application/resident-maintenance.service';
@@ -18,6 +19,7 @@ import { UnitMaintenanceController } from './presentation/unit-maintenance.contr
   providers: [
     MaintenanceService,
     ResidentMaintenanceService,
+    AttachmentsService,
     { provide: MAINTENANCE_REPOSITORY, useClass: PrismaMaintenanceRepository },
   ],
 })

@@ -280,7 +280,13 @@ only (owner decision, 2026-11-11: never billed in Phase 7).
 | `work_order_costs` | work order, kind (`LABOUR`/`MATERIAL`/`OTHER`), description, amount_minor, currency, recorded_by_user, voided_at?, voided_by_user?, void_reason? | Positive, in the property's currency, never on cancelled work. Never edited: voided once with a reason, then recorded again. |
 | `maintenance_events` | sequence, request?, work_order?, type (`STATUS_CHANGED`/`ASSIGNEE_CHANGED`/`PRIORITY_CHANGED`/`NOTE`), visibility (`RESIDENT`/`INTERNAL`), from_value?, to_value?, body?, actor_user? | **Append-only for every role**, the superuser included (UPDATE, DELETE and TRUNCATE refused). Status, assignee and priority changes are written by the database's own triggers with the current user as actor; the application can add only notes (text and author required). Request changes are visible to the requester; work order changes are internal. A work order's note is also filed under its request. `sequence` orders events written in the same transaction. |
 
-All five tables have RLS by organisation; the application has no DELETE grant except on SLA
+**Attachments** (migration `20261115090000_maintenance_attachments`, ADR 0007):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `maintenance_attachments` | request?, work_order?, storage_key, file_name, content_type, size_bytes, kind (`BEFORE`/`AFTER`/`OTHER`), visibility, status (`PENDING`/`READY`/`REJECTED`), uploaded_by_user, ready_at?, removed_at?, removed_by_user? | Photos (JPEG, PNG, WebP, HEIC) and PDFs up to 10 MB; file names without paths, quotes or control characters; the key is exactly `org/<organisation>/prop/<property>/maintenance/<id>`. Not on finished requests or cancelled work; a work order's attachment is also filed under its request; RESIDENT ones need a request. At most 10 not rejected and not removed per work order, or per request for its own (advisory lock). Checked once (`PENDING → READY \| REJECTED`), removed once (READY only; the row stays, the object is deleted); nothing else ever changes. RLS; no DELETE grant. |
+
+All six maintenance tables have RLS by organisation; the application has no DELETE grant except on SLA
 targets.
 
 ## 8. Identity vs person vs relationship

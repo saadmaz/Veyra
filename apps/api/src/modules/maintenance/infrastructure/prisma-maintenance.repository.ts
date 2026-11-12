@@ -3,6 +3,7 @@ import { type DbClient, type DbTransaction, withTenantTransaction } from '@veyra
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
 import type {
+  AttachmentRecord,
   CostRecord,
   EventRecord,
   MaintenanceAuditEvent,
@@ -205,6 +206,31 @@ const toCost = (row: {
   const { recordedBy, currency, ...rest } = row;
   return { ...rest, currency: currency.trim(), recordedByName: recordedBy.displayName };
 };
+
+const ATTACHMENT_SELECT = {
+  id: true,
+  requestId: true,
+  workOrderId: true,
+  storageKey: true,
+  fileName: true,
+  contentType: true,
+  sizeBytes: true,
+  kind: true,
+  visibility: true,
+  status: true,
+  uploadedByUserId: true,
+  uploadedBy: { select: { displayName: true } },
+  createdAt: true,
+  readyAt: true,
+  removedAt: true,
+} as const;
+
+const toAttachment = ({
+  uploadedBy,
+  ...row
+}: Omit<AttachmentRecord, 'uploadedByName'> & {
+  uploadedBy: { displayName: string };
+}): AttachmentRecord => ({ ...row, uploadedByName: uploadedBy.displayName });
 
 class PrismaMaintenanceUnitOfWork implements MaintenanceUnitOfWork {
   private readonly scope: { organisationId: string; propertyId: string };
@@ -446,6 +472,64 @@ class PrismaMaintenanceUnitOfWork implements MaintenanceUnitOfWork {
     await this.tx.maintenanceEvent.create({
       data: { ...this.scope, ...input, type: 'NOTE', actorUserId: this.userId },
       select: { id: true },
+    });
+  }
+
+  async createAttachment(input: {
+    id: string;
+    storageKey: string;
+    requestId: string | null;
+    workOrderId: string | null;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    kind: AttachmentRecord['kind'];
+    visibility: Visibility;
+  }): Promise<void> {
+    await this.tx.maintenanceAttachment.create({
+      data: { ...this.scope, ...input, uploadedByUserId: this.userId },
+      select: { id: true },
+    });
+  }
+
+  async attachment(id: string, options?: { lock?: boolean }): Promise<AttachmentRecord | null> {
+    if (options?.lock) {
+      await this.tx.$queryRaw`
+        SELECT 1 FROM "maintenance_attachments"
+         WHERE "id" = ${id}::uuid AND "organisation_id" = ${this.organisationId}::uuid
+           AND "property_id" = ${this.propertyId}::uuid
+         FOR UPDATE`;
+    }
+    const row = await this.tx.maintenanceAttachment.findFirst({
+      where: { ...this.scope, id },
+      select: ATTACHMENT_SELECT,
+    });
+    return row && toAttachment(row);
+  }
+
+  async attachments(
+    target: { requestId: string } | { workOrderId: string },
+  ): Promise<AttachmentRecord[]> {
+    const rows = await this.tx.maintenanceAttachment.findMany({
+      where: { ...this.scope, ...target, status: { not: 'REJECTED' }, removedAt: null },
+      select: ATTACHMENT_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 200,
+    });
+    return rows.map(toAttachment);
+  }
+
+  async setAttachmentStatus(id: string, status: 'READY' | 'REJECTED'): Promise<void> {
+    await this.tx.maintenanceAttachment.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: { status },
+    });
+  }
+
+  async removeAttachment(id: string): Promise<void> {
+    await this.tx.maintenanceAttachment.update({
+      where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
+      data: { removedAt: new Date(), removedByUserId: this.userId },
     });
   }
 

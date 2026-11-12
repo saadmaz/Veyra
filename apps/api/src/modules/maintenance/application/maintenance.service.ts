@@ -59,11 +59,12 @@ export class MaintenanceService {
   request(access: OrganisationAccess, id: string, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) => {
       const request = await this.mustFindRequest(uow, id);
-      const [workOrders, events] = await Promise.all([
+      const [workOrders, events, attachments] = await Promise.all([
         uow.workOrders({ requestId: id }),
         uow.events({ requestId: id }),
+        uow.attachments({ requestId: id }),
       ]);
-      return { request, workOrders, events };
+      return { request, workOrders, events, attachments };
     });
   }
 
@@ -396,12 +397,13 @@ export class MaintenanceService {
 
   private async workOrderDetail(uow: MaintenanceUnitOfWork, id: string) {
     const workOrder = await this.mustFindWorkOrder(uow, id);
-    const [costs, events, property] = await Promise.all([
+    const [costs, events, attachments, property] = await Promise.all([
       uow.costs(id),
       uow.events({ workOrderId: id }),
+      uow.attachments({ workOrderId: id }),
       uow.property(),
     ]);
-    return { workOrder, costs, events, currency: property.currency };
+    return { workOrder, costs, events, attachments, currency: property.currency };
   }
 
   /** Work assigned to the caller; anyone else's work does not exist for them (404). */

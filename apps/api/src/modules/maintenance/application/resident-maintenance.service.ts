@@ -126,8 +126,15 @@ export class ResidentMaintenanceService {
   /** The request with its resident-visible history only. */
   private async view(uow: MaintenanceUnitOfWork, unitId: string, id: string) {
     const request = await this.mustFind(uow, unitId, id);
-    const events = await uow.events({ requestId: id }, 'RESIDENT');
-    return { request, events };
+    const [events, attachments] = await Promise.all([
+      uow.events({ requestId: id }, 'RESIDENT'),
+      uow.attachments({ requestId: id }),
+    ]);
+    return {
+      request,
+      events,
+      attachments: attachments.filter((a) => a.status === 'READY' && a.visibility === 'RESIDENT'),
+    };
   }
 
   private async mustFind(

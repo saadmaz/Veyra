@@ -75,6 +75,8 @@ model User {
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
   maintenanceEvents       MaintenanceEvent[]       @relation("MaintenanceEventActor")
+  attachmentsUploaded     MaintenanceAttachment[]  @relation("MaintenanceAttachmentUploadedBy")
+  attachmentsRemoved      MaintenanceAttachment[]  @relation("MaintenanceAttachmentRemovedBy")
 
   @@map("users")
 }
@@ -367,11 +369,12 @@ model Property {
   financeApprovals FinanceApproval[]
   bankTransfers    BankTransferSubmission[]
 
-  maintenanceSlaTargets MaintenanceSlaTarget[]
-  maintenanceRequests   MaintenanceRequest[]
-  workOrders            WorkOrder[]
-  workOrderCosts        WorkOrderCost[]
-  maintenanceEvents     MaintenanceEvent[]
+  maintenanceSlaTargets  MaintenanceSlaTarget[]
+  maintenanceRequests    MaintenanceRequest[]
+  workOrders             WorkOrder[]
+  workOrderCosts         WorkOrderCost[]
+  maintenanceEvents      MaintenanceEvent[]
+  maintenanceAttachments MaintenanceAttachment[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, code])
@@ -1793,13 +1796,14 @@ model MaintenanceRequest {
   createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property    Property           @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  unit        Unit?              @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  commonArea  CommonArea?        @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  submittedBy User               @relation("MaintenanceRequestSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  acceptedBy  User?              @relation("MaintenanceRequestAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  property    Property                @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit        Unit?                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea  CommonArea?             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  submittedBy User                    @relation("MaintenanceRequestSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  acceptedBy  User?                   @relation("MaintenanceRequestAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   workOrders  WorkOrder[]
   events      MaintenanceEvent[]
+  attachments MaintenanceAttachment[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, requestNumber])
@@ -1834,14 +1838,15 @@ model WorkOrder {
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property   Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  request    MaintenanceRequest? @relation(fields: [organisationId, propertyId, requestId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  unit       Unit?               @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  commonArea CommonArea?         @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
-  assignedTo User?               @relation("WorkOrderAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  createdBy  User                @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  costs      WorkOrderCost[]
-  events     MaintenanceEvent[]
+  property    Property                @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  request     MaintenanceRequest?     @relation(fields: [organisationId, propertyId, requestId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit        Unit?                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea  CommonArea?             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignedTo  User?                   @relation("WorkOrderAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy   User                    @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  costs       WorkOrderCost[]
+  events      MaintenanceEvent[]
+  attachments MaintenanceAttachment[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, workOrderNumber])
@@ -1907,4 +1912,56 @@ model MaintenanceEvent {
   @@index([organisationId, requestId, sequence])
   @@index([organisationId, workOrderId, sequence])
   @@map("maintenance_events")
+}
+
+enum AttachmentStatus {
+  /// A signed upload URL was handed out; the bytes may not have arrived yet.
+  PENDING
+  /// Checked: the stored object has the declared size and really is the declared type.
+  READY
+  /// Failed the check; the object was deleted.
+  REJECTED
+}
+
+enum AttachmentKind {
+  BEFORE
+  AFTER
+  OTHER
+}
+
+/// A photo or PDF on a request or a work order (Phase 7 Part 3). The bytes live in object
+/// storage under storage_key; this row is the metadata and the access decision. Rules are
+/// hand-written in migration 20261115090000_maintenance_attachments.
+model MaintenanceAttachment {
+  id               String                     @id @default(uuid(7)) @db.Uuid
+  organisationId   String                     @map("organisation_id") @db.Uuid
+  propertyId       String                     @map("property_id") @db.Uuid
+  /// Set for every attachment of a request, or of a work order that belongs to one.
+  requestId        String?                    @map("request_id") @db.Uuid
+  workOrderId      String?                    @map("work_order_id") @db.Uuid
+  /// Chosen by the server, never derived from the file name.
+  storageKey       String                     @map("storage_key")
+  fileName         String                     @map("file_name")
+  contentType      String                     @map("content_type")
+  sizeBytes        Int                        @map("size_bytes")
+  kind             AttachmentKind             @default(OTHER)
+  visibility       MaintenanceEventVisibility
+  status           AttachmentStatus           @default(PENDING)
+  uploadedByUserId String                     @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  readyAt          DateTime?                  @map("ready_at") @db.Timestamptz(3)
+  /// Removed attachments stay listed in history; their object is deleted.
+  removedAt        DateTime?                  @map("removed_at") @db.Timestamptz(3)
+  removedByUserId  String?                    @map("removed_by_user_id") @db.Uuid
+
+  property   Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  request    MaintenanceRequest? @relation(fields: [organisationId, propertyId, requestId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder  WorkOrder?          @relation(fields: [organisationId, propertyId, workOrderId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  uploadedBy User                @relation("MaintenanceAttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  removedBy  User?               @relation("MaintenanceAttachmentRemovedBy", fields: [removedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([storageKey])
+  @@index([organisationId, requestId])
+  @@index([organisationId, workOrderId])
+  @@map("maintenance_attachments")
 }

@@ -49,7 +49,8 @@ CDN and WAF, e.g. Cloudflare):
 - **PostgreSQL** is the only authoritative store. **Redis** holds caches, rate-limit
   counters, queues and ephemeral pub/sub. Losing Redis must never lose business data.
 - **Object storage** (S3-compatible) holds files. The database holds file metadata and
-  the tenant that owns every object.
+  the tenant that owns every object. Browsers upload and download with short-lived signed URLs;
+  the API checks every upload before it is shown ([ADR 0007](../adr/0007-object-storage.md)).
 
 ## 2. Module structure
 

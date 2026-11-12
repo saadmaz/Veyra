@@ -222,3 +222,17 @@ export function parseCost(decimal: string, currency: string): bigint {
   if (minor <= 0n) throw new DomainError('INVALID_MONEY', 'The amount must be more than zero');
   return minor;
 }
+
+/** 10 MB, as in the database. */
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+export const uploadSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf']),
+  sizeBytes: z.number().int().min(1).max(MAX_ATTACHMENT_BYTES),
+  /** Staff and technicians: before/after evidence. */
+  kind: z.enum(['BEFORE', 'AFTER', 'OTHER']).default('OTHER'),
+  /** Staff and technicians; residents' files are always resident-visible. */
+  visibility: z.enum(['RESIDENT', 'INTERNAL']).default('INTERNAL'),
+});
+export type UploadInput = z.infer<typeof uploadSchema>;

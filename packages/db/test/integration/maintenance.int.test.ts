@@ -554,6 +554,160 @@ describe('history', () => {
   });
 });
 
+describe('attachments', () => {
+  interface AttachmentInput {
+    request?: string | null;
+    work?: string | null;
+    visibility?: string;
+    type?: string;
+    size?: number;
+    name?: string;
+    key?: (id: string) => string;
+  }
+
+  async function attach(c: pg.PoolClient, input: AttachmentInput): Promise<string> {
+    const id = randomUUID();
+    const key = input.key?.(id) ?? `org/${ids.org}/prop/${ids.prop}/maintenance/${id}`;
+    await c.query(
+      `INSERT INTO maintenance_attachments (id, organisation_id, property_id, request_id, work_order_id, storage_key,
+         file_name, content_type, size_bytes, visibility, uploaded_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        id,
+        ids.org,
+        ids.prop,
+        input.request ?? null,
+        input.work ?? null,
+        key,
+        input.name ?? 'leak.jpg',
+        input.type ?? 'image/jpeg',
+        input.size ?? 2048,
+        input.visibility ?? 'RESIDENT',
+        ids.resident,
+      ],
+    );
+    return id;
+  }
+
+  it('take only allowed types and sizes, safe names and a key under the tenant prefix', async () => {
+    const r = await inTenant(ids.org, (c) => request(c));
+    for (const [input, error] of [
+      [{ type: 'image/svg+xml' }, /maintenance_attachments_type/],
+      [{ size: 10_485_761 }, /maintenance_attachments_size/],
+      [{ name: '../etc/passwd' }, /maintenance_attachments_file_name/],
+      [{ key: () => `org/${ids.otherOrg}/x` }, /maintenance_attachments_key/],
+    ] as const) {
+      await expect(
+        inTenant(ids.org, (c) => attach(c, { request: r.id, ...input })),
+      ).rejects.toThrow(error);
+    }
+    await inTenant(ids.org, (c) => attach(c, { request: r.id, type: 'application/pdf' }));
+  });
+
+  it('are checked once and removed once; nothing else changes', async () => {
+    const r = await inTenant(ids.org, (c) => request(c));
+    const id = await inTenant(ids.org, (c) => attach(c, { request: r.id }));
+    await expect(
+      inTenant(ids.org, (c) =>
+        c.query(`UPDATE maintenance_attachments SET size_bytes = 1 WHERE id = $1`, [id]),
+      ),
+    ).rejects.toThrow(/checked once/);
+    // Cannot be removed before it is ready.
+    await expect(
+      inTenant(ids.org, (c) =>
+        c.query(
+          `UPDATE maintenance_attachments SET removed_at = now(), removed_by_user_id = $2 WHERE id = $1`,
+          [id, ids.manager],
+        ),
+      ),
+    ).rejects.toThrow(/checked once/);
+    await inTenant(ids.org, (c) =>
+      c.query(`UPDATE maintenance_attachments SET status = 'READY' WHERE id = $1`, [id]),
+    );
+    const { rows } = await inTenant(ids.org, (c) =>
+      c.query(`SELECT ready_at FROM maintenance_attachments WHERE id = $1`, [id]),
+    );
+    expect(rows[0].ready_at).not.toBeNull();
+    await expect(
+      inTenant(ids.org, (c) =>
+        c.query(`UPDATE maintenance_attachments SET status = 'REJECTED' WHERE id = $1`, [id]),
+      ),
+    ).rejects.toThrow(/checked once/);
+    const remove = (c: pg.PoolClient) =>
+      c.query(
+        `UPDATE maintenance_attachments SET removed_at = now(), removed_by_user_id = $2 WHERE id = $1`,
+        [id, ids.manager],
+      );
+    await inTenant(ids.org, remove);
+    await expect(inTenant(ids.org, remove)).rejects.toThrow(/removed once/);
+  });
+
+  it('file a work order photo under its request; resident ones need a request', async () => {
+    await inTenant(ids.org, async (c) => {
+      const r = await request(c);
+      await setRequest(c, r.id, 'ACCEPTED');
+      const w = await workOrder(c, { request: r.id });
+      const id = await attach(c, { work: w.id, visibility: 'INTERNAL' });
+      const { rows } = await c.query(
+        `SELECT request_id FROM maintenance_attachments WHERE id = $1`,
+        [id],
+      );
+      expect(rows[0].request_id).toBe(r.id);
+    });
+    const direct = await inTenant(ids.org, async (c) => (await workOrder(c)).id);
+    await expect(
+      inTenant(ids.org, (c) => attach(c, { work: direct, visibility: 'RESIDENT' })),
+    ).rejects.toThrow(/no resident to show/);
+    await inTenant(ids.org, (c) => attach(c, { work: direct, visibility: 'INTERNAL' }));
+  });
+
+  it('are refused on finished requests and cancelled work, and capped at 10', async () => {
+    const rejected = await inTenant(ids.org, async (c) => {
+      const r = await request(c);
+      await setRequest(c, r.id, 'REJECTED', 'Not ours');
+      return r.id;
+    });
+    await expect(inTenant(ids.org, (c) => attach(c, { request: rejected }))).rejects.toThrow(
+      /finished request/,
+    );
+    const cancelled = await inTenant(ids.org, async (c) => {
+      const w = await workOrder(c);
+      await setWork(c, w.id, 'CANCELLED', 'Duplicate');
+      return w.id;
+    });
+    await expect(
+      inTenant(ids.org, (c) => attach(c, { work: cancelled, visibility: 'INTERNAL' })),
+    ).rejects.toThrow(/cancelled work/);
+
+    const r = await inTenant(ids.org, (c) => request(c));
+    const first = await inTenant(ids.org, async (c) => {
+      const ids10: string[] = [];
+      for (let i = 0; i < 10; i++) ids10.push(await attach(c, { request: r.id }));
+      return ids10[0] as string;
+    });
+    await expect(inTenant(ids.org, (c) => attach(c, { request: r.id }))).rejects.toThrow(
+      /at most 10/,
+    );
+    // A rejected upload frees its place.
+    await inTenant(ids.org, (c) =>
+      c.query(`UPDATE maintenance_attachments SET status = 'REJECTED' WHERE id = $1`, [first]),
+    );
+    await inTenant(ids.org, (c) => attach(c, { request: r.id }));
+  });
+
+  it('are invisible to another organisation and never deleted by the application', async () => {
+    const r = await inTenant(ids.org, (c) => request(c));
+    const id = await inTenant(ids.org, (c) => attach(c, { request: r.id }));
+    const { rows } = await inTenant(ids.otherOrg, (c) =>
+      c.query(`SELECT count(*)::int AS n FROM maintenance_attachments`),
+    );
+    expect(rows[0].n).toBe(0);
+    await expect(
+      inTenant(ids.org, (c) => c.query(`DELETE FROM maintenance_attachments WHERE id = $1`, [id])),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
+
 describe('isolation', () => {
   it('shows another organisation nothing and refuses its writes', async () => {
     const counts = await inTenant(ids.otherOrg, (c) =>

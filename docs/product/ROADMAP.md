@@ -28,7 +28,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
 | 6     | Finance and billing                      | Done. Exit review: [PHASE_6_REVIEW](../reviews/PHASE_6_REVIEW.md) |
-| 7     | Maintenance and work orders              | In progress (Parts 1-2 done) |
+| 7     | Maintenance and work orders              | In progress (Parts 1-3 done) |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
 | 10    | Communications and documents             | |
@@ -184,7 +184,7 @@ Decisions (owner, 2026-11-11):
 | ---- | ----- | ------ |
 | 1 | Data foundation: SLA targets, requests (unit or common area) and work orders numbered per property, validated status transitions with required reasons, resolution only when the work is done, database-owned timestamps and due times, costs corrected by voiding, append-only history written by the database, RLS | ✅ Done |
 | 2 | Roles and API: Maintenance Manager and Technician; residents raise, follow, confirm or reopen their unit's requests (resident-visible history only); staff triage, accept, reject, raise and assign work orders, add notes; technicians see and progress only their own work and record costs | ✅ Done |
-| 3 | File storage: S3-compatible adapter (MinIO in Docker Compose), signed upload and download URLs, type and size limits, tenant-scoped keys; photos on requests and work orders | |
+| 3 | File storage: S3-compatible adapter (MinIO in Docker Compose), signed upload and download URLs, type and size limits, tenant-scoped keys; photos on requests and work orders | ✅ Done (SeaweedFS instead of MinIO, whose images are no longer published; ADR 0007) |
 | 4 | SLAs: targets per property in the API; a worker job marks response and resolution breaches; the manager's queue sorted by urgency and breach | |
 | 5 | Console: residents' maintenance pages, the manager's queue and request page, the technician's work list; browser journeys; Phase 7 exit review | |
 
@@ -217,6 +217,10 @@ readiness, user training and release communication, and known limitations docume
   is no screen yet for online payment intents or for resolving an `AMOUNT_MISMATCH` callback; the
   invoice and payment lists show the API's 200 most recent with no paging; the chart of accounts
   is read-only (no API to add or rename accounts yet).
+- File storage (ADR 0007): uploads never completed leave PENDING attachments (and maybe objects)
+  until a worker job and a bucket lifecycle rule clean them up; a failed delete after removal
+  leaves an orphaned object; no malware scanning yet; production buckets need CORS for the
+  console's origin.
 - Residents' finance: access ends with the ownership or tenancy record, so former owners and
   tenants cannot read their past account; no bank-slip attachment (file storage) and no way to
   withdraw a submission (finance rejects it instead); residents are not notified when a

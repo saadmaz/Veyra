@@ -1,4 +1,6 @@
 import type {
+  AttachmentContentType,
+  MaintenanceAttachmentDto,
   MaintenanceEventDto,
   MaintenanceRequestDto,
   MoneyDto,
@@ -7,6 +9,7 @@ import type {
   WorkOrderDto,
 } from '@veyra/api-contracts';
 import type {
+  AttachmentRecord,
   CostRecord,
   EventRecord,
   RequestRecord,
@@ -92,10 +95,23 @@ const toCost = (c: CostRecord): WorkOrderCostDto => ({
   voidReason: c.voidReason,
 });
 
+export const toAttachment = (a: AttachmentRecord): MaintenanceAttachmentDto => ({
+  id: a.id,
+  workOrderId: a.workOrderId,
+  fileName: a.fileName,
+  contentType: a.contentType as AttachmentContentType,
+  sizeBytes: a.sizeBytes,
+  kind: a.kind,
+  visibility: a.visibility,
+  uploadedBy: { userId: a.uploadedByUserId, name: a.uploadedByName },
+  createdAt: a.createdAt.toISOString(),
+});
+
 export const toWorkOrderDetail = (d: {
   workOrder: WorkOrderRecord;
   costs: CostRecord[];
   events: EventRecord[];
+  attachments: AttachmentRecord[];
   currency: string;
 }): WorkOrderDetailDto => ({
   workOrder: toWorkOrder(d.workOrder),
@@ -105,4 +121,5 @@ export const toWorkOrderDetail = (d: {
     d.currency,
   ),
   events: d.events.map(toEvent),
+  attachments: d.attachments.filter((a) => a.status === 'READY').map(toAttachment),
 });

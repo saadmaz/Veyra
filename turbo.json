@@ -20,7 +20,13 @@
       "dependsOn": ["^build", "generate"],
       "outputs": [],
       "cache": false,
-      "passThroughEnv": ["REDIS_URL"]
+      "passThroughEnv": [
+        "REDIS_URL",
+        "STORAGE_TEST_ENDPOINT",
+        "STORAGE_TEST_BUCKET",
+        "STORAGE_TEST_ACCESS_KEY_ID",
+        "STORAGE_TEST_SECRET_ACCESS_KEY"
+      ]
     },
     "dev": {
       "cache": false,

@@ -5,6 +5,8 @@ import { CLOCK, systemClock } from '../clock';
 import { API_ENV, type ApiEnv } from '../config/env';
 import { HEALTH_CHECKS, type HealthCheck } from '../health/health.service';
 import { RATE_LIMITER, RedisRateLimiter } from '../rate-limit/rate-limiter';
+import { OBJECT_STORAGE, type ObjectStorage } from '../storage/object-storage';
+import { S3ObjectStorage } from '../storage/s3-object-storage';
 
 export const DB_CLIENT = Symbol('DB_CLIENT');
 export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
@@ -45,6 +47,21 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
       inject: [REDIS_CLIENT],
       useFactory: (redis: Redis) => new RedisRateLimiter(redis),
     },
+    {
+      provide: OBJECT_STORAGE,
+      inject: [API_ENV],
+      useFactory: (env: ApiEnv): ObjectStorage | null =>
+        env.STORAGE_BUCKET && env.STORAGE_ACCESS_KEY_ID && env.STORAGE_SECRET_ACCESS_KEY
+          ? new S3ObjectStorage({
+              ...(env.STORAGE_ENDPOINT ? { endpoint: env.STORAGE_ENDPOINT } : {}),
+              region: env.STORAGE_REGION,
+              bucket: env.STORAGE_BUCKET,
+              accessKeyId: env.STORAGE_ACCESS_KEY_ID,
+              secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
+              forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
+            })
+          : null,
+    },
     { provide: CLOCK, useValue: systemClock },
     {
       provide: HEALTH_CHECKS,
@@ -65,7 +82,7 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
       ],
     },
   ],
-  exports: [DB_CLIENT, REDIS_CLIENT, RATE_LIMITER, CLOCK, HEALTH_CHECKS],
+  exports: [DB_CLIENT, REDIS_CLIENT, RATE_LIMITER, OBJECT_STORAGE, CLOCK, HEALTH_CHECKS],
 })
 export class InfrastructureModule implements OnApplicationShutdown {
   constructor(
