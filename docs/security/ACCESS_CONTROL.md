@@ -159,6 +159,10 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   them; others get 404. A follow-up action can be marked done by a manager or the person it was
   given to, who must hold `property.incident.read` at the property. Residents have no incident
   access yet.
+  For governance (Phase 11) `property.governance.manage` (organisation admins, property
+  managers) and `property.governance.read` (also the new **Committee member** role, granted per
+  property, which also reads the property's documents). Seats go only to people holding
+  `property.governance.read` at the property.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

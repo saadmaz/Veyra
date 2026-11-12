@@ -808,6 +808,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   technician given the follow-up has done it (others cannot mark it), notes refused once closed,
   open vs all lists; escalation contacts managed by managers, filtered by kind and retired.
 
+### Part 2: committees and meetings
+
+- `packages/db` integration (4, `governance.int.test.ts`): one seat per person and one chair at a
+  time, a term ended once, terms that make sense; dissolved committees take no seats or meetings,
+  active names unique; meetings not held early, cancelled only with a reason, agenda fixed once
+  held, minutes approved once and then final, resolutions numbered and only at a held meeting
+  before approval; resolutions never change; isolation and no deletes.
+- `apps/api` unit (3, `test/governance/governance-rules.test.ts`): current seats, what each
+  meeting state allows, term and vote count checks.
+- `apps/api` integration (3, `governance.int.test.ts`): seats only for Committee members, one
+  chair, terms ended once; a meeting with an agenda is held, resolutions recorded (unknown
+  documents refused), minutes approved once and then final; committee members read but cannot
+  change, guards see nothing; cancelling, no early holding, dissolving only without scheduled
+  meetings.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

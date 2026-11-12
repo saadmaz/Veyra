@@ -127,6 +127,7 @@ export const ROLE_LABELS: Record<string, string> = {
   PROPERTY_MANAGER: 'Property manager',
   MAINTENANCE_MANAGER: 'Maintenance manager',
   TECHNICIAN: 'Technician',
+  COMMITTEE_MEMBER: 'Committee member',
 };
 
 /** Roles that can be given for the whole organisation (property managers are per property). */

@@ -420,6 +420,18 @@ tables have RLS by organisation and no DELETE grant.
 
 All four have RLS by organisation and no DELETE grant.
 
+**Governance** (Phase 11, migration `20261127090000_governance`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `committees` | name (unique among active ones, ignoring case), purpose?, status (`ACTIVE`/`DISSOLVED`), dissolved_at? | Dissolving is final; dissolved committees take no seats or meetings. |
+| `committee_members` | committee, user, position (`CHAIR`/`VICE_CHAIR`/`SECRETARY`/`TREASURER`/`MEMBER`), term_start, term_end? | A person holds one seat per committee at a time and a committee has one chair at a time (exclusion constraints on the term). Only the end of a term changes, once. |
+| `meetings` | committee, title, scheduled_at, location?, status (`SCHEDULED`/`HELD`/`CANCELLED`), held_at?, cancel_reason?, minutes?, minutes_approved_at?, minutes_approved_by_user? | Held not before its time (or cancelled with a reason); a held meeting changes only by its minutes; approving the minutes is done once, by a person, and makes the meeting final. |
+| `meeting_agenda_items` | meeting, position, title, details? | Only while the meeting is scheduled. |
+| `resolutions` | meeting, resolution_number (per property, RES-000012), title, text, outcome (`PASSED`/`REJECTED`/`DEFERRED`), votes_for?, votes_against?, abstentions?, document? (of the property), recorded_by_user | Only at a held meeting before its minutes are approved; never changed or deleted. |
+
+All five have RLS by organisation and no DELETE grant.
+
 ## 12. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)

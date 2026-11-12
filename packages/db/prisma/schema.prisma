@@ -92,6 +92,9 @@ model User {
   incidentUpdatesWritten   IncidentUpdate[]         @relation("IncidentUpdateActor")
   incidentActionsAssigned  IncidentAction[]         @relation("IncidentActionAssignee")
   incidentActionsDone      IncidentAction[]         @relation("IncidentActionDoneBy")
+  committeeSeats           CommitteeMember[]        @relation("CommitteeMemberUser")
+  minutesApproved          Meeting[]                @relation("MeetingMinutesApprovedBy")
+  resolutionsRecorded      Resolution[]             @relation("ResolutionRecordedBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided     WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -422,6 +425,11 @@ model Property {
   incidentUpdates        IncidentUpdate[]
   incidentActions        IncidentAction[]
   escalationContacts     EscalationContact[]
+  committees             Committee[]
+  committeeMembers       CommitteeMember[]
+  meetings               Meeting[]
+  meetingAgendaItems     MeetingAgendaItem[]
+  resolutions            Resolution[]
   facilityOpeningHours   FacilityOpeningHours[]
   facilityClosures       FacilityClosure[]
   facilityBookings       FacilityBooking[]
@@ -2832,9 +2840,10 @@ model Document {
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  property  Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
-  createdBy User              @relation("DocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  versions  DocumentVersion[]
+  property    Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy   User              @relation("DocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versions    DocumentVersion[]
+  resolutions Resolution[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId, status])
@@ -3018,4 +3027,150 @@ model EscalationContact {
 
   @@index([organisationId, propertyId, active])
   @@map("escalation_contacts")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Governance (Phase 11 Part 2). A property's committees, who sits on them and when; meetings
+// with an agenda, minutes approved once, and the resolutions recorded at them (with the vote
+// counts as recorded, and a supporting document). No voting in the application (PRD 3.11).
+// Rules are hand-written in migration 20261127090000_governance.
+// ---------------------------------------------------------------------------------------------
+
+enum CommitteeStatus {
+  ACTIVE
+  DISSOLVED
+}
+
+enum CommitteePosition {
+  CHAIR
+  VICE_CHAIR
+  SECRETARY
+  TREASURER
+  MEMBER
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  HELD
+  CANCELLED
+}
+
+enum ResolutionOutcome {
+  PASSED
+  REJECTED
+  DEFERRED
+}
+
+model Committee {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organisationId String          @map("organisation_id") @db.Uuid
+  propertyId     String          @map("property_id") @db.Uuid
+  name           String
+  purpose        String?
+  status         CommitteeStatus @default(ACTIVE)
+  dissolvedAt    DateTime?       @map("dissolved_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property Property          @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  members  CommitteeMember[]
+  meetings Meeting[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, status])
+  @@map("committees")
+}
+
+/// A seat on a committee for a term. A person holds one seat at a time per committee; one chair at a time.
+model CommitteeMember {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  organisationId String            @map("organisation_id") @db.Uuid
+  propertyId     String            @map("property_id") @db.Uuid
+  committeeId    String            @map("committee_id") @db.Uuid
+  userId         String            @map("user_id") @db.Uuid
+  position       CommitteePosition
+  termStart      DateTime          @map("term_start") @db.Date
+  /// Last day of the term; set once (at the start or to end the term early).
+  termEnd        DateTime?         @map("term_end") @db.Date
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property  Property  @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  committee Committee @relation(fields: [organisationId, propertyId, committeeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user      User      @relation("CommitteeMemberUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, committeeId])
+  @@map("committee_members")
+}
+
+model Meeting {
+  id                    String        @id @default(uuid(7)) @db.Uuid
+  organisationId        String        @map("organisation_id") @db.Uuid
+  propertyId            String        @map("property_id") @db.Uuid
+  committeeId           String        @map("committee_id") @db.Uuid
+  title                 String
+  scheduledAt           DateTime      @map("scheduled_at") @db.Timestamptz(3)
+  location              String?
+  status                MeetingStatus @default(SCHEDULED)
+  heldAt                DateTime?     @map("held_at") @db.Timestamptz(3)
+  cancelReason          String?       @map("cancel_reason")
+  minutes               String?
+  minutesApprovedAt     DateTime?     @map("minutes_approved_at") @db.Timestamptz(3)
+  minutesApprovedUserId String?       @map("minutes_approved_by_user_id") @db.Uuid
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property          Property            @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  committee         Committee           @relation(fields: [organisationId, propertyId, committeeId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  minutesApprovedBy User?               @relation("MeetingMinutesApprovedBy", fields: [minutesApprovedUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  agendaItems       MeetingAgendaItem[]
+  resolutions       Resolution[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, committeeId, scheduledAt])
+  @@map("meetings")
+}
+
+model MeetingAgendaItem {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  propertyId     String   @map("property_id") @db.Uuid
+  meetingId      String   @map("meeting_id") @db.Uuid
+  position       Int
+  title          String
+  details        String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  meeting  Meeting  @relation(fields: [organisationId, propertyId, meetingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([meetingId, position])
+  @@map("meeting_agenda_items")
+}
+
+/// A decision recorded at a held meeting. Never changes.
+model Resolution {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  organisationId   String            @map("organisation_id") @db.Uuid
+  propertyId       String            @map("property_id") @db.Uuid
+  meetingId        String            @map("meeting_id") @db.Uuid
+  /// Sequential per property (RES-000012), set by the database.
+  resolutionNumber BigInt?           @map("resolution_number")
+  title            String
+  text             String
+  outcome          ResolutionOutcome
+  votesFor         Int?              @map("votes_for")
+  votesAgainst     Int?              @map("votes_against")
+  abstentions      Int?
+  documentId       String?           @map("document_id") @db.Uuid
+  recordedByUserId String            @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property   Property  @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  meeting    Meeting   @relation(fields: [organisationId, propertyId, meetingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  document   Document? @relation(fields: [organisationId, propertyId, documentId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  recordedBy User      @relation("ResolutionRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([propertyId, resolutionNumber])
+  @@index([organisationId, meetingId])
+  @@map("resolutions")
 }
