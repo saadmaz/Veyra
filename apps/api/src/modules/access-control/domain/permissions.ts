@@ -101,6 +101,8 @@ export const PERMISSIONS = [
   'organisation.vendor.read',
   /** Register, edit, suspend and archive vendors; add and void their documents. */
   'organisation.vendor.manage',
+  /** Register webhook endpoints, see their deliveries, rotate secrets and send tests. */
+  'organisation.webhook.manage',
   /** Book, follow and cancel a unit's facility bookings (owners and tenants, and staff on their behalf). */
   'unit.facility.book',
   /** View the property's facilities, closures and every booking. */

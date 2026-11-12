@@ -439,6 +439,26 @@ documents for everyone or residents, and for owners when they own the unit, with
 {id}/download`. Each document shows `expiry` (`NONE`, `VALID`, `EXPIRING_SOON` within 30 days,
 `EXPIRED`).
 
+### Webhooks (Phase 12 Part 3)
+
+Organisation admins (`organisation.webhook.manage`) keep endpoints under
+`/organisations/{org}/webhooks`: `GET`, `POST` (`{ url, events, description? }`; returns the
+signing secret once), `GET {id}` (with the latest 50 deliveries), `PATCH {id}` (url, events,
+description, `status: ACTIVE | DISABLED`), `POST {id}/rotate-secret` (a new secret, shown once)
+and `POST {id}/test` (a `webhook.test` event); `GET events` lists the event types
+(`incident.reported`, `incident.closed`, `approval_request.created`,
+`approval_request.settled`). URLs must be HTTPS to a public host name; the worker also refuses
+hosts that resolve to private addresses and does not follow redirects.
+
+Each delivery is a `POST` of `{ id, type, organisationId, occurredAt, data }` with the headers
+`Veyra-Event`, `Veyra-Delivery` (unique per delivery; use it to ignore duplicates) and
+`Veyra-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>`. Receivers
+should recompute the signature over the raw body and reject timestamps older than five minutes.
+Any 2xx counts as delivered; otherwise the worker retries with backoff, five attempts in all.
+Payloads carry references, states and amounts, never names or free text, and sensitive incidents
+are never sent. Without `WEBHOOK_SIGNING_KEY` the endpoints answer 409
+`WEBHOOKS_NOT_CONFIGURED`.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

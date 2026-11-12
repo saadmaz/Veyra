@@ -5,6 +5,7 @@ import { createJobRouter, OUTBOX_ROUTES } from '../src/jobs';
 import { checkSlaBreach, SLA_CHECK_JOB, SLA_DUE_EVENT } from '../src/maintenance-jobs';
 import { DELIVERY_DUE_EVENT } from '../src/notification-jobs';
 import { type OutboxEvent, OutboxRelay, type OutboxStore } from '../src/outbox-relay';
+import { WEBHOOK_DUE_EVENT } from '../src/webhook-jobs';
 
 const ORG = '0192f0a4-7c1e-7b2a-9c4d-1a2b3c4d5e6f';
 const PROP = '0192f0a4-7c1e-7b2a-9c4d-1a2b3c4d5e70';
@@ -36,7 +37,10 @@ describe('OutboxRelay', () => {
     const enqueue = vi.fn(async () => undefined);
     const relay = new OutboxRelay(s, enqueue, OUTBOX_ROUTES);
     await expect(relay.tick()).resolves.toBe(2);
-    expect(s.claim).toHaveBeenCalledWith([SLA_DUE_EVENT, DELIVERY_DUE_EVENT], 100);
+    expect(s.claim).toHaveBeenCalledWith(
+      [SLA_DUE_EVENT, DELIVERY_DUE_EVENT, WEBHOOK_DUE_EVENT],
+      100,
+    );
     expect(enqueue).toHaveBeenCalledWith(
       SLA_CHECK_JOB,
       expect.objectContaining({

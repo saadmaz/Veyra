@@ -14,6 +14,7 @@ import { GovernanceModule } from './modules/governance/governance.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AuthGuard } from './modules/identity/presentation/auth.guard';
 import { IncidentsModule } from './modules/incidents/incidents.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { OrganisationsModule } from './modules/organisations/organisations.module';
 import { PropertiesModule } from './modules/properties/properties.module';
@@ -51,6 +52,7 @@ export class AppModule implements NestModule {
         StaffModule,
         CommunicationsModule,
         IncidentsModule,
+        IntegrationsModule,
         GovernanceModule,
         ReportingModule,
       ],

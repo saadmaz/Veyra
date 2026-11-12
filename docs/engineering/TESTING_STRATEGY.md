@@ -866,6 +866,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   incidents without free text, ranges too long or reversed refused; an empty arrears file;
   unknown export names refused.
 
+### Part 3: webhooks
+
+- `packages/db` integration (4, `webhooks.int.test.ts`): endpoint URL rules, secrets rotating
+  forward only; deliveries only to active subscribed endpoints with an outbox event each (the
+  test event to any); outcomes only through the function, counting attempts and leaving settled
+  ones alone; isolation and no deletes.
+- `apps/worker` unit (4, `webhook-jobs.test.ts`): signed sends verified with the derived secret
+  (a changed body, old timestamp or old secret fails), retries and the last failure, skipped and
+  refused deliveries, private addresses refused even behind a public name.
+- `apps/api` unit (3, `test/integrations/webhook-rules.test.ts`) and integration (3,
+  `webhooks.int.test.ts`): HTTPS public hosts only, known events; the secret shown once and
+  matching the worker's derivation, rotation; incident reports queue deliveries (never sensitive
+  ones); test events; disabled endpoints get nothing; only admins manage endpoints.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

@@ -2245,3 +2245,41 @@ export type ExportName =
 export interface ExportListDto {
   data: ExportName[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Webhooks (Phase 12 Part 3). Deliveries are POSTed as JSON with the headers Veyra-Event,
+// Veyra-Delivery and Veyra-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<body>")>.
+// ---------------------------------------------------------------------------------------------
+
+export interface WebhookEndpointDto {
+  id: string;
+  url: string;
+  description: string | null;
+  events: string[];
+  status: 'ACTIVE' | 'DISABLED';
+  createdAt: string;
+}
+
+/** Returned on creation and rotation only: the secret is never shown again. */
+export interface WebhookSecretDto {
+  endpoint: WebhookEndpointDto;
+  secret: string;
+}
+
+export interface WebhookDeliveryDto {
+  id: string;
+  eventType: string;
+  eventId: string;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
+  attempts: number;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+}
+
+export interface WebhookEndpointDetailDto {
+  endpoint: WebhookEndpointDto;
+  /** The latest 50. */
+  deliveries: WebhookDeliveryDto[];
+}

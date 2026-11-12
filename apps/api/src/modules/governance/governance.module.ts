@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
 import { CommunicationsModule } from '../communications/communications.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
 import { APPROVAL_REPOSITORY } from './application/approval-ports';
 import { ApprovalsService } from './application/approvals.service';
 import { GovernanceService } from './application/governance.service';
@@ -12,7 +13,7 @@ import { GovernanceController } from './presentation/governance.controller';
 
 /** Governance (Phase 11): committees and seats, meetings, minutes, resolutions and approvals. */
 @Module({
-  imports: [AccessControlModule, CommunicationsModule],
+  imports: [AccessControlModule, CommunicationsModule, IntegrationsModule],
   controllers: [GovernanceController, ApprovalsController],
   providers: [
     GovernanceService,
