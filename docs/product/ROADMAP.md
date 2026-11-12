@@ -32,7 +32,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 8     | Facilities and reservations              | Done. Exit review: [PHASE_8_REVIEW](../reviews/PHASE_8_REVIEW.md) |
 | 9     | Staff, vendors and assets                | Done. Exit review: [PHASE_9_REVIEW](../reviews/PHASE_9_REVIEW.md) |
 | 10    | Communications and documents             | Done. Exit review: [PHASE_10_REVIEW](../reviews/PHASE_10_REVIEW.md) |
-| 11    | Governance and incident management       | |
+| 11    | Governance and incident management       | Done. Exit review: [PHASE_11_REVIEW](../reviews/PHASE_11_REVIEW.md) |
 | 12    | Analytics and integrations               | |
 | 13    | SaaS administration and subscriptions    | |
 | 14    | Security hardening and commercial launch | |
@@ -260,7 +260,7 @@ policies with thresholds. Voting waits for legal review (PRD 3.11).
 | 2 | Committees and meetings: members and terms, meetings, agendas, minutes, resolutions with supporting documents | ✅ Done (a Committee member role; managers keep the records; no voting in the application) |
 | 3 | Approval policies: thresholds and approvers for expenses, purchases and other requests | ✅ Done (managers or a committee's current members; finance's maker-checker approvals stay as they are) |
 | 4 | Console screens and browser journeys | ✅ Done (incidents with timeline, follow-ups and contacts; committees, meetings, minutes and resolutions; approvals and policies) |
-| 5 | Phase 11 exit review | |
+| 5 | Phase 11 exit review | ✅ Done ([PHASE_11_REVIEW](../reviews/PHASE_11_REVIEW.md)) |
 
 ## Release gates
 
