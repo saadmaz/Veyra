@@ -48,3 +48,10 @@ than it claims.
 - No malware scanning yet (THREAT_MODEL T7): only photos and PDFs are accepted, types are
   checked by content, and storage serves them from its own origin, not the console's. Add
   scanning before documents (Phase 10) or before a pilot with real residents.
+
+## Malware scanning (Phase 14)
+
+Every upload is scanned when it is completed, after its size and real type are checked
+(`platform/storage/check-upload.ts`): ClamAV's clamd over TCP when `CLAMAV_HOST` is set, nothing
+in development. An infected file is deleted and rejected like a false one; when the scanner
+cannot be reached the upload stays pending and completion answers 503, so it can be retried.

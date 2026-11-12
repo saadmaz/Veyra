@@ -961,6 +961,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   wrong code refused, recovery codes shown once, a later session prompted and verified with a
   recovery code. axe WCAG 2.2 AA.
 
+### Part 3: operational hardening
+
+- `apps/api` unit (5, `test/platform/json-logger.test.ts`, `test/platform/file-scanner.test.ts`):
+  redaction of bearer tokens, cookies, named secrets, query strings, emails and long opaque
+  strings while ids stay; JSON lines by level; clamd answers, chunked INSTREAM against a fake
+  clamd (with a harmless marker, not real test malware), failing closed when unreachable.
+- `apps/api` integration (2, `upload-scanning.int.test.ts`): infected uploads rejected and
+  deleted; uploads stay pending (503) while the scanner is down and complete afterwards.
+- `packages/web-config` (2, `test/csp.test.ts`) and `apps/console-web` (`test/next-config.test.ts`):
+  the policy names only the API and storage origins, forbids framing, plugins and foreign forms,
+  and allows eval only in development. The full browser suite runs with the policy on.
+- CI: gitleaks scans the checkout before dependencies are installed; `bun audit` fails on high
+  and critical advisories.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

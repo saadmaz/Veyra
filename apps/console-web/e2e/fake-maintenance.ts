@@ -18,7 +18,8 @@ import type {
  * assignee works, files checked before they show); the API's own tests prove the real rules.
  */
 
-export const STORAGE_ORIGIN = 'https://storage.example.test';
+/** The development storage address, which the console's Content-Security-Policy allows. */
+export const STORAGE_ORIGIN = 'http://localhost:8333';
 
 interface Ctx {
   method: string;

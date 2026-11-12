@@ -3,6 +3,7 @@ import { AttachmentsService } from '../../src/modules/maintenance/application/at
 import type { MaintenanceRepository } from '../../src/modules/maintenance/application/maintenance-ports';
 import { uploadSchema } from '../../src/modules/maintenance/domain/maintenance-rules';
 import { apiEnvSchema } from '../../src/platform/config/env';
+import { NoFileScanner } from '../../src/platform/storage/file-scanner';
 import { safeFileName, sniffFileType } from '../../src/platform/storage/object-storage';
 
 const bytes = (...values: (number | string)[]) =>
@@ -47,9 +48,12 @@ describe('uploads', () => {
   });
 
   it('answer STORAGE_NOT_CONFIGURED when no storage is set up', async () => {
-    const service = new AttachmentsService({} as MaintenanceRepository, null, {
-      now: () => new Date(),
-    });
+    const service = new AttachmentsService(
+      {} as MaintenanceRepository,
+      null,
+      { now: () => new Date() },
+      new NoFileScanner(),
+    );
     await expect(
       service.download(
         { userId: 'u', organisationId: 'o', propertyId: 'p', permissions: new Set() },

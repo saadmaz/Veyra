@@ -5,6 +5,7 @@ import { CLOCK, systemClock } from '../clock';
 import { API_ENV, type ApiEnv } from '../config/env';
 import { HEALTH_CHECKS, type HealthCheck } from '../health/health.service';
 import { RATE_LIMITER, RedisRateLimiter } from '../rate-limit/rate-limiter';
+import { ClamAvFileScanner, FILE_SCANNER, NoFileScanner } from '../storage/file-scanner';
 import { OBJECT_STORAGE, type ObjectStorage } from '../storage/object-storage';
 import { S3ObjectStorage } from '../storage/s3-object-storage';
 
@@ -48,6 +49,14 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
       useFactory: (redis: Redis) => new RedisRateLimiter(redis),
     },
     {
+      provide: FILE_SCANNER,
+      inject: [API_ENV],
+      useFactory: (env: ApiEnv) =>
+        env.CLAMAV_HOST
+          ? new ClamAvFileScanner(env.CLAMAV_HOST, env.CLAMAV_PORT)
+          : new NoFileScanner(),
+    },
+    {
       provide: OBJECT_STORAGE,
       inject: [API_ENV],
       useFactory: (env: ApiEnv): ObjectStorage | null =>
@@ -82,7 +91,15 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
       ],
     },
   ],
-  exports: [DB_CLIENT, REDIS_CLIENT, RATE_LIMITER, OBJECT_STORAGE, CLOCK, HEALTH_CHECKS],
+  exports: [
+    DB_CLIENT,
+    REDIS_CLIENT,
+    RATE_LIMITER,
+    OBJECT_STORAGE,
+    FILE_SCANNER,
+    CLOCK,
+    HEALTH_CHECKS,
+  ],
 })
 export class InfrastructureModule implements OnApplicationShutdown {
   constructor(

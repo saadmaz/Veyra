@@ -14,6 +14,11 @@ export const apiEnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+    /** "json": one redacted JSON object per line (the production default); "pretty" for humans. */
+    LOG_FORMAT: z.enum(['json', 'pretty']).optional(),
+    /** ClamAV (clamd) for scanning uploads; without it uploads are not scanned (development). */
+    CLAMAV_HOST: z.string().min(1).optional(),
+    CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     API_CORS_ORIGINS: csv,
     /**
