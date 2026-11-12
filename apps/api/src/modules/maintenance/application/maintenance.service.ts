@@ -3,6 +3,7 @@ import { databaseErrorCode } from '@veyra/db';
 import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
 import { AccessControlService, type OrganisationAccess } from '../../access-control';
+import { NotificationsService } from '../../communications/application/notifications.service';
 import { VendorsService } from '../../vendors/application/vendors.service';
 import {
   type AcceptInput,
@@ -48,6 +49,7 @@ export class MaintenanceService {
     @Inject(MAINTENANCE_REPOSITORY) private readonly repository: MaintenanceRepository,
     private readonly accessControl: AccessControlService,
     @Inject(VendorsService) private readonly vendors: VendorsService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
   ) {}
 
   // ------------------------------------------------------------------ SLAs and queue (Part 4)
@@ -139,6 +141,7 @@ export class MaintenanceService {
         });
       }
       await this.auditRequest(uow, id, 'accepted');
+      await this.tellRequester(uow, access, id, 'accepted');
       return this.mustFindRequest(uow, id);
     });
   }
@@ -177,6 +180,7 @@ export class MaintenanceService {
         await uow.addNote({ requestId: id, workOrderId: null, visibility: 'RESIDENT', body: note });
       }
       await this.auditRequest(uow, id, 'resolved');
+      await this.tellRequester(uow, access, id, 'resolved');
       return this.mustFindRequest(uow, id);
     });
   }
@@ -523,6 +527,7 @@ export class MaintenanceService {
       this.requireRequestMove(request, to);
       await uow.updateRequest(id, { status: to, statusNote: note });
       await this.auditRequest(uow, id, to.toLowerCase());
+      if (to === 'REJECTED') await this.tellRequester(uow, access, id, 'rejected');
       return this.mustFindRequest(uow, id);
     });
   }
@@ -567,6 +572,43 @@ export class MaintenanceService {
     const work = await uow.workOrder(id);
     if (!work) throw notFound('Work order');
     return work;
+  }
+
+  /** Tells whoever raised the request what the property team did (in-app and email). */
+  private async tellRequester(
+    uow: MaintenanceUnitOfWork,
+    access: OrganisationAccess,
+    id: string,
+    what: 'accepted' | 'resolved' | 'rejected',
+  ) {
+    const r = await this.mustFindRequest(uow, id);
+    if (r.submittedByUserId === access.userId) return;
+    const property = this.propertyOf(access);
+    const text = {
+      accepted: ['Your request is in hand', `The property team accepted "${r.title}".`],
+      resolved: [
+        'Please confirm the work is done',
+        `The work on "${r.title}" is done. Confirm it, or reopen it if not.`,
+      ],
+      rejected: [
+        'Your request was declined',
+        `"${r.title}" was declined: ${r.statusNote ?? ''}`.trim(),
+      ],
+    }[what];
+    await this.notifications.notifyWithin(uow.transaction(), access.organisationId, [
+      {
+        userId: r.submittedByUserId,
+        propertyId: property,
+        kind: `maintenance.request.${what}`,
+        title: text[0] as string,
+        body: (text[1] as string).slice(0, 2000),
+        link: r.unitId
+          ? `/organisations/${access.organisationId}/properties/${property}/units/${r.unitId}/maintenance/${id}`
+          : null,
+        urgent: false,
+        email: true,
+      },
+    ]);
   }
 
   private auditRequest(uow: MaintenanceUnitOfWork, id: string, what: string) {

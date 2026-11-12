@@ -1921,3 +1921,35 @@ export interface DraftAnnouncementRequest {
   buildingId?: string | null;
   requiresAcknowledgement?: boolean;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Notifications (Phase 10 Part 2)
+// ---------------------------------------------------------------------------------------------
+
+export interface NotificationDto {
+  id: string;
+  propertyId: string | null;
+  /** What happened, e.g. "facility.booking.approved". */
+  kind: string;
+  title: string;
+  body: string;
+  /** A console path to open. */
+  link: string | null;
+  urgent: boolean;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationDeliveryDto {
+  id: string;
+  channel: 'EMAIL' | 'SMS' | 'PUSH';
+  status: 'PENDING' | 'SENT' | 'FAILED';
+  attempts: number;
+  /** The adapter's reason for the latest failure. */
+  lastError: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  kind: string;
+  title: string;
+  recipient: string;
+}

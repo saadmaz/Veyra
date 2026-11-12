@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type DbClient, type DbTransaction, withTenantTransaction } from '@veyra/db';
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type {
   AttachmentRecord,
   CostRecord,
@@ -256,6 +257,10 @@ class PrismaMaintenanceUnitOfWork implements MaintenanceUnitOfWork {
     private readonly meta: RequestMeta,
   ) {
     this.scope = { organisationId, propertyId };
+  }
+
+  transaction(): TransactionHandle {
+    return this.tx as unknown as TransactionHandle;
   }
 
   async property() {

@@ -1,4 +1,5 @@
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type { AnnouncementStatus, Audience, Priority } from '../domain/announcement-rules';
 
 export interface AnnouncementContent {
@@ -43,6 +44,8 @@ export interface RecipientRecord {
 
 /** One transaction in the organisation's RLS context (property-scoped work names the property). */
 export interface AnnouncementUnitOfWork {
+  /** The open transaction, for notifications written in the same commit. */
+  transaction(): TransactionHandle;
   building(
     propertyId: string,
     id: string,

@@ -15,6 +15,7 @@ import {
   type AnnouncementRepository,
   type AnnouncementUnitOfWork,
 } from './announcement-ports';
+import { NotificationsService } from './notifications.service';
 
 const notFound = () => new ApiError(404, 'NOT_FOUND', 'Announcement not found');
 const invalidState = (message: string) => new ApiError(409, 'INVALID_STATE_TRANSITION', message);
@@ -31,6 +32,7 @@ export class AnnouncementsService {
   constructor(
     @Inject(ANNOUNCEMENT_REPOSITORY) private readonly repository: AnnouncementRepository,
     private readonly accessControl: AccessControlService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
   ) {}
 
   list(access: OrganisationAccess, status: AnnouncementStatus | undefined, meta: RequestMeta) {
@@ -99,6 +101,23 @@ export class AnnouncementsService {
       }
       await uow.setStatus(propertyId, id, 'PUBLISHED', null);
       const delivered = await uow.deliver(propertyId, id, [...audience]);
+      // An emergency broadcast also goes out by email (and stands out in the feed).
+      if (announcement.priority === 'URGENT') {
+        await this.notifications.notifyWithin(
+          uow.transaction(),
+          access.organisationId,
+          [...audience].map((userId) => ({
+            userId,
+            propertyId,
+            kind: 'announcement.urgent',
+            title: announcement.title,
+            body: announcement.body.slice(0, 2000),
+            link: `/organisations/${access.organisationId}/inbox`,
+            urgent: true,
+            email: true,
+          })),
+        );
+      }
       await uow.audit({
         action: 'announcement.published',
         propertyId,

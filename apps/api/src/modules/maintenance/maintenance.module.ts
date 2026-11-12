@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { CommunicationsModule } from '../communications/communications.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { ASSET_REPOSITORY } from './application/asset-ports';
 import { AssetsService } from './application/assets.service';
@@ -19,7 +20,7 @@ import { UnitMaintenanceController } from './presentation/unit-maintenance.contr
  * maintenance tables.
  */
 @Module({
-  imports: [AccessControlModule, VendorsModule],
+  imports: [AccessControlModule, VendorsModule, CommunicationsModule],
   controllers: [MaintenanceController, UnitMaintenanceController, AssetsController],
   providers: [
     MaintenanceService,

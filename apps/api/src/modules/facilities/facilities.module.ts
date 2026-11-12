@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { CommunicationsModule } from '../communications/communications.module';
 import { FinanceModule } from '../finance/finance.module';
 import { FacilitiesService } from './application/facilities.service';
 import { FACILITY_REPOSITORY } from './application/facility-ports';
@@ -13,7 +14,7 @@ import { UnitFacilitiesController } from './presentation/unit-facilities.control
  * facility tables.
  */
 @Module({
-  imports: [AccessControlModule, FinanceModule],
+  imports: [AccessControlModule, FinanceModule, CommunicationsModule],
   controllers: [FacilitiesController, UnitFacilitiesController],
   providers: [
     FacilitiesService,

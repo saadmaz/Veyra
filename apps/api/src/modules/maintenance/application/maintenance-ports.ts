@@ -1,4 +1,5 @@
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type {
   Category,
   Priority,
@@ -134,6 +135,8 @@ export interface MaintenanceAuditEvent {
  * by organisation and property explicitly as well.
  */
 export interface MaintenanceUnitOfWork {
+  /** The open transaction, for work other modules do in the same commit (notifications). */
+  transaction(): TransactionHandle;
   property(): Promise<{ currency: string; status: 'ONBOARDING' | 'ACTIVE' | 'ARCHIVED' }>;
   unit(id: string): Promise<{ id: string; number: string; status: 'ACTIVE' | 'ARCHIVED' } | null>;
   commonArea(
