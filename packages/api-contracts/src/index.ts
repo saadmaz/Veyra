@@ -2312,3 +2312,38 @@ export interface SubscriptionDto {
     createdAt: string;
   }[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Platform administration (Phase 13 Part 2): /platform/... for VEYRA staff only (404 otherwise).
+// ---------------------------------------------------------------------------------------------
+
+export interface PlatformPlanDto {
+  code: string;
+  name: string;
+  features: string[];
+  maxProperties: number | null;
+  maxUnits: number | null;
+  active: boolean;
+}
+
+export interface PlatformOrganisationDto {
+  id: string;
+  name: string;
+  slug: string;
+  countryCode: string;
+  status: OrganisationStatus;
+  createdAt: string;
+  subscription: {
+    planCode: string;
+    planName: string;
+    status: SubscriptionDto['status'];
+    trialEndsAt: string | null;
+  } | null;
+}
+
+export interface PlatformOrganisationDetailDto {
+  organisation: PlatformOrganisationDto;
+  /** Counts only: no tenant data. */
+  usage: { properties: number; units: number; members: number };
+  history: SubscriptionDto['history'];
+}

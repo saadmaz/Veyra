@@ -1,0 +1,49 @@
+# Platform administration runbook
+
+Platform administrators are VEYRA staff who manage customer organisations: they see every
+organisation's name, status, plan and usage counts (properties, units, members), change plans
+and subscription status, and suspend or reactivate organisations. They do **not** see tenant data
+(residents, finance, visitors, documents, ...); support access to that comes with Phase 13 Part 3
+and is approved by the customer.
+
+## Granting and revoking
+
+Only an operator with the database owner's credentials can grant or revoke the role; the
+application can only read it.
+
+```powershell
+$env:DATABASE_OWNER_URL = 'postgres://owner:...@host:5432/veyra'
+bun run --cwd packages/db platform-admin grant staff@example.com "Support team"
+bun run --cwd packages/db platform-admin list
+bun run --cwd packages/db platform-admin revoke staff@example.com
+```
+
+The person must have signed up first. Revocation takes effect on their next request.
+
+Until MFA exists (ACCESS_CONTROL rule 7), keep the list short and review it monthly.
+
+## What platform administrators can do (API `/api/v1/platform`)
+
+| Action | Route | Notes |
+| ------ | ----- | ----- |
+| Check the role | `GET me` | `{ platformAdmin }`; every other route answers 404 to non-admins |
+| List organisations | `GET organisations?search=` | Name, slug, country, status, plan; at most 200 |
+| One organisation | `GET organisations/{id}` | Usage counts and subscription history |
+| Plans | `GET plans` | Starter, Professional, Enterprise |
+| Change the plan or status | `POST organisations/{id}/subscription` | `{ planCode, status, trialEndsAt?, reason }` |
+| Suspend / reactivate | `POST organisations/{id}/suspend` or `/reactivate` | `{ reason }`; suspended organisations are read-only |
+
+Every change needs a reason and is written by the database into the customer's own subscription
+history and audit log, so they can see who changed what and why.
+
+## Subscription states
+
+| Status | Effect |
+| ------ | ------ |
+| `TRIAL` | Everything in the plan until `trial_ends_at`; afterwards read-only |
+| `ACTIVE` | Everything in the plan |
+| `PAST_DUE` | Everything in the plan (grace while payment is chased) |
+| `CANCELLED` | Read-only |
+
+Plan limits (properties, units) are enforced by the database: a customer over a limit after a
+downgrade keeps what they have but cannot add more.

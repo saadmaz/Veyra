@@ -310,10 +310,21 @@ them. A cancelled subscription or an ended trial makes an active organisation re
 `PAST_DUE` keeps everything working. The plan page uses `organisation.member.read`, a read
 permission only organisation admins hold, so it stays visible while read-only.
 
+### 6.4b Platform administration (Phase 13)
+
+Platform administrators are listed in `platform_admins`, granted and revoked only with the
+database owner's credentials (`packages/db/scripts/platform-admin.ts`). Separate permissive
+policies let them read `organisations`, `subscriptions` and `subscription_events` across tenants
+and nothing else; usage is available only as counts through `app_platform_usage()`. Plan and
+status changes and suspensions go only through `app_platform_set_subscription()` and
+`app_platform_set_organisation_status()`, which check the caller again, need a reason, act in
+that organisation's context and write its audit log and subscription history. The API's
+`/platform` routes answer 404 to everyone else. See docs/operations/PLATFORM_ADMIN.md.
+
 ### 6.5 Not yet implemented
 
 - MFA for privileged mutations (rule 7) depends on MFA in authentication (ADR 0005 gap).
 - Building and unit scopes and derived owner/tenant grants: later Phase 3 parts and Phase 4.
 - Property managers cannot invite others to their property yet (organisation admins do).
-- Platform super admin support access.
+- Platform support access to tenant data (Phase 13 Part 3).
 - Permission caching with invalidation events (not needed while reads are cheap).

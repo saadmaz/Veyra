@@ -452,6 +452,9 @@ are separate and unchanged.
 | `subscriptions` | organisation (one each), plan, status (`TRIAL`/`ACTIVE`/`PAST_DUE`/`CANCELLED`), trial_ends_at? (exactly for trials) | Created by the database with each new organisation (a 30-day Enterprise trial); existing organisations were moved to Enterprise. The application role can only read them. |
 | `subscription_events` | from/to plan, from/to status, reason?, actor_user? | Written by the database on every change; append-only. |
 
+`platform_admins` (user, note?, granted_at, revoked_at?) lists VEYRA staff; only the database
+owner writes it.
+
 Inserting a property or a unit beyond the plan's limit fails with the application's own SQLSTATE
 `VE401` or `VE402`, answered as 409 `PLAN_LIMIT_REACHED`.
 
