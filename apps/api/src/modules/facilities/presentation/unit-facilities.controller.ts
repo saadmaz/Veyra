@@ -50,8 +50,11 @@ export class UnitFacilitiesController {
     @CurrentAccess() access: OrganisationAccess,
     @Req() req: Request,
   ): Promise<{ data: FacilityDto[] }> {
-    const { facilities, timeZone } = await this.facilities.unitFacilities(access, requestMeta(req));
-    return { data: facilities.map((f) => toFacility(f, timeZone)) };
+    const { facilities, timeZone, currency } = await this.facilities.unitFacilities(
+      access,
+      requestMeta(req),
+    );
+    return { data: facilities.map((f) => toFacility(f, timeZone, currency)) };
   }
 
   @Get(`${UNIT}/facilities/:facilityId/availability`)

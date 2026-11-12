@@ -1,8 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { databaseErrorCode, databaseErrorMessage } from '@veyra/db';
+import { Money } from '@veyra/domain';
 import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
 import type { OrganisationAccess } from '../../access-control';
+import {
+  BookingChargesService,
+  type ChargeLine,
+  type ChargeScope,
+} from '../../finance/application/booking-charges.service';
 import {
   type BookingInput,
   type BookingListQuery,
@@ -10,6 +16,7 @@ import {
   type ClosureInput,
   type CreateFacilityInput,
   canMoveBooking,
+  formatBookingNumber,
   LIVE_BOOKING,
   needsReason,
   type OpeningRange,
@@ -21,6 +28,7 @@ import {
   FACILITY_REPOSITORY,
   type FacilityRecord,
   type FacilityRepository,
+  type FacilitySettings,
   type FacilityUnitOfWork,
   type SlotRecord,
 } from './facility-ports';
@@ -28,6 +36,11 @@ import {
 const facilityNotFound = () => new ApiError(404, 'NOT_FOUND', 'Facility not found');
 const bookingNotFound = () => new ApiError(404, 'NOT_FOUND', 'Booking not found');
 const invalidState = (message: string) => new ApiError(409, 'INVALID_STATE_TRANSITION', message);
+const chargesGone = () =>
+  new ApiError(409, 'CHARGE_NOT_SET_UP', "This facility's fee or deposit is no longer set up");
+
+/** A booking invoice has the fee on line 1 (when there is one) and the deposit after it. */
+const depositLine = (b: BookingRecord) => (b.feeMinor > 0n ? 2 : 1);
 
 export type SlotState = 'OPEN' | 'FULL' | 'CLOSED' | 'TOO_SOON' | 'TOO_FAR';
 
@@ -88,14 +101,17 @@ function translateDatabaseError(error: unknown): never {
  */
 @Injectable()
 export class FacilitiesService {
-  constructor(@Inject(FACILITY_REPOSITORY) private readonly repository: FacilityRepository) {}
+  constructor(
+    @Inject(FACILITY_REPOSITORY) private readonly repository: FacilityRepository,
+    @Inject(BookingChargesService) private readonly charges: BookingChargesService,
+  ) {}
 
   // ------------------------------------------------------------------ staff: setup
 
   list(access: OrganisationAccess, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) => ({
       facilities: await uow.facilities({ activeOnly: false }),
-      timeZone: (await uow.property()).timeZone,
+      ...(await this.place(uow)),
     }));
   }
 
@@ -112,11 +128,31 @@ export class FacilitiesService {
       if (await uow.facilityForArea(input.commonAreaId)) {
         throw new ApiError(409, 'ALREADY_EXISTS', 'This common area already has a facility');
       }
-      const { openingHours, commonAreaId, description, ...settings } = input;
+      const {
+        openingHours,
+        commonAreaId,
+        description,
+        feeChargeTypeId,
+        feePerSlot,
+        depositChargeTypeId,
+        deposit,
+        ...settings
+      } = input;
+      const money = await this.chargeSettings(uow, {
+        feeChargeTypeId,
+        feePerSlot,
+        depositChargeTypeId,
+        deposit,
+      });
       const id = await uow.createFacility({
         commonAreaId,
         description: description ?? null,
+        feeChargeTypeId: null,
+        feePerSlotMinor: null,
+        depositChargeTypeId: null,
+        depositMinor: null,
         ...settings,
+        ...money,
       });
       await uow.replaceOpeningHours(id, openingHours);
       await uow.audit({ action: 'facility.created', resourceType: 'facility', resourceId: id });
@@ -127,7 +163,14 @@ export class FacilitiesService {
   update(access: OrganisationAccess, id: string, input: UpdateFacilityInput, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) => {
       await this.activeFacility(uow, id);
-      await uow.updateFacility(id, input);
+      const { feeChargeTypeId, feePerSlot, depositChargeTypeId, deposit, ...settings } = input;
+      const money = await this.chargeSettings(uow, {
+        feeChargeTypeId,
+        feePerSlot,
+        depositChargeTypeId,
+        deposit,
+      });
+      await uow.updateFacility(id, { ...settings, ...money });
       await uow.audit({
         action: 'facility.updated',
         resourceType: 'facility',
@@ -186,6 +229,7 @@ export class FacilitiesService {
       for (const b of inTheWay) {
         await uow.setBookingStatus(b.id, 'CANCELLED', note);
         await this.auditBooking(uow, b.id, 'cancelled', { byStaff: true, closure: true });
+        await this.creditOnCancel(uow, access, meta, b.id);
       }
       const closureId = await uow.createClosure({
         facilityId: id,
@@ -269,6 +313,8 @@ export class FacilitiesService {
       }
       await uow.setBookingStatus(id, to, reason ?? null);
       await this.auditBooking(uow, id, to.toLowerCase(), { byStaff: true });
+      if (to === 'CONFIRMED') await this.chargeIfConfirmed(uow, access, meta, id);
+      if (to === 'CANCELLED') await this.creditOnCancel(uow, access, meta, id);
       return this.bookingView(uow, id);
     });
   }
@@ -278,7 +324,7 @@ export class FacilitiesService {
   unitFacilities(access: OrganisationAccess, meta: RequestMeta) {
     return this.inUnit(access, meta, async (uow) => ({
       facilities: await uow.facilities({ activeOnly: true }),
-      timeZone: (await uow.property()).timeZone,
+      ...(await this.place(uow)),
     }));
   }
 
@@ -326,6 +372,7 @@ export class FacilitiesService {
         byStaff: access.permissions.has('property.facility.manage'),
         slots: input.slots,
       });
+      await this.chargeIfConfirmed(uow, access, meta, id);
       return this.bookingView(uow, id);
     });
   }
@@ -352,11 +399,189 @@ export class FacilitiesService {
       const note = reason ?? (booking.status === 'CONFIRMED' ? 'Cancelled by the resident' : null);
       await uow.setBookingStatus(id, 'CANCELLED', note);
       await this.auditBooking(uow, id, 'cancelled', { byStaff: false });
+      await this.creditOnCancel(uow, access, meta, id);
+      return this.bookingView(uow, id);
+    });
+  }
+
+  /**
+   * Gives the deposit back after the booking: a credit note on its line, while it is unpaid. A
+   * paid deposit is refunded through finance (release the payment, credit the line, refund).
+   */
+  releaseDeposit(access: OrganisationAccess, id: string, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => {
+      const booking = await this.mustFindBooking(uow, id);
+      if (!booking.invoiceId || booking.depositMinor === 0n) {
+        throw invalidState('This booking has no deposit');
+      }
+      if (booking.depositReleasedAt) throw invalidState('The deposit is already released');
+      if (booking.status !== 'COMPLETED' && booking.status !== 'NO_SHOW') {
+        throw invalidState('Release the deposit once the booking is marked used or not used');
+      }
+      const scope = this.scope(uow, access, meta);
+      const line = depositLine(booking);
+      const creditable = await this.charges.creditable(scope, booking.invoiceId, line);
+      if (creditable < booking.depositMinor) {
+        throw new ApiError(
+          409,
+          'DEPOSIT_PAID',
+          'The deposit has been paid. Refund it through finance: release the payment, credit the deposit line, then refund.',
+        );
+      }
+      await this.charges.credit(
+        scope,
+        booking.invoiceId,
+        line,
+        booking.depositMinor,
+        `Deposit released for ${formatBookingNumber(booking.number)}`,
+      );
+      await uow.markDepositReleased(id);
+      await this.auditBooking(uow, id, 'deposit_released', { byStaff: true });
       return this.bookingView(uow, id);
     });
   }
 
   // ------------------------------------------------------------------ shared
+
+  /** A confirmed booking with a fee or deposit is invoiced to its unit in the same transaction. */
+  private async chargeIfConfirmed(
+    uow: FacilityUnitOfWork,
+    access: OrganisationAccess,
+    meta: RequestMeta,
+    id: string,
+  ) {
+    const b = await this.mustFindBooking(uow, id);
+    if (b.status !== 'CONFIRMED' || b.invoiceId || b.feeMinor + b.depositMinor === 0n) return;
+    const facility = await this.mustFindFacility(uow, b.facilityId);
+    const number = formatBookingNumber(b.number);
+    const lines: ChargeLine[] = [];
+    if (b.feeMinor > 0n) {
+      if (!facility.feeChargeTypeId) throw chargesGone();
+      lines.push({
+        chargeTypeId: facility.feeChargeTypeId,
+        description: `${b.facilityName} booking ${number} (${b.slotCount} slot${b.slotCount === 1 ? '' : 's'})`,
+        amountMinor: b.feeMinor,
+      });
+    }
+    if (b.depositMinor > 0n) {
+      if (!facility.depositChargeTypeId) throw chargesGone();
+      lines.push({
+        chargeTypeId: facility.depositChargeTypeId,
+        description: `${b.facilityName} deposit ${number}`,
+        amountMinor: b.depositMinor,
+      });
+    }
+    const invoice = await this.charges.charge(this.scope(uow, access, meta), b.unitId, lines);
+    await uow.setBookingInvoice(id, invoice.id);
+    await this.auditBooking(uow, id, 'charged', { invoiceId: invoice.id });
+  }
+
+  /**
+   * A cancelled booking's fee and deposit are credited back as far as they are unpaid; anything
+   * paid stays with finance to refund. The deposit counts as released once credited in full.
+   */
+  private async creditOnCancel(
+    uow: FacilityUnitOfWork,
+    access: OrganisationAccess,
+    meta: RequestMeta,
+    id: string,
+  ) {
+    const b = await this.mustFindBooking(uow, id);
+    if (!b.invoiceId) return;
+    const scope = this.scope(uow, access, meta);
+    const reason = `Booking ${formatBookingNumber(b.number)} cancelled`;
+    let fee = 0n;
+    if (b.feeMinor > 0n) fee = await this.charges.credit(scope, b.invoiceId, 1, b.feeMinor, reason);
+    let deposit = 0n;
+    if (b.depositMinor > 0n && !b.depositReleasedAt) {
+      deposit = await this.charges.credit(
+        scope,
+        b.invoiceId,
+        depositLine(b),
+        b.depositMinor,
+        reason,
+      );
+      if (deposit === b.depositMinor) await uow.markDepositReleased(id);
+    }
+    await this.auditBooking(uow, id, 'credited', {
+      feeMinor: fee.toString(),
+      depositMinor: deposit.toString(),
+    });
+  }
+
+  /** A fee and deposit with their charge types (income and a liability), in minor units. */
+  private async chargeSettings(
+    uow: FacilityUnitOfWork,
+    input: {
+      feeChargeTypeId?: string | null | undefined;
+      feePerSlot?: string | null | undefined;
+      depositChargeTypeId?: string | null | undefined;
+      deposit?: string | null | undefined;
+    },
+  ): Promise<Partial<FacilitySettings>> {
+    const out: Partial<FacilitySettings> = {};
+    const { currency } = await uow.property();
+    const pairs = [
+      ['fee', input.feeChargeTypeId, input.feePerSlot, 'INCOME'],
+      ['deposit', input.depositChargeTypeId, input.deposit, 'LIABILITY'],
+    ] as const;
+    for (const [what, typeId, amount, accountType] of pairs) {
+      if (typeId === undefined && amount === undefined) continue;
+      if (((typeId ?? null) === null) !== ((amount ?? null) === null)) {
+        throw new ApiError(
+          422,
+          'VALIDATION_FAILED',
+          `Give the ${what} with its charge type, or neither`,
+        );
+      }
+      let minor: bigint | null = null;
+      if (typeId && amount) {
+        const chargeType = await uow.chargeType(typeId);
+        if (!chargeType) throw new ApiError(404, 'NOT_FOUND', 'Charge type not found');
+        if (chargeType.status !== 'ACTIVE' || chargeType.accountType !== accountType) {
+          throw new ApiError(
+            422,
+            'VALIDATION_FAILED',
+            what === 'fee'
+              ? 'Charge the fee through an active charge type that books to income'
+              : 'Charge the deposit through an active charge type that books to a liability (deposits held)',
+          );
+        }
+        minor = Money.parse(amount, currency).amountMinor;
+        if (minor <= 0n) {
+          throw new ApiError(422, 'VALIDATION_FAILED', `The ${what} must be more than zero`);
+        }
+      }
+      if (what === 'fee') {
+        out.feeChargeTypeId = typeId ?? null;
+        out.feePerSlotMinor = minor;
+      } else {
+        out.depositChargeTypeId = typeId ?? null;
+        out.depositMinor = minor;
+      }
+    }
+    return out;
+  }
+
+  private scope(
+    uow: FacilityUnitOfWork,
+    access: OrganisationAccess,
+    meta: RequestMeta,
+  ): ChargeScope {
+    if (!access.propertyId) throw new Error('Property route without a resolved property');
+    return {
+      transaction: uow.transaction(),
+      organisationId: access.organisationId,
+      propertyId: access.propertyId,
+      userId: access.userId,
+      meta,
+    };
+  }
+
+  private async place(uow: FacilityUnitOfWork) {
+    const { timeZone, currency } = await uow.property();
+    return { timeZone, currency };
+  }
 
   private async slots(uow: FacilityUnitOfWork, facility: FacilityRecord, date: string) {
     const [rows, property] = await Promise.all([uow.slots(facility.id, date), uow.property()]);
@@ -372,7 +597,7 @@ export class FacilitiesService {
   private async view(uow: FacilityUnitOfWork, id: string) {
     const facility = await this.mustFindFacility(uow, id);
     const [closures, property] = await Promise.all([uow.closures(id, new Date()), uow.property()]);
-    return { facility, closures, timeZone: property.timeZone };
+    return { facility, closures, timeZone: property.timeZone, currency: property.currency };
   }
 
   private async bookingView(uow: FacilityUnitOfWork, id: string) {

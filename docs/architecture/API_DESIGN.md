@@ -333,6 +333,18 @@ Staff, under `/organisations/{orgId}/properties/{propertyId}/` (`property.facili
 | GET | `facility-bookings/{id}` | With its history |
 | POST | `facility-bookings/{id}/approve`, `reject` (reason), `cancel` (reason once confirmed), `complete`, `no-show` | Used or no-show only once started |
 
+**Fees and deposits** (Part 3). A facility takes `feeChargeTypeId` + `feePerSlot` (an income
+charge type such as `FACILITY`) and `depositChargeTypeId` + `deposit` (a liability charge type such
+as `DEPOSIT`), as decimal strings in the property's currency. Finance set-up now also creates the
+accounts 2200 Facility deposits held and 4200 Facility income and those two charge types. When a
+booking is confirmed (at once, or on approval) the unit is invoiced in the same transaction: one
+invoice issued today with the fee line (slots x fee) and the deposit line, billed to the party the
+charge types name (occupants: the tenants, or the owners while there is no tenancy). Cancelling
+credits both lines as far as they are unpaid (credit notes); what was paid stays with finance to
+refund. `POST facility-bookings/{id}/release-deposit` (manage) credits an unpaid deposit once the
+booking is COMPLETED or NO_SHOW; a paid deposit is 409 `DEPOSIT_PAID` (refund it through finance).
+Bookings show `fee`, `deposit`, `invoiceId` and `depositReleasedAt`.
+
 Residents (and staff on their behalf), under `…/units/{unitId}/` (`unit.facility.book`):
 `GET facilities` (active only), `GET facilities/{id}/availability?date=`, `GET` and `POST
 facility-bookings` (`{ facilityId, startsAt, slots, purpose? }`), `GET facility-bookings/{id}`

@@ -1491,6 +1491,10 @@ export interface FacilityDto {
   openingHours: OpeningRangeDto[];
   /** The property's IANA time zone, in which opening hours and dates are read. */
   timeZone: string;
+  /** Charged per slot to the unit when a booking is confirmed (Phase 8 Part 3). */
+  fee: { chargeTypeId: string; perSlot: MoneyDto } | null;
+  /** Charged once with the fee and held (a liability) until released. */
+  deposit: { chargeTypeId: string; amount: MoneyDto } | null;
 }
 
 export interface FacilityClosureDto {
@@ -1520,6 +1524,12 @@ export interface CreateFacilityRequest {
   maxSlotsPerBooking?: number;
   maxUpcomingPerUnit?: number | null;
   cancellationMinutes?: number;
+  /** A decimal amount per slot with an income charge type (e.g. FACILITY), or neither. */
+  feeChargeTypeId?: string | null;
+  feePerSlot?: string | null;
+  /** A decimal amount with a liability charge type (e.g. DEPOSIT), or neither. */
+  depositChargeTypeId?: string | null;
+  deposit?: string | null;
   openingHours?: OpeningRangeDto[];
 }
 
@@ -1569,6 +1579,12 @@ export interface FacilityBookingDto {
   decidedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
+  /** What it costs (zero when free), fixed when booked. */
+  fee: MoneyDto;
+  deposit: MoneyDto;
+  /** The invoice issued when it was confirmed; credited back as far as unpaid when cancelled. */
+  invoiceId: string | null;
+  depositReleasedAt: string | null;
   /** Residents: whether they may still cancel it themselves. */
   cancellable: boolean;
 }

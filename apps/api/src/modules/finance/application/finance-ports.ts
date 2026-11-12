@@ -1,4 +1,5 @@
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type {
   AccountDefinition,
   CreateChargeTypeInput,
@@ -487,6 +488,17 @@ export interface FinanceUnitOfWork {
 }
 
 export interface FinanceRepository {
+  /**
+   * A unit of work on a transaction another module opened in the same organisation's context, so
+   * that its change and the finance records it causes commit together.
+   */
+  within(
+    transaction: TransactionHandle,
+    organisationId: string,
+    propertyId: string,
+    userId: string,
+    meta: RequestMeta,
+  ): FinanceUnitOfWork;
   inProperty<T>(
     organisationId: string,
     propertyId: string,

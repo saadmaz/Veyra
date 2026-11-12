@@ -93,6 +93,12 @@ const optionalText = (max: number) =>
     .optional()
     .transform((v) => (v === '' ? undefined : v));
 
+/** A positive decimal amount in the property's currency, e.g. "1500.00". */
+const amount = z
+  .string()
+  .trim()
+  .regex(/^\d{1,15}(\.\d{1,4})?$/, 'Use a decimal amount like 1500.00');
+
 const range = z.object({
   weekday: z.int().min(1).max(7),
   opensAt: z.string().regex(TIME, 'Use HH:MM'),
@@ -121,6 +127,12 @@ const settings = {
   maxSlotsPerBooking: z.int().min(1).max(288),
   maxUpcomingPerUnit: z.int().min(1).max(100).nullable(),
   cancellationMinutes: z.int().min(0).max(525600),
+  /** Charged per slot when a booking is confirmed, e.g. "500.00"; with its charge type, or neither. */
+  feeChargeTypeId: z.uuid().nullable(),
+  feePerSlot: amount.nullable(),
+  /** Charged once per booking with the fee and held until released; with its charge type, or neither. */
+  depositChargeTypeId: z.uuid().nullable(),
+  deposit: amount.nullable(),
 };
 
 export const createFacilitySchema = z.object({
@@ -133,6 +145,10 @@ export const createFacilitySchema = z.object({
   maxSlotsPerBooking: settings.maxSlotsPerBooking.default(1),
   maxUpcomingPerUnit: settings.maxUpcomingPerUnit.default(null),
   cancellationMinutes: settings.cancellationMinutes.default(0),
+  feeChargeTypeId: settings.feeChargeTypeId.default(null),
+  feePerSlot: settings.feePerSlot.default(null),
+  depositChargeTypeId: settings.depositChargeTypeId.default(null),
+  deposit: settings.deposit.default(null),
   openingHours: openingHours.default([]),
 });
 export type CreateFacilityInput = z.infer<typeof createFacilitySchema>;

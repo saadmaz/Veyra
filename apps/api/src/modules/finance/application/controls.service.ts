@@ -23,6 +23,7 @@ import {
   FINANCE_REPOSITORY,
   type FinanceRepository,
   type FinanceUnitOfWork,
+  type InvoiceDetailRecord,
   type Party,
   type PropertyFinanceInfo,
 } from './finance-ports';
@@ -351,57 +352,91 @@ export class ControlsService {
   ) {
     return this.inProperty(access, meta, async (uow) => {
       const property = await uow.property();
-      const invoice = await uow.invoice(invoiceId);
-      if (!invoice) throw notFound('Invoice');
-      if (invoice.status !== 'ISSUED') throw invalid('Correct a draft by discarding it instead');
-      const line = invoice.lines.find((l) => l.lineNumber === input.lineNumber);
-      if (!line) throw invalid('The invoice has no such line');
       const amount = parsePositiveAmount(input.amount, property.currency);
-      const creditedOnLine = invoice.credits
-        .filter((c) => c.lineNumber === line.lineNumber)
-        .reduce((sum, c) => sum + c.amountMinor, 0n);
-      if (amount > line.amountMinor - creditedOnLine) throw invalid('That is more than the line');
-      if (amount > outstandingOf(invoice)) {
-        throw invalid('That is more than the invoice still owes; release its payments first');
-      }
-      await requireOpenPeriod(uow, property.today);
-      const accounts = await uow.accounts();
-      const entryId = await uow.postEntry(
-        'CREDIT_NOTE',
-        `Credit note for ${formatInvoiceNumber(invoice.invoiceNumber ?? 0n)}`,
-        property.today,
-        property.currency,
-        [
-          { accountId: line.incomeAccountId, unitId: null, debitMinor: amount, creditMinor: 0n },
-          {
-            accountId: systemAccount(accounts, 'RECEIVABLES').id,
-            unitId: invoice.unitId,
-            debitMinor: 0n,
-            creditMinor: amount,
-          },
-        ],
-      );
-      const id = await uow.createInvoiceCredit({
-        unitId: invoice.unitId,
+      return this.creditNoteWithin(
+        uow,
+        property,
         invoiceId,
-        kind: 'CREDIT_NOTE',
-        lineNumber: line.lineNumber,
-        amountMinor: amount,
-        reason: input.reason,
-        creditedOn: property.today,
-        journalEntryId: entryId,
-        approvalId: null,
-      });
-      await uow.audit({
-        action: 'credit_note.created',
-        resourceType: 'invoice_credit',
-        resourceId: id,
-        metadata: { invoiceId, lineNumber: line.lineNumber, amountMinor: amount.toString() },
-      });
-      const updated = await uow.invoice(invoiceId);
-      if (!updated) throw new Error('Invoice vanished inside its own transaction');
-      return updated;
+        input.lineNumber,
+        amount,
+        input.reason,
+      );
     });
+  }
+
+  /** What an issued invoice line can still be credited now: what is left of it and still owed. */
+  static creditable(invoice: InvoiceDetailRecord, lineNumber: number): bigint {
+    const line = invoice.lines.find((l) => l.lineNumber === lineNumber);
+    if (!line || invoice.status !== 'ISSUED') return 0n;
+    const left =
+      line.amountMinor -
+      invoice.credits
+        .filter((c) => c.lineNumber === lineNumber)
+        .reduce((sum, c) => sum + c.amountMinor, 0n);
+    const owed = outstandingOf(invoice);
+    // biome-ignore lint/complexity/useMathMinMax: bigint amounts; Math.min takes numbers only.
+    return left < owed ? left : owed;
+  }
+
+  /** A credit note inside a finance unit of work (also used for facility bookings). */
+  async creditNoteWithin(
+    uow: FinanceUnitOfWork,
+    property: PropertyFinanceInfo,
+    invoiceId: string,
+    lineNumber: number,
+    amount: bigint,
+    reason: string,
+  ): Promise<InvoiceDetailRecord> {
+    const input = { lineNumber, reason };
+    const invoice = await uow.invoice(invoiceId);
+    if (!invoice) throw notFound('Invoice');
+    if (invoice.status !== 'ISSUED') throw invalid('Correct a draft by discarding it instead');
+    const line = invoice.lines.find((l) => l.lineNumber === input.lineNumber);
+    if (!line) throw invalid('The invoice has no such line');
+    const creditedOnLine = invoice.credits
+      .filter((c) => c.lineNumber === line.lineNumber)
+      .reduce((sum, c) => sum + c.amountMinor, 0n);
+    if (amount > line.amountMinor - creditedOnLine) throw invalid('That is more than the line');
+    if (amount > outstandingOf(invoice)) {
+      throw invalid('That is more than the invoice still owes; release its payments first');
+    }
+    await requireOpenPeriod(uow, property.today);
+    const accounts = await uow.accounts();
+    const entryId = await uow.postEntry(
+      'CREDIT_NOTE',
+      `Credit note for ${formatInvoiceNumber(invoice.invoiceNumber ?? 0n)}`,
+      property.today,
+      property.currency,
+      [
+        { accountId: line.incomeAccountId, unitId: null, debitMinor: amount, creditMinor: 0n },
+        {
+          accountId: systemAccount(accounts, 'RECEIVABLES').id,
+          unitId: invoice.unitId,
+          debitMinor: 0n,
+          creditMinor: amount,
+        },
+      ],
+    );
+    const id = await uow.createInvoiceCredit({
+      unitId: invoice.unitId,
+      invoiceId,
+      kind: 'CREDIT_NOTE',
+      lineNumber: line.lineNumber,
+      amountMinor: amount,
+      reason: input.reason,
+      creditedOn: property.today,
+      journalEntryId: entryId,
+      approvalId: null,
+    });
+    await uow.audit({
+      action: 'credit_note.created',
+      resourceType: 'invoice_credit',
+      resourceId: id,
+      metadata: { invoiceId, lineNumber: line.lineNumber, amountMinor: amount.toString() },
+    });
+    const updated = await uow.invoice(invoiceId);
+    if (!updated) throw new Error('Invoice vanished inside its own transaction');
+    return updated;
   }
 
   // ------------------------------------------------------------------ reports

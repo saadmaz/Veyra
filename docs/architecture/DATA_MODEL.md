@@ -318,6 +318,15 @@ fixed-length slots.
 | `facility_bookings` | facility, unit, booking_number, starts_at, ends_at, slot_count, status, status_note?, purpose?, booked_by_user, decided_by_user?, decided_at?, cancelled_at? | Inside one opening range of the property-local day, starting on a slot boundary, whole slots up to the facility maximum (slot_count set by the database). Starts at least min_notice ahead and at most max_advance_days ahead; never in an unlifted closure; the unit holds at most max_upcoming_per_unit pending or confirmed bookings of the facility that have not ended; overlapping pending and confirmed bookings never exceed the capacity at any moment. All checked under an advisory lock per facility (shared with closures, hours and archiving), so concurrent requests cannot overbook. Status set by the database on insert: `PENDING` when the facility needs approval, else `CONFIRMED`. Then `PENDING → CONFIRMED \| REJECTED \| CANCELLED`, `CONFIRMED → CANCELLED \| COMPLETED \| NO_SHOW`; rejecting and cancelling a confirmed booking need a reason; approving needs a person (decided-by/at recorded) and a booking that has not ended; COMPLETED and NO_SHOW only once it has started. Place, time, unit and purpose never change (cancel and book again). Numbered per property (BK-000042). REJECTED, CANCELLED, COMPLETED and NO_SHOW are final. |
 | `facility_booking_events` | sequence, booking, from_status?, to_status, note?, actor_user? | Written only by the database on every insert and status change, with the current user as actor and the reason as note. **Append-only for every role**, the superuser included. |
 
+**Fees and deposits** (migration `20261118090000_facility_charges`): a facility may have a fee
+per slot with a charge type booking to income, and a deposit per booking with a charge type
+booking to a liability (both or neither for each; amounts positive). Charge types may now book to
+a LIABILITY for money held, not only to INCOME. Each booking keeps `fee_minor` (slots x the fee
+per slot) and `deposit_minor` as they were when it was made, set by the database and never
+changed. `invoice_id` is set once, only on a CONFIRMED booking with something to pay, and only to
+an ISSUED invoice of the same unit. `deposit_released_at` is set once, only with an invoice and a
+deposit, also after the booking has finished (the only change a finished booking still takes).
+
 All five tables have RLS by organisation; the application has no DELETE grant except on opening
 hours. Daylight saving: slot boundaries and lengths are property-local wall-clock times; a booking
 across a daylight-saving change is as long on the clock as it looks, not in elapsed time.

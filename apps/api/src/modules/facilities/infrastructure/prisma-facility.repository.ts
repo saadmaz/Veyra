@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type DbClient, type DbTransaction, withTenantTransaction } from '@veyra/db';
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type {
   BookingEventRecord,
   BookingFilter,
@@ -31,6 +32,10 @@ const FACILITY_SELECT = {
   maxSlotsPerBooking: true,
   maxUpcomingPerUnit: true,
   cancellationMinutes: true,
+  feeChargeTypeId: true,
+  feePerSlotMinor: true,
+  depositChargeTypeId: true,
+  depositMinor: true,
   commonArea: { select: { name: true, type: true } },
 } as const;
 
@@ -49,6 +54,11 @@ const BOOKING_SELECT = {
   decidedAt: true,
   cancelledAt: true,
   createdAt: true,
+  feeMinor: true,
+  depositMinor: true,
+  invoiceId: true,
+  depositReleasedAt: true,
+  property: { select: { currency: true } },
   bookedBy: { select: { displayName: true } },
   unit: { select: { number: true } },
   facility: { select: { cancellationMinutes: true, commonArea: { select: { name: true } } } },
@@ -69,6 +79,11 @@ interface BookingRow {
   decidedAt: Date | null;
   cancelledAt: Date | null;
   createdAt: Date;
+  feeMinor: bigint;
+  depositMinor: bigint;
+  invoiceId: string | null;
+  depositReleasedAt: Date | null;
+  property: { currency: string };
   bookedBy: { displayName: string };
   unit: { number: string };
   facility: { cancellationMinutes: number; commonArea: { name: string } };
@@ -93,6 +108,11 @@ const toBooking = (row: BookingRow): BookingRecord => ({
   cancelledAt: row.cancelledAt,
   createdAt: row.createdAt,
   cancellationMinutes: row.facility.cancellationMinutes,
+  feeMinor: row.feeMinor,
+  depositMinor: row.depositMinor,
+  currency: row.property.currency.trim(),
+  invoiceId: row.invoiceId,
+  depositReleasedAt: row.depositReleasedAt,
 });
 
 const toClosure = (row: ClosureRecord): ClosureRecord => ({
@@ -121,10 +141,22 @@ class PrismaFacilityUnitOfWork implements FacilityUnitOfWork {
   async property() {
     const row = await this.tx.property.findFirst({
       where: { id: this.propertyId, organisationId: this.organisationId },
-      select: { timeZone: true, status: true },
+      select: { timeZone: true, currency: true, status: true },
     });
     if (!row) throw new Error('Property vanished inside its own transaction');
-    return row;
+    return { ...row, currency: row.currency.trim() };
+  }
+
+  transaction(): TransactionHandle {
+    return this.tx as unknown as TransactionHandle;
+  }
+
+  async chargeType(id: string) {
+    const row = await this.tx.chargeType.findFirst({
+      where: { ...this.scope, id },
+      select: { id: true, status: true, incomeAccount: { select: { type: true } } },
+    });
+    return row ? { id: row.id, status: row.status, accountType: row.incomeAccount.type } : null;
   }
 
   unit(id: string) {
@@ -175,6 +207,10 @@ class PrismaFacilityUnitOfWork implements FacilityUnitOfWork {
       maxSlotsPerBooking: number;
       maxUpcomingPerUnit: number | null;
       cancellationMinutes: number;
+      feeChargeTypeId: string | null;
+      feePerSlotMinor: bigint | null;
+      depositChargeTypeId: string | null;
+      depositMinor: bigint | null;
       commonArea: { name: string; type: string };
     }[],
   ): Promise<FacilityRecord[]> {
@@ -362,6 +398,17 @@ class PrismaFacilityUnitOfWork implements FacilityUnitOfWork {
     await this.tx.facilityBooking.updateMany({
       where: { ...this.scope, id },
       data: { status, statusNote: note },
+    });
+  }
+
+  async setBookingInvoice(id: string, invoiceId: string) {
+    await this.tx.facilityBooking.updateMany({ where: { ...this.scope, id }, data: { invoiceId } });
+  }
+
+  async markDepositReleased(id: string) {
+    await this.tx.facilityBooking.updateMany({
+      where: { ...this.scope, id },
+      data: { depositReleasedAt: new Date() },
     });
   }
 

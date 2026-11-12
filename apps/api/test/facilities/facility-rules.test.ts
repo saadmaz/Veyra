@@ -29,6 +29,10 @@ const facility: FacilityRecord = {
   maxSlotsPerBooking: 2,
   maxUpcomingPerUnit: null,
   cancellationMinutes: 120,
+  feeChargeTypeId: null,
+  feePerSlotMinor: null,
+  depositChargeTypeId: null,
+  depositMinor: null,
   openingHours: [],
 };
 
