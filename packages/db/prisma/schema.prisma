@@ -85,6 +85,7 @@ model User {
   announcementsCreated    Announcement[]           @relation("AnnouncementCreatedBy")
   announcementsPublished  Announcement[]           @relation("AnnouncementPublishedBy")
   announcementsReceived   AnnouncementRecipient[]  @relation("AnnouncementRecipientUser")
+  notifications           Notification[]           @relation("NotificationUser")
   vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -170,11 +171,13 @@ model Organisation {
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships Membership[]
-  invitations Invitation[]
-  properties  Property[]
-  vendors     Vendor[]
-  persons     Person[]
+  memberships            Membership[]
+  invitations            Invitation[]
+  properties             Property[]
+  vendors                Vendor[]
+  notifications          Notification[]
+  notificationDeliveries NotificationDelivery[]
+  persons                Person[]
 
   @@map("organisations")
 }
@@ -2686,4 +2689,74 @@ model AnnouncementRecipient {
   @@unique([announcementId, userId])
   @@index([organisationId, userId, createdAt])
   @@map("announcement_recipients")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Notifications (Phase 10 Part 2). A notification tells one person about something that
+// happened (a booking decided, a request updated, an urgent announcement); it shows in their
+// in-app feed and may be delivered on other channels. Each delivery is sent by the worker through
+// a provider adapter and records its outcome. Rules are hand-written in migration
+// 20261124090000_notifications.
+// ---------------------------------------------------------------------------------------------
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationDeliveryStatus {
+  /// Waiting for the worker (an outbox event is written with it).
+  PENDING
+  SENT
+  /// Gave up after the last attempt. Final.
+  FAILED
+}
+
+model Notification {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  /// The property it is about, if any.
+  propertyId     String?   @map("property_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// What happened, e.g. "facility.booking.approved".
+  kind           String
+  title          String
+  body           String
+  /// A console path to open, e.g. "/organisations/…/units/…/facilities".
+  link           String?
+  urgent         Boolean   @default(false)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  readAt         DateTime? @map("read_at") @db.Timestamptz(3)
+
+  organisation Organisation           @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user         User                   @relation("NotificationUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  deliveries   NotificationDelivery[]
+
+  @@unique([organisationId, id])
+  @@index([organisationId, userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id                String                     @id @default(uuid(7)) @db.Uuid
+  organisationId    String                     @map("organisation_id") @db.Uuid
+  notificationId    String                     @map("notification_id") @db.Uuid
+  channel           NotificationChannel
+  status            NotificationDeliveryStatus @default(PENDING)
+  attempts          Int                        @default(0)
+  /// The adapter's reason for the latest failure (no personal data).
+  lastError         String?                    @map("last_error")
+  /// The provider's message id once sent.
+  providerReference String?                    @map("provider_reference")
+  sentAt            DateTime?                  @map("sent_at") @db.Timestamptz(3)
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  notification Notification @relation(fields: [organisationId, notificationId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([notificationId, channel])
+  @@index([organisationId, status, createdAt])
+  @@map("notification_deliveries")
 }

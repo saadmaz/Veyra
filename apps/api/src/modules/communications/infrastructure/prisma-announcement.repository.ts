@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type DbClient, type DbTransaction, withTenantTransaction } from '@veyra/db';
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
 import type { RequestMeta } from '../../../platform/request-meta';
+import type { TransactionHandle } from '../../../platform/transaction-handle';
 import type {
   AnnouncementContent,
   AnnouncementRecord,
@@ -80,6 +81,10 @@ class PrismaAnnouncementUnitOfWork implements AnnouncementUnitOfWork {
       read: figures.get(r.id)?.read ?? 0,
       acknowledged: figures.get(r.id)?.acknowledged ?? 0,
     }));
+  }
+
+  transaction(): TransactionHandle {
+    return this.tx as unknown as TransactionHandle;
   }
 
   building(propertyId: string, id: string) {

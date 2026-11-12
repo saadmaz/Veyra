@@ -380,7 +380,7 @@ Migration `20261121090000_staff_shifts`.
 
 All six staff tables have RLS by organisation and no DELETE grant.
 
-## 11. Communications (Phase 10, announcements implemented)
+## 11. Communications (Phase 10, announcements and notifications implemented)
 
 Migration `20261123090000_announcements`.
 
@@ -394,6 +394,13 @@ property (or building) today: owners, tenants and household members by the prope
 date, the same rules as `app_resident_grants`. Publishing delivers to these residents and/or to
 everyone holding `property.profile.read` at the property (staff), as the audience says. Both
 tables have RLS by organisation and no DELETE grant.
+
+**Notifications** (migration `20261124090000_notifications`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `notifications` | user, property?, kind (`facility.booking.approved` style), title, body, link? (a console path), urgent, read_at? | Never change; only the recipient marks one read, once. Written by the module that made the change, in the same transaction. |
+| `notification_deliveries` | notification, channel (`EMAIL`/`SMS`/`PUSH`), status (`PENDING`/`SENT`/`FAILED`), attempts, last_error?, provider_reference?, sent_at? | One per notification and channel; start PENDING and write a `notification.delivery.due` outbox event in the same transaction. The application role cannot update them: the worker records each attempt through `app_notification_delivery_result()` (runs as the owner, under RLS), which counts attempts, marks FAILED after the last one and leaves SENT and FAILED alone. |
 
 ## 12. Identity vs person vs relationship
 

@@ -15,6 +15,8 @@ export const workerEnvSchema = z.object({
     .refine((url) => /^postgres(ql)?:\/\//.test(url), 'DATABASE_URL must be a PostgreSQL URL'),
   /** How often the outbox relay looks for due events. */
   OUTBOX_POLL_MS: z.coerce.number().int().min(1000).max(300000).default(15000),
+  /** Email provider adapter. Only "log" exists yet: it accepts and logs delivery ids (Phase 10). */
+  EMAIL_ADAPTER: z.enum(['log']).default('log'),
 });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;

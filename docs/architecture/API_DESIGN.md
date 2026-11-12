@@ -415,6 +415,17 @@ copies exist): `GET` (published announcements, newest first), `POST {id}/read` a
 {id}/acknowledge` (409 when it does not ask for acknowledgement). Withdrawn announcements leave
 inboxes.
 
+## Notifications (Phase 10)
+
+Everyone signed in, under `/organisations/{orgId}/notifications` (only their own): `GET` (newest
+100 with an `unread` count), `POST {id}/read` and `POST read-all`. Managers (`property.announcement.read`):
+`GET properties/{id}/notification-deliveries?status=` shows how each delivery went (attempts and
+the adapter's last error, never addresses). Today a staff decision on a booking (approved,
+declined, cancelled), the property team accepting, resolving or declining a resident's
+maintenance request, and an urgent announcement notify the people concerned, in-app and by email.
+The worker sends email deliveries through an `EmailSender` adapter (`EMAIL_ADAPTER`, only `log`
+for now: it accepts and logs the delivery id) with five attempts and backoff.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

@@ -754,6 +754,21 @@ expiry, rehash on sign-in, idempotent sign-out).
   guards cannot publish, residents get 404 on manager routes; withdrawn announcements leave
   inboxes; strangers see an empty inbox.
 
+### Part 2: notifications
+
+- `packages/db` integration (3, `notifications.int.test.ts`): only the recipient marks a
+  notification read and nothing else changes; kinds are checked; each delivery writes its outbox
+  event with only its id; the application role cannot update deliveries; outcomes count attempts,
+  fail after the last one, leave finished deliveries alone and stay within the caller's tenant.
+- `apps/worker` unit (3, `notification-jobs.test.ts`): a pending email is sent and recorded and
+  the log holds neither the address nor the content; a failure is recorded and retried until the
+  last attempt fails it; deliveries gone or finished are skipped; bad payloads refused. The relay
+  test now claims both event types.
+- `apps/api` integration (2, `notifications.int.test.ts`): approving a booking and accepting a
+  maintenance request notify the tenant with a link and a pending email; an urgent announcement
+  notifies residents by email too; a stranger's feed is empty and cannot mark others' items read;
+  read and read-all; managers see the deliveries, residents get 404.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

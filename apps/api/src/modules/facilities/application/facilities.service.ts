@@ -4,6 +4,7 @@ import { Money } from '@veyra/domain';
 import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
 import type { OrganisationAccess } from '../../access-control';
+import { NotificationsService } from '../../communications/application/notifications.service';
 import {
   BookingChargesService,
   type ChargeLine,
@@ -104,6 +105,7 @@ export class FacilitiesService {
   constructor(
     @Inject(FACILITY_REPOSITORY) private readonly repository: FacilityRepository,
     @Inject(BookingChargesService) private readonly charges: BookingChargesService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
   ) {}
 
   // ------------------------------------------------------------------ staff: setup
@@ -315,6 +317,9 @@ export class FacilitiesService {
       await this.auditBooking(uow, id, to.toLowerCase(), { byStaff: true });
       if (to === 'CONFIRMED') await this.chargeIfConfirmed(uow, access, meta, id);
       if (to === 'CANCELLED') await this.creditOnCancel(uow, access, meta, id);
+      if (to === 'CONFIRMED' || to === 'REJECTED' || to === 'CANCELLED') {
+        await this.tellBooker(uow, access, id, to);
+      }
       return this.bookingView(uow, id);
     });
   }
@@ -442,6 +447,42 @@ export class FacilitiesService {
   }
 
   // ------------------------------------------------------------------ shared
+
+  /** Tells whoever booked what staff decided (in-app and email). */
+  private async tellBooker(
+    uow: FacilityUnitOfWork,
+    access: OrganisationAccess,
+    id: string,
+    to: 'CONFIRMED' | 'REJECTED' | 'CANCELLED',
+  ) {
+    const b = await this.mustFindBooking(uow, id);
+    if (b.bookedByUserId === access.userId) return;
+    const number = formatBookingNumber(b.number);
+    const [title, body] = {
+      CONFIRMED: ['Booking approved', `${b.facilityName} booking ${number} is confirmed.`],
+      REJECTED: [
+        'Booking declined',
+        `${b.facilityName} booking ${number} was declined: ${b.statusNote ?? ''}`.trim(),
+      ],
+      CANCELLED: [
+        'Booking cancelled',
+        `${b.facilityName} booking ${number} was cancelled: ${b.statusNote ?? ''}`.trim(),
+      ],
+    }[to];
+    const property = access.propertyId as string;
+    await this.notifications.notifyWithin(uow.transaction(), access.organisationId, [
+      {
+        userId: b.bookedByUserId,
+        propertyId: property,
+        kind: `facility.booking.${{ CONFIRMED: 'approved', REJECTED: 'rejected', CANCELLED: 'cancelled' }[to]}`,
+        title: title as string,
+        body: (body as string).slice(0, 2000),
+        link: `/organisations/${access.organisationId}/properties/${property}/units/${b.unitId}/facilities`,
+        urgent: false,
+        email: true,
+      },
+    ]);
+  }
 
   /** A confirmed booking with a fee or deposit is invoiced to its unit in the same transaction. */
   private async chargeIfConfirmed(
