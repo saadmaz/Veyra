@@ -80,6 +80,7 @@ export const ROLES = {
       'property.approval.read',
       'property.approval.request',
       'property.approval.decide',
+      'property.report.export',
     ],
   },
   PROPERTY_MANAGER: {
@@ -125,6 +126,7 @@ export const ROLES = {
       'property.approval.read',
       'property.approval.request',
       'property.approval.decide',
+      'property.report.export',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -150,6 +152,7 @@ export const ROLES = {
       'property.incident.report',
       'property.approval.read',
       'property.approval.request',
+      'property.report.export',
     ],
   },
   TECHNICIAN: {
@@ -186,6 +189,7 @@ export const ROLES = {
       'property.incident.read',
       'property.incident.report',
       'property.incident.manage',
+      'property.report.export',
     ],
   },
   SECURITY_GUARD: {
@@ -224,6 +228,7 @@ export const ROLES = {
       'organisation.vendor.read',
       'property.approval.read',
       'property.approval.request',
+      'property.report.export',
     ],
   },
   COMMITTEE_MEMBER: {

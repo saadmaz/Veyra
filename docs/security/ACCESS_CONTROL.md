@@ -173,6 +173,12 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   of that area's read permission (`property.structure.read`, `.finance.read`,
   `.maintenance.read`, `.visitor.read`, `.facility.read`, `.incident.read`, `.approval.read`), and
   sensitive incidents are counted only for holders of `property.incident.manage`.
+  Exports (Phase 12) need `property.report.export` (organisation admins, property managers,
+  finance officers, maintenance managers, security supervisors) **and** the area's read
+  permission. They carry no visitor names or text written by residents; occupancy by building
+  is suppressed below three units; every download writes a `report.exported` audit record with
+  the report, row count and dates; at most 366 days and 10,000 rows; cells are defused against
+  spreadsheet formula injection.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

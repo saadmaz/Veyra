@@ -263,6 +263,7 @@ describe('a property manager of P1', () => {
       'property.maintenance.read',
       'property.maintenance.work',
       'property.profile.read',
+      'property.report.export',
       'property.resident.manage',
       'property.resident.read',
       'property.settings.manage',

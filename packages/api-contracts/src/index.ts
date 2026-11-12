@@ -2233,3 +2233,15 @@ export interface PropertyDashboardDto {
   incidents: { open: number; openHighOrCritical: number } | null;
   pendingApprovals: number | null;
 }
+
+/** CSV exports (Phase 12 Part 2): GET .../exports/{name}?from=YYYY-MM-DD&to=YYYY-MM-DD. */
+export type ExportName =
+  | 'occupancy-by-building'
+  | 'arrears'
+  | 'maintenance-requests'
+  | 'visits'
+  | 'incidents';
+
+export interface ExportListDto {
+  data: ExportName[];
+}
