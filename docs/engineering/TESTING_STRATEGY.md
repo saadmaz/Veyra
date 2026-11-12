@@ -728,6 +728,16 @@ expiry, rehash on sign-in, idempotent sign-out).
   409; returned with a note, fixed, resubmitted and verified; a supervisor's own checklist is 403
   for them to verify; an archived template is 409.
 
+### Part 5: operations console
+
+- Browser journeys (2, `e2e/operations.spec.ts`, desktop and phone, with an in-memory
+  `e2e/fake-ops.ts`): an admin opens Vendors from the organisation, adds a vendor and its
+  insurance, and sees its papers go from none on file to in order. A security supervisor adds a
+  department and a guard, plans a shift and gives a checklist; the guard starts the shift, answers
+  the checks (a problem without a note is stopped on the page), hands the checklist in and ends the
+  shift with a handover; the supervisor sees the answers and the handover and verifies it. axe
+  WCAG 2.2 AA on each screen. Asset screens are covered by the API tests (no journey yet).
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

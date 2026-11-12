@@ -98,6 +98,16 @@ export default function OrganisationPage() {
 
       <YourHomes organisationId={org.id} />
       <Properties organisationId={org.id} canCreate={can('organisation.property.create')} />
+      {can('organisation.vendor.read') ? (
+        <Card title="Vendors">
+          <p className="muted">
+            Outside contractors, their trades and their insurance and licences.
+          </p>
+          <div className="form__actions">
+            <ButtonLink href={`/organisations/${org.id}/vendors`}>Open vendors</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
       {can('organisation.member.read') ? <Members organisationId={org.id} /> : null}
       {can('organisation.member.invite') ? <Invitations organisationId={org.id} /> : null}
     </>
