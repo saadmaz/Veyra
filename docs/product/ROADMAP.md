@@ -276,7 +276,7 @@ customer need (Phase 13/14).
 | 1 | Dashboards: a property's figures by area (occupancy, finance, maintenance, visitors, facilities, incidents, approvals), each only for people who can see that area | ✅ Done |
 | 2 | Exports: CSV reports per area with export permissions, an audit record per export and small-group suppression | ✅ Done (occupancy by building, arrears, maintenance requests, visits, incidents) |
 | 3 | Webhooks: endpoints per organisation, event subscriptions, signed deliveries retried by the worker, delivery log | ✅ Done (incident and approval events; secrets derived from one master key, never stored) |
-| 4 | Console screens and browser journeys | |
+| 4 | Console screens and browser journeys | ✅ Done (figures and exports on the property page, webhooks for organisation admins) |
 | 5 | Phase 12 exit review | |
 
 ## Release gates

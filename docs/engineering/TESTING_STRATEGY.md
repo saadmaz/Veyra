@@ -880,6 +880,15 @@ expiry, rehash on sign-in, idempotent sign-out).
   matching the worker's derivation, rotation; incident reports queue deliveries (never sensitive
   ones); test events; disabled endpoints get nothing; only admins manage endpoints.
 
+### Part 4: reporting console
+
+- `apps/console-web` unit (2, `test/reporting.test.ts`): export file names and refused exports.
+- Browser journeys (3, `e2e/reporting.spec.ts`, desktop and phone, with an in-memory
+  `e2e/fake-reporting.ts`): a manager sees every area's figures and downloads an export (the
+  download is recorded); a guard sees only their areas and no exports; an organisation admin adds
+  a webhook endpoint, sees the secret once, sends a test, reads the delivery and disables it.
+  axe WCAG 2.2 AA.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

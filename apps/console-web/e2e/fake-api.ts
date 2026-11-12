@@ -25,6 +25,7 @@ import { FakeFinance } from './fake-finance';
 import { FakeGovernance } from './fake-governance';
 import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
 import { FakeOps } from './fake-ops';
+import { FakeReporting } from './fake-reporting';
 
 /**
  * In-memory stand-in for the VEYRA API, answering the console's browser requests through
@@ -68,6 +69,7 @@ interface FakeInvitation {
 const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
   ORGANISATION_ADMIN: {
     organisation: [
+      'organisation.webhook.manage',
       'organisation.member.invite',
       'organisation.member.manage',
       'organisation.member.read',
@@ -79,6 +81,7 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'organisation.vendor.manage',
     ],
     property: [
+      'property.report.export',
       'property.incident.read',
       'property.incident.report',
       'property.incident.manage',
@@ -135,6 +138,7 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
   PROPERTY_MANAGER: {
     organisation: [],
     property: [
+      'property.report.export',
       'property.incident.read',
       'property.incident.report',
       'property.incident.manage',
@@ -300,6 +304,7 @@ export class FakeApi {
   ops = new FakeOps();
   comms = new FakeComms();
   governance = new FakeGovernance();
+  reporting = new FakeReporting();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -712,6 +717,14 @@ export class FakeApi {
 
     if (rest === '' && method === 'GET')
       return this.reply(route, 200, { ...organisation, permissions });
+    const reported = this.reporting.handleOrganisation({
+      method,
+      sub: rest,
+      body,
+      organisationId: organisation.id,
+      permissions,
+    });
+    if (reported) return this.send(route, reported);
     if (rest.startsWith('/inbox') || rest.startsWith('/notifications')) {
       const reply = this.comms.handleOrganisation({ method, sub: rest, user });
       if (reply) return this.reply(route, reply.status, reply.body);
@@ -1010,6 +1023,16 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    const figures = this.reporting.handleProperty({
+      method,
+      sub,
+      property,
+      user,
+      permissions: pp,
+      units: this.units.filter((u) => u.propertyId === property.id && u.status === 'ACTIVE').length,
+    });
+    if (figures) return this.send(route, figures);
 
     const governed = this.governance.handleProperty({
       method,
@@ -2157,6 +2180,26 @@ export class FakeApi {
         absoluteExpiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
       },
     };
+  }
+
+  /** A module's reply: JSON, or a file with its own headers (CSV exports). */
+  private send(
+    route: Route,
+    r: { status: number; body?: unknown; headers?: Record<string, string> },
+  ) {
+    if (!r.headers) return this.reply(route, r.status, r.body);
+    const origin = route.request().headers().origin;
+    return route.fulfill({
+      status: r.status,
+      headers: {
+        'Access-Control-Allow-Origin':
+          origin && /^http:\/\/localhost:\d+$/.test(origin) ? origin : ORIGIN,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Expose-Headers': 'Content-Disposition',
+        ...r.headers,
+      },
+      body: String(r.body ?? ''),
+    });
   }
 
   private reply(route: Route, status: number, body?: unknown) {

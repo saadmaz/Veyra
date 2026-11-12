@@ -17,6 +17,8 @@ export function configureApp(app: INestApplication, env: ApiEnv): void {
   app.enableCors({
     origin: env.API_CORS_ORIGINS.length > 0 ? env.API_CORS_ORIGINS : false,
     credentials: true,
+    // Lets the console read the file name of CSV exports.
+    exposedHeaders: ['Content-Disposition'],
   });
   app.setGlobalPrefix(API_PREFIX);
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

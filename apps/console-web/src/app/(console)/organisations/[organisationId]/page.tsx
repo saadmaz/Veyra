@@ -96,6 +96,16 @@ export default function OrganisationPage() {
         </dl>
       </Card>
 
+      {org.permissions.includes('organisation.webhook.manage') ? (
+        <Card title="Webhooks">
+          <p className="muted">Tell other systems when incidents and approvals happen.</p>
+          <div className="form__actions">
+            <ButtonLink href={`/organisations/${org.id}/webhooks`} variant="secondary">
+              Webhooks
+            </ButtonLink>
+          </div>
+        </Card>
+      ) : null}
       <Card title="Inbox">
         <p className="muted">Announcements and notifications for you in this organisation.</p>
         <div className="form__actions">
