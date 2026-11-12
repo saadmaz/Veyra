@@ -35,6 +35,8 @@ export const apiEnvSchema = z
      * Development and test only: refused in production.
      */
     PAYMENT_SANDBOX_SECRET: z.string().min(32).optional(),
+    /** The console's address, for links in account emails (verification, password reset). */
+    CONSOLE_URL: z.string().url().default('http://localhost:3000'),
     /**
      * Master key for webhook signing secrets (Phase 12): at least 32 bytes, base64. The worker
      * needs the same value. Without it, webhook endpoints answer 409 WEBHOOKS_NOT_CONFIGURED.

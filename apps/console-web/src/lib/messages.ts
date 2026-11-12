@@ -9,6 +9,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   [NETWORK_ERROR]: 'We could not reach VEYRA. Check your connection and try again.',
   INVALID_CREDENTIALS: 'The email or password is incorrect.',
   EMAIL_ALREADY_REGISTERED: 'An account with this email already exists. Sign in instead.',
+  INVALID_OR_EXPIRED_LINK: 'This link is invalid or has expired.',
   RATE_LIMITED: 'Too many attempts. Wait a few minutes and try again.',
   SERVICE_UNAVAILABLE: 'VEYRA is temporarily unavailable. Try again shortly.',
   UNAUTHENTICATED: 'Your session has ended. Sign in again.',

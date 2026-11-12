@@ -48,7 +48,7 @@ class FakeRepository implements IdentityRepository {
     if ([...this.users.values()].some((u) => u.email === user.email)) {
       throw new EmailAlreadyRegisteredError();
     }
-    const created = { id: randomUUID(), status: 'ACTIVE' as const, ...user };
+    const created = { id: randomUUID(), status: 'ACTIVE' as const, emailVerified: false, ...user };
     this.users.set(created.id, created);
     const createdSession = await this.createSession(created.id, session, meta, {
       action: 'auth.sign_up',

@@ -81,6 +81,9 @@ function SignInForm() {
         </Button>
       </form>
       <p className="auth__switch">
+        <Link href="/forgot-password">Forgot your password?</Link>
+      </p>
+      <p className="auth__switch">
         New to VEYRA?{' '}
         <Link href={`/sign-up?next=${encodeURIComponent(next)}`}>Create an account</Link>
       </p>

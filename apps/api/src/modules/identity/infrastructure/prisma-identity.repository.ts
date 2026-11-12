@@ -22,6 +22,7 @@ const toUser = (row: UserRow): IdentityUser => ({
   email: row.email,
   displayName: row.displayName,
   status: row.status,
+  emailVerified: row.emailVerifiedAt !== null,
 });
 
 const toSession = (row: SessionRow): IdentitySession => ({

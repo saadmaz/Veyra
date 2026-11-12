@@ -99,6 +99,7 @@ model User {
   approvalDecisionsMade    ApprovalDecision[]       @relation("ApprovalDecisionBy")
   subscriptionChanges      SubscriptionEvent[]      @relation("SubscriptionEventActor")
   platformAdmin            PlatformAdmin?
+  accountTokens            AccountToken[]
   supportRequested         SupportAccess[]          @relation("SupportRequestedBy")
   supportDecided           SupportAccess[]          @relation("SupportDecidedBy")
   webhookEndpointsCreated  WebhookEndpoint[]        @relation("WebhookEndpointCreatedBy")
@@ -3495,4 +3496,31 @@ model SupportAccess {
   @@index([organisationId, createdAt])
   @@index([requestedByUserId, status])
   @@map("support_access")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Account tokens (Phase 14 Part 1): single-use links for email verification and password reset.
+// Only the SHA-256 of a token is stored; the token itself is emailed and never kept. Identity
+// tables have no row-level security (they are not tenant data). Rules are hand-written in
+// migration 20261203090000_account_tokens.
+// ---------------------------------------------------------------------------------------------
+
+enum AccountTokenPurpose {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+model AccountToken {
+  id        String              @id @default(uuid(7)) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  purpose   AccountTokenPurpose
+  tokenHash String              @unique @map("token_hash")
+  expiresAt DateTime            @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime?           @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([userId, purpose])
+  @@map("account_tokens")
 }

@@ -297,6 +297,23 @@ time-boxed, reason-logged, approved by the organisation and visible to it.
 | 4 | Console screens and browser journeys | ✅ Done (plan and support page in the console; organisations, plans, suspension and support requests in the admin tool) |
 | 5 | Phase 13 exit review | ✅ Done ([PHASE_13_REVIEW](../reviews/PHASE_13_REVIEW.md)) |
 
+## Phase 14 plan (Security hardening and commercial launch)
+
+Decisions (2026-11-12, the recommended options): close the pilot-readiness items carried since
+Phase 2 first; TOTP for multi-factor authentication (WebAuthn later), required for privileged
+roles' changes (ACCESS_CONTROL rule 7); structured JSON logs with redaction; gitleaks secret
+scanning and dependency audit in CI; a strict Content-Security-Policy; a launch checklist,
+runbooks and the exit review. Email still goes through the logging adapter until the owner picks
+a provider.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Email verification and password reset: one-time links (hashes only), no account enumeration, reset ends every session; console pages and a reminder | ✅ Done |
+| 2 | Multi-factor authentication (TOTP) with recovery codes, required for privileged roles' changes and for platform administrators | |
+| 3 | Operational hardening: structured JSON logging with redaction, secret scanning and dependency audit in CI, Content-Security-Policy, upload malware scanning adapter | |
+| 4 | Launch readiness: production database roles, backup and restore runbook, full-stack smoke test, launch checklist | |
+| 5 | Phase 14 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,
