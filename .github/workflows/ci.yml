@@ -85,3 +85,32 @@ jobs:
           name: playwright-report
           path: apps/console-web/playwright-report
           retention-days: 7
+
+  # The whole product in production mode (Phase 14 Part 4): built images, migrations, API,
+  # worker and console together; a customer's first journey; then a backup restored and checked.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Start the full stack
+        run: docker compose -f infra/compose/full-stack.yml up -d --build --wait
+
+      - name: Smoke test
+        run: bun infra/smoke/smoke.ts
+
+      - name: Restore drill
+        run: sh infra/scripts/restore-drill.sh
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f infra/compose/full-stack.yml logs --tail=200
+
+      - name: Stop
+        if: always()
+        run: docker compose -f infra/compose/full-stack.yml down -v
