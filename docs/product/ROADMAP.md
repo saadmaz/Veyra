@@ -245,6 +245,23 @@ categories, audiences, versions and expiry dates, stored in the existing object 
 | 4 | Console screens and browser journeys | ✅ Done (inbox and notifications, announcements with delivery status, documents for staff and residents) |
 | 5 | Phase 10 exit review | ✅ Done ([PHASE_10_REVIEW](../reviews/PHASE_10_REVIEW.md)) |
 
+## Phase 11 plan (Governance and incident management)
+
+Decisions (2026-11-12, the recommended options): incidents per property reported by staff, with
+severity, an append-only timeline, follow-up actions that must be done before closing, sensitive
+records for managers only and escalation contacts per kind of incident; high and critical reports
+alert the managers in-app and by email. VEYRA does not replace emergency services. Governance
+follows: committees and terms, meetings with agendas, minutes and resolutions, and approval
+policies with thresholds. Voting waits for legal review (PRD 3.11).
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Incidents: reports, timeline, follow-up actions, sensitive records, escalation contacts, manager alerts | ✅ Done |
+| 2 | Committees and meetings: members and terms, meetings, agendas, minutes, resolutions with supporting documents | |
+| 3 | Approval policies: thresholds and approvers for expenses, purchases and other requests | |
+| 4 | Console screens and browser journeys | |
+| 5 | Phase 11 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,

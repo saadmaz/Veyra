@@ -409,6 +409,17 @@ tables have RLS by organisation and no DELETE grant.
 | `documents` | title, description?, category (`RULES`/`MINUTES`/`NOTICE`/`FORM`/`FINANCIAL`/`CONTRACT`/`INSURANCE`/`OTHER`), audience (`EVERYONE`/`RESIDENTS`/`OWNERS`/`STAFF`), expires_on?, status (`ACTIVE`/`ARCHIVED`) | Details editable while active; archiving is final and hides it from readers. |
 | `document_versions` | document, version_number, storage_key, file_name, content_type, size_bytes, note?, status (`PENDING`/`READY`/`REJECTED`), uploaded_by_user, ready_at? | Numbered 1, 2, 3 per document (advisory lock); only on active documents; key exactly `org/<organisation>/prop/<property>/documents/<id>`; photos or PDF up to 20 MB; checked once; nothing else changes. The newest READY version is the current one. |
 
+**Incidents** (Phase 11, migration `20261126090000_incidents`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `incidents` | incident_number (per property, IN-000042), category, severity (`LOW`…`CRITICAL`), title, description, occurred_at, unit? or common_area? (at most one, active), location_detail?, sensitive, status (`OPEN`/`RESPONDING`/`RESOLVED`/`CLOSED`), outcome?, reported_by_user, resolved_at?, closed_at? | Start open, never in the future. What was reported never changes (category, severity and sensitivity may). OPEN → RESPONDING → RESOLVED → CLOSED, also OPEN → RESOLVED and RESOLVED → RESPONDING (reopening clears the outcome). Resolving needs an outcome; closing needs every follow-up action done; times set by the database; closed is final. |
+| `incident_updates` | incident, kind (`STATUS_CHANGED`/`NOTE`), from_status?, to_status?, body?, actor_user? | The timeline. Status changes are written only by the database trigger; people add notes (not on closed incidents). Append-only. |
+| `incident_actions` | incident, description, assigned_to_user?, due_on?, done_at?, done_by_user? | Not added to closed incidents; done once, by a person (recorded by the database). |
+| `escalation_contacts` | name, role, phone, email?, categories (empty: every kind), position, active | Whom to call, in order; retired by deactivating. |
+
+All four have RLS by organisation and no DELETE grant.
+
 ## 12. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)

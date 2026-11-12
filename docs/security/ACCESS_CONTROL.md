@@ -152,6 +152,13 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   technicians and finance officers: documents for everyone or staff) and `unit.document.read`
   (owners, tenants and household members: documents for everyone or residents, owners also those
   for owners).
+  For incidents (Phase 11) `property.incident.read` and `.report` (organisation admins, property
+  managers, security supervisors and guards, maintenance managers and technicians) and
+  `property.incident.manage` (organisation admins, property managers, security supervisors).
+  Sensitive incidents are visible only to holders of `.manage` and to the person who reported
+  them; others get 404. A follow-up action can be marked done by a manager or the person it was
+  given to, who must hold `property.incident.read` at the property. Residents have no incident
+  access yet.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

@@ -72,6 +72,9 @@ export const ROLES = {
       'unit.document.read',
       'organisation.vendor.read',
       'organisation.vendor.manage',
+      'property.incident.read',
+      'property.incident.report',
+      'property.incident.manage',
     ],
   },
   PROPERTY_MANAGER: {
@@ -109,6 +112,9 @@ export const ROLES = {
       'property.document.read',
       'property.document.manage',
       'unit.document.read',
+      'property.incident.read',
+      'property.incident.report',
+      'property.incident.manage',
     ],
   },
   MAINTENANCE_MANAGER: {
@@ -130,6 +136,8 @@ export const ROLES = {
       'property.staff.read',
       'property.staff.manage',
       'property.staff.work',
+      'property.incident.read',
+      'property.incident.report',
     ],
   },
   TECHNICIAN: {
@@ -143,6 +151,8 @@ export const ROLES = {
       'property.maintenance.work',
       'property.staff.work',
       'property.document.read',
+      'property.incident.read',
+      'property.incident.report',
     ],
   },
   SECURITY_SUPERVISOR: {
@@ -161,6 +171,9 @@ export const ROLES = {
       'property.staff.work',
       // Sees who has booked a facility, to let them in.
       'property.facility.read',
+      'property.incident.read',
+      'property.incident.report',
+      'property.incident.manage',
     ],
   },
   SECURITY_GUARD: {
@@ -175,6 +188,8 @@ export const ROLES = {
       'property.staff.work',
       // Staff documents, e.g. gate procedures (Phase 10).
       'property.document.read',
+      'property.incident.read',
+      'property.incident.report',
     ],
   },
   FINANCE_OFFICER: {
