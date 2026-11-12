@@ -3,6 +3,7 @@ export {
   type DbClient,
   type DbTransaction,
   databaseErrorCode,
+  databaseErrorMessage,
   isUniqueViolation,
   type SessionRow,
   type UserRow,

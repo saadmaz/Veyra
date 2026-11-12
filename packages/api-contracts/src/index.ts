@@ -1450,3 +1450,147 @@ export interface RecordWorkOrderCostRequest {
   description: string;
   amount: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Facilities and reservations (Phase 8)
+// ---------------------------------------------------------------------------------------------
+
+export type FacilityBookingStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'COMPLETED'
+  | 'NO_SHOW';
+
+/** When a facility is open on an ISO weekday (1 = Monday), property-local "HH:MM". */
+export interface OpeningRangeDto {
+  weekday: number;
+  opensAt: string;
+  /** "24:00" closes at midnight. */
+  closesAt: string;
+}
+
+export interface FacilityDto {
+  id: string;
+  commonAreaId: string;
+  name: string;
+  type: string;
+  description: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+  slotMinutes: number;
+  /** Bookings that may overlap at once (1 = exclusive use). */
+  capacity: number;
+  approvalRequired: boolean;
+  minNoticeMinutes: number;
+  maxAdvanceDays: number;
+  maxSlotsPerBooking: number;
+  maxUpcomingPerUnit: number | null;
+  /** Residents cannot cancel later than this before the start. */
+  cancellationMinutes: number;
+  openingHours: OpeningRangeDto[];
+  /** The property's IANA time zone, in which opening hours and dates are read. */
+  timeZone: string;
+}
+
+export interface FacilityClosureDto {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  createdAt: string;
+  liftedAt: string | null;
+}
+
+/** Staff: GET …/facilities/:facilityId */
+export interface FacilityDetailDto {
+  facility: FacilityDto;
+  /** Not lifted and not yet ended, soonest first. */
+  closures: FacilityClosureDto[];
+}
+
+export interface CreateFacilityRequest {
+  commonAreaId: string;
+  description?: string;
+  slotMinutes: number;
+  capacity?: number;
+  approvalRequired?: boolean;
+  minNoticeMinutes?: number;
+  maxAdvanceDays?: number;
+  maxSlotsPerBooking?: number;
+  maxUpcomingPerUnit?: number | null;
+  cancellationMinutes?: number;
+  openingHours?: OpeningRangeDto[];
+}
+
+export interface CreateFacilityClosureRequest {
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  /** Cancel the pending and confirmed bookings in the period first (with the reason). */
+  cancelBookings?: boolean;
+}
+
+/** One slot of a property-local day. */
+export interface FacilitySlotDto {
+  startsAt: string;
+  endsAt: string;
+  /** Local "HH:MM" of the start. */
+  time: string;
+  /** Places left (0 when full, closed or outside the booking window). */
+  available: number;
+  state: 'OPEN' | 'FULL' | 'CLOSED' | 'TOO_SOON' | 'TOO_FAR';
+}
+
+export interface FacilityAvailabilityDto {
+  facilityId: string;
+  date: string;
+  timeZone: string;
+  slotMinutes: number;
+  slots: FacilitySlotDto[];
+}
+
+export interface FacilityBookingDto {
+  id: string;
+  /** e.g. "BK-000042". */
+  number: string;
+  facilityId: string;
+  facilityName: string;
+  unitId: string;
+  unitNumber: string;
+  startsAt: string;
+  endsAt: string;
+  slotCount: number;
+  status: FacilityBookingStatus;
+  /** The reason given when it was rejected or cancelled. */
+  statusNote: string | null;
+  purpose: string | null;
+  bookedBy: { userId: string; name: string };
+  decidedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  /** Residents: whether they may still cancel it themselves. */
+  cancellable: boolean;
+}
+
+export interface FacilityBookingEventDto {
+  fromStatus: FacilityBookingStatus | null;
+  toStatus: FacilityBookingStatus;
+  note: string | null;
+  actor: { userId: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface FacilityBookingDetailDto {
+  booking: FacilityBookingDto;
+  events: FacilityBookingEventDto[];
+}
+
+export interface CreateFacilityBookingRequest {
+  facilityId: string;
+  /** The start of the first slot, from the availability route. */
+  startsAt: string;
+  /** Consecutive slots; defaults to 1. */
+  slots?: number;
+  purpose?: string;
+}

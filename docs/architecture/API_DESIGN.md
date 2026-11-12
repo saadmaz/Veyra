@@ -316,6 +316,31 @@ without storage configured every file route is 409 `STORAGE_NOT_CONFIGURED`.
 | Staff | `maintenance/requests/{id}/attachments`, `maintenance/work-orders/{id}/attachments` (manage) | `maintenance/attachments/{attachmentId}/…`: download with read, complete and remove with manage (any file) |
 | Technicians | `my-work-orders/{id}/attachments` (their own work; RESIDENT only for work with a request) | `my-work-orders/{id}/attachments/{attachmentId}/…`; their own uploads |
 
+## Facilities (Phase 8)
+
+Staff, under `/organisations/{orgId}/properties/{propertyId}/` (`property.facility.read` to read,
+`.manage` for the rest):
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| GET, POST | `facilities` | List (archived included); make a common area bookable with its settings and weekly `openingHours` (`HH:MM`, `24:00` = midnight). One per common area (409 `ALREADY_EXISTS`) |
+| GET, PATCH | `facilities/{id}` | With current and coming closures; change settings (bookings already made stay) |
+| PUT | `facilities/{id}/opening-hours` | Replace the week |
+| POST | `facilities/{id}/archive` | Final; 409 `BOOKINGS_IN_THE_WAY` while anything upcoming is booked |
+| POST | `facilities/{id}/closures`, `…/closures/{closureId}/lift` | A closure over pending or confirmed bookings is 409 `BOOKINGS_IN_THE_WAY` unless `cancelBookings: true`, which cancels them first with "Facility closed: <reason>" |
+| GET | `facilities/{id}/availability?date=YYYY-MM-DD` | The property-local day's slots: `startsAt`, `endsAt`, local `time`, `available`, `state` (`OPEN`/`FULL`/`CLOSED`/`TOO_SOON`/`TOO_FAR`) |
+| GET | `facility-bookings?status=&facilityId=&unitId=&from=&to=` | Latest start first, at most 500 |
+| GET | `facility-bookings/{id}` | With its history |
+| POST | `facility-bookings/{id}/approve`, `reject` (reason), `cancel` (reason once confirmed), `complete`, `no-show` | Used or no-show only once started |
+
+Residents (and staff on their behalf), under `…/units/{unitId}/` (`unit.facility.book`):
+`GET facilities` (active only), `GET facilities/{id}/availability?date=`, `GET` and `POST
+facility-bookings` (`{ facilityId, startsAt, slots, purpose? }`), `GET facility-bookings/{id}`
+and `POST facility-bookings/{id}/cancel` (`{ reason? }`). Bookings of other units are 404. The
+database's booking rules come back as 409 `SLOT_UNAVAILABLE`, `FACILITY_CLOSED`,
+`BOOKING_LIMIT`, `ARCHIVED` or 422 `INVALID_BOOKING_TIME` (off the slot grid, outside opening
+hours, too many slots, outside the notice or advance window).
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.
