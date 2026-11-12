@@ -1,0 +1,150 @@
+'use client';
+
+import type { CurrentSessionResponse } from '@veyra/api-contracts';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { ApiError, api, errorText } from '@/lib/api';
+
+type State =
+  | { kind: 'loading' }
+  | { kind: 'signed-out' }
+  | { kind: 'not-staff'; email: string }
+  | { kind: 'staff'; email: string }
+  | { kind: 'error'; message: string };
+
+/**
+ * Shows its children only to a signed-in platform administrator. Others get a sign-in form or
+ * a plain refusal. The API checks every request again; this only decides what to show.
+ */
+export function StaffGate({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<State>({ kind: 'loading' });
+
+  const check = useCallback(async () => {
+    try {
+      const session = await api.get<CurrentSessionResponse>('/auth/session');
+      const me = await api.get<{ platformAdmin: boolean }>('/platform/me');
+      setState(
+        me.platformAdmin
+          ? { kind: 'staff', email: session.user.email }
+          : { kind: 'not-staff', email: session.user.email },
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) setState({ kind: 'signed-out' });
+      else setState({ kind: 'error', message: errorText(error) });
+    }
+  }, []);
+
+  useEffect(() => {
+    void check();
+  }, [check]);
+
+  async function signOut() {
+    await api.post('/auth/sign-out').catch(() => undefined);
+    setState({ kind: 'signed-out' });
+  }
+
+  if (state.kind === 'loading') {
+    return (
+      <p className="muted" role="status">
+        Loading…
+      </p>
+    );
+  }
+  if (state.kind === 'error') {
+    return (
+      <div role="alert" className="alert">
+        {state.message}{' '}
+        <button type="button" className="button button--secondary" onClick={() => void check()}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+  if (state.kind === 'signed-out') return <SignIn onSignedIn={() => void check()} />;
+  if (state.kind === 'not-staff') {
+    return (
+      <section className="panel" aria-labelledby="refused">
+        <h1 id="refused">Not for this account</h1>
+        <p className="muted">
+          {state.email} is not a VEYRA platform administrator. Ask an operator if you should be.
+        </p>
+        <button type="button" className="button button--secondary" onClick={() => void signOut()}>
+          Sign out
+        </button>
+      </section>
+    );
+  }
+  return (
+    <>
+      <header className="topbar">
+        <span className="eyebrow">VEYRA · INTERNAL</span>
+        <span className="muted">
+          {state.email}{' '}
+          <button type="button" className="link-button" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </span>
+      </header>
+      {children}
+    </>
+  );
+}
+
+function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post('/auth/sign-in', { email, password, client: 'web' });
+      onSignedIn();
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 401 ? 'Wrong email or password.' : errorText(e),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel" aria-labelledby="sign-in">
+      <p className="eyebrow">VEYRA · INTERNAL</p>
+      <h1 id="sign-in">Platform Admin</h1>
+      <form className="form" onSubmit={submit} aria-label="Sign in">
+        <label className="field">
+          <span>Email</span>
+          <input
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </label>
+        {error ? (
+          <p role="alert" className="alert">
+            {error}
+          </p>
+        ) : null}
+        <button type="submit" className="button" disabled={busy}>
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+    </section>
+  );
+}

@@ -923,6 +923,15 @@ expiry, rehash on sign-in, idempotent sign-out).
   managers cannot decide; approval gives reads only (no changes, no exports, no deciding);
   revocation ends access at once and is final.
 
+### Part 4: platform screens
+
+- `apps/admin-web` unit (3, `test/platform.test.ts`): plan summaries, the plan change form's
+  checks, refused requests turned into readable errors.
+- Browser journeys (2, `e2e/plan.spec.ts`, desktop and phone, with an in-memory
+  `e2e/fake-platform.ts`): an organisation admin sees the plan, its limits and features, approves
+  a support request and ends it; a property manager does not see the page. axe WCAG 2.2 AA. The
+  admin tool has no browser journeys yet.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

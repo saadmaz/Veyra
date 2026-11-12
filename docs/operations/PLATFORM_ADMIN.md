@@ -22,6 +22,13 @@ The person must have signed up first. Revocation takes effect on their next requ
 
 Until MFA exists (ACCESS_CONTROL rule 7), keep the list short and review it monthly.
 
+## The admin tool
+
+`apps/admin-web` (`bun run --cwd apps/admin-web dev`, http://localhost:3002) signs staff in with
+their VEYRA account and shows nothing to anyone who is not a platform administrator: the
+organisation list with plans, an organisation's usage and history, the plan form, suspension and
+reactivation, and support access requests. `API_CORS_ORIGINS` must include its address.
+
 ## What platform administrators can do (API `/api/v1/platform`)
 
 | Action | Route | Notes |
