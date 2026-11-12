@@ -169,6 +169,10 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   `property.approval.decide` (organisation admins, property managers). A request sent to a
   committee is decided only by people holding a current seat on it; nobody decides their own
   request. Policies are kept with `property.governance.manage`.
+  Dashboards (Phase 12) need only `property.profile.read`; each area is computed only for holders
+  of that area's read permission (`property.structure.read`, `.finance.read`,
+  `.maintenance.read`, `.visitor.read`, `.facility.read`, `.incident.read`, `.approval.read`), and
+  sensitive incidents are counted only for holders of `property.incident.manage`.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |
