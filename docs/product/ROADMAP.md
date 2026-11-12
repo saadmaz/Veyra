@@ -223,7 +223,7 @@ Decisions (2026-11-12, the recommended options; the owner asked to proceed with 
 | Part | Scope | Status |
 | ---- | ----- | ------ |
 | 1 | Vendors: register, suspension and archiving, compliance documents with expiry, work orders given to active vendors (logged), API and roles | ✅ Done |
-| 2 | Assets and preventive maintenance: asset register, schedules that raise work orders, service history | |
+| 2 | Assets and preventive maintenance: asset register, schedules that raise work orders, service history | ✅ Done (raised from the console; a daily worker job is a follow-up) |
 | 3 | Staff operations: departments, shifts and handovers, checklists with supervisor verification | |
 | 4 | Console screens and browser journeys | |
 | 5 | Phase 9 exit review | |

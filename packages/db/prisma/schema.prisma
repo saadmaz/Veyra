@@ -73,6 +73,7 @@ model User {
   workOrdersAssigned      WorkOrder[]              @relation("WorkOrderAssignee")
   workOrdersCreated       WorkOrder[]              @relation("WorkOrderCreatedBy")
   vendorDocumentsAdded    VendorDocument[]         @relation("VendorDocumentCreatedBy")
+  schedulesCreated        MaintenanceSchedule[]    @relation("MaintenanceScheduleCreatedBy")
   vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
@@ -385,6 +386,8 @@ model Property {
   maintenanceAttachments MaintenanceAttachment[]
 
   facilities            Facility[]
+  assets                Asset[]
+  maintenanceSchedules  MaintenanceSchedule[]
   facilityOpeningHours  FacilityOpeningHours[]
   facilityClosures      FacilityClosure[]
   facilityBookings      FacilityBooking[]
@@ -484,6 +487,7 @@ model Unit {
   maintenanceRequests MaintenanceRequest[]
   workOrders          WorkOrder[]
   facilityBookings    FacilityBooking[]
+  assets              Asset[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -510,6 +514,7 @@ model CommonArea {
   maintenanceRequests MaintenanceRequest[]
   workOrders          WorkOrder[]
   facility            Facility?
+  assets              Asset[]
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, name])
@@ -1861,6 +1866,11 @@ model WorkOrder {
   assignedToUserId String?             @map("assigned_to_user_id") @db.Uuid
   /// An outside contractor doing the work (Phase 9), instead of or as well as a technician.
   vendorId         String?             @map("vendor_id") @db.Uuid
+  /// The asset worked on (Phase 9), at the work's place.
+  assetId          String?             @map("asset_id") @db.Uuid
+  /// Raised by a preventive maintenance schedule for this due date (once per date).
+  scheduleId       String?             @map("schedule_id") @db.Uuid
+  scheduledFor     DateTime?           @map("scheduled_for") @db.Date
   createdByUserId  String              @map("created_by_user_id") @db.Uuid
   dueAt            DateTime?           @map("due_at") @db.Timestamptz(3)
   startedAt        DateTime?           @map("started_at") @db.Timestamptz(3)
@@ -1874,6 +1884,8 @@ model WorkOrder {
   commonArea  CommonArea?             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   assignedTo  User?                   @relation("WorkOrderAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   vendor      Vendor?                 @relation(fields: [organisationId, vendorId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  asset       Asset?                  @relation(fields: [organisationId, propertyId, assetId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  schedule    MaintenanceSchedule?    @relation(fields: [organisationId, propertyId, scheduleId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   createdBy   User                    @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   costs       WorkOrderCost[]
   events      MaintenanceEvent[]
@@ -1881,10 +1893,12 @@ model WorkOrder {
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, workOrderNumber])
+  @@unique([scheduleId, scheduledFor])
   @@index([organisationId, propertyId, status, createdAt])
   @@index([organisationId, assignedToUserId, status])
   @@index([organisationId, requestId])
   @@index([organisationId, vendorId])
+  @@index([organisationId, assetId])
   @@map("work_orders")
 }
 
@@ -2235,9 +2249,11 @@ model Vendor {
   createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  documents    VendorDocument[]
-  workOrders   WorkOrder[]
+  organisation   Organisation          @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  documents      VendorDocument[]
+  workOrders     WorkOrder[]
+  assetsSupplied Asset[]
+  schedules      MaintenanceSchedule[]
 
   @@unique([organisationId, id])
   @@index([organisationId, status])
@@ -2269,4 +2285,98 @@ model VendorDocument {
   @@index([organisationId, vendorId])
   @@index([organisationId, expiresOn])
   @@map("vendor_documents")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Assets and preventive maintenance (Phase 9 Part 2). An asset is equipment at a unit or common
+// area of a property (lift, pump, generator); a schedule repeats work on it every N days, weeks or
+// months and raises a work order for each due date, once. Rules are hand-written in migration
+// 20261120090000_assets.
+// ---------------------------------------------------------------------------------------------
+
+enum AssetStatus {
+  ACTIVE
+  /// Broken or switched off for now.
+  OUT_OF_SERVICE
+  /// Removed for good. Final.
+  RETIRED
+}
+
+enum ScheduleIntervalUnit {
+  DAY
+  WEEK
+  MONTH
+}
+
+model Asset {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  organisationId    String              @map("organisation_id") @db.Uuid
+  propertyId        String              @map("property_id") @db.Uuid
+  /// Unique within the property, e.g. "LIFT-01". Upper-case letters, digits, dots and hyphens.
+  tag               String
+  name              String
+  category          MaintenanceCategory
+  /// Exactly one place.
+  unitId            String?             @map("unit_id") @db.Uuid
+  commonAreaId      String?             @map("common_area_id") @db.Uuid
+  manufacturer      String?
+  model             String?
+  serialNumber      String?             @map("serial_number")
+  installedOn       DateTime?           @map("installed_on") @db.Date
+  warrantyExpiresOn DateTime?           @map("warranty_expires_on") @db.Date
+  /// Who supplied or services it.
+  supplierVendorId  String?             @map("supplier_vendor_id") @db.Uuid
+  notes             String?
+  status            AssetStatus         @default(ACTIVE)
+  statusNote        String?             @map("status_note")
+  retiredAt         DateTime?           @map("retired_at") @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property              @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit       Unit?                 @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea CommonArea?           @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier   Vendor?               @relation(fields: [organisationId, supplierVendorId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  schedules  MaintenanceSchedule[]
+  workOrders WorkOrder[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, tag])
+  @@index([organisationId, propertyId, status])
+  @@map("assets")
+}
+
+/**
+ * Repeating work on an asset.
+ */
+model MaintenanceSchedule {
+  id              String               @id @default(uuid(7)) @db.Uuid
+  organisationId  String               @map("organisation_id") @db.Uuid
+  propertyId      String               @map("property_id") @db.Uuid
+  assetId         String               @map("asset_id") @db.Uuid
+  title           String
+  description     String?
+  priority        MaintenancePriority  @default(MEDIUM)
+  intervalUnit    ScheduleIntervalUnit @map("interval_unit")
+  intervalCount   Int                  @map("interval_count")
+  /// The next date work is due (property-local); moves forward by the interval when raised.
+  nextDueOn       DateTime             @map("next_due_on") @db.Date
+  /// Work is raised this many days before it is due.
+  leadDays        Int                  @default(7) @map("lead_days")
+  /// Who usually does it; new work goes to this vendor when active.
+  vendorId        String?              @map("vendor_id") @db.Uuid
+  active          Boolean              @default(true)
+  createdByUserId String               @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property   Property    @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  asset      Asset       @relation(fields: [organisationId, propertyId, assetId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  vendor     Vendor?     @relation(fields: [organisationId, vendorId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User        @relation("MaintenanceScheduleCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workOrders WorkOrder[]
+
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId, active, nextDueOn])
+  @@map("maintenance_schedules")
 }

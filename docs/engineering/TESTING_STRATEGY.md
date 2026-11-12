@@ -686,6 +686,20 @@ expiry, rehash on sign-in, idempotent sign-out).
   one, cannot archive a vendor with open work until the vendor is taken off it (back to open).
 - `apps/api` unit (access control): finance officers now read vendors.
 
+### Part 2: assets and preventive maintenance
+
+- `packages/db` integration (4, `assets.int.test.ts`): unique upper-case tags and exactly one
+  place; assets start in use; out of service needs a note; retiring waits for paused schedules and
+  finished work and is final, and a retired asset's schedule cannot be resumed; work on an asset
+  is at its place; scheduled work needs its date, is raised once per schedule and date, keeps its
+  links and stays on the schedule's asset; isolation and no deletes.
+- `apps/api` unit (4, `test/maintenance/asset-rules.test.ts`): interval arithmetic (month ends,
+  leap years, weeks across years), lead time, skipping missed periods, tag and place input.
+- `apps/api` integration (3, `assets.int.test.ts`): managers register assets (duplicate tag 409)
+  and technicians cannot; raising due work creates one work order for the due schedule only, at
+  the asset's place and to its vendor, a second run raises nothing and the next date moves on;
+  out-of-service assets are skipped; retiring waits for the schedule to be paused, then is final.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
