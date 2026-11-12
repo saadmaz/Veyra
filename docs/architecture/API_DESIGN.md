@@ -353,6 +353,20 @@ database's booking rules come back as 409 `SLOT_UNAVAILABLE`, `FACILITY_CLOSED`,
 `BOOKING_LIMIT`, `ARCHIVED` or 422 `INVALID_BOOKING_TIME` (off the slot grid, outside opening
 hours, too many slots, outside the notice or advance window).
 
+## Vendors (Phase 9)
+
+Under `/organisations/{orgId}/vendors` (`organisation.vendor.read` to read, `.manage` for the
+rest): `GET ?status=` (by name, with `compliance`), `POST`, `GET` and `PATCH {id}`, `POST
+{id}/suspend` (reason), `{id}/reactivate`, `{id}/archive` (409 `OPEN_WORK` while it has open work
+orders), `POST {id}/documents` and `POST {id}/documents/{documentId}/void` (reason). Names are
+unique ignoring case (409 `NAME_TAKEN`).
+
+Maintenance managers, under the property's `maintenance/` (`property.maintenance.manage`): `GET
+vendors` lists active vendors with their compliance; `POST work-orders/{id}/vendor` with
+`{ vendorId }` gives the work to an active vendor (409 `VENDOR_NOT_ACTIVE` otherwise) or with
+`{ vendorId: null }` takes the vendor off it (back to open when nobody is left and it has not
+started). Work orders show `vendor`; unassigning clears technician and vendor.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

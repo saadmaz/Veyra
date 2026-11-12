@@ -82,6 +82,7 @@ export const toWorkOrder = (w: WorkOrderRecord): WorkOrderDto => ({
   assignedTo: w.assignedToUserId
     ? { userId: w.assignedToUserId, name: w.assignedToName ?? '' }
     : null,
+  vendor: w.vendorId ? { id: w.vendorId, name: w.vendorName ?? '' } : null,
   dueAt: iso(w.dueAt),
   startedAt: iso(w.startedAt),
   completedAt: iso(w.completedAt),

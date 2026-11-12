@@ -3,6 +3,7 @@ import { databaseErrorCode } from '@veyra/db';
 import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
 import { AccessControlService, type OrganisationAccess } from '../../access-control';
+import { VendorsService } from '../../vendors/application/vendors.service';
 import {
   type AcceptInput,
   AssigneeNotAllowed,
@@ -46,6 +47,7 @@ export class MaintenanceService {
   constructor(
     @Inject(MAINTENANCE_REPOSITORY) private readonly repository: MaintenanceRepository,
     private readonly accessControl: AccessControlService,
+    @Inject(VendorsService) private readonly vendors: VendorsService,
   ) {}
 
   // ------------------------------------------------------------------ SLAs and queue (Part 4)
@@ -283,6 +285,46 @@ export class MaintenanceService {
     });
   }
 
+  /**
+   * Gives the work to an active vendor (Phase 9), with or without a technician, or takes the
+   * vendor off it (null). Work with nobody left on it goes back to the open pool if not started.
+   */
+  assignVendor(access: OrganisationAccess, id: string, vendorId: string | null, meta: RequestMeta) {
+    return this.inProperty(access, meta, async (uow) => {
+      const work = await this.mustFindWorkOrder(uow, id);
+      if (work.status !== 'OPEN' && !isAssignedWork(work.status)) {
+        throw invalidState('Finished work cannot be assigned');
+      }
+      if (vendorId) {
+        const vendor = await uow.vendor(vendorId);
+        if (!vendor) throw notFound('Vendor');
+        if (vendor.status !== 'ACTIVE') {
+          throw new ApiError(409, 'VENDOR_NOT_ACTIVE', 'This vendor is not taking work');
+        }
+        await uow.updateWorkOrder(id, {
+          vendorId,
+          ...(work.status === 'OPEN' ? { status: 'ASSIGNED' as const } : {}),
+        });
+      } else {
+        if (!work.vendorId) throw invalidState('No vendor is on this work');
+        if (!work.assignedToUserId && work.status !== 'ASSIGNED') {
+          throw invalidState('Give the work to someone else before taking the vendor off it');
+        }
+        await uow.updateWorkOrder(id, {
+          vendorId: null,
+          ...(work.assignedToUserId ? {} : { status: 'OPEN' as const }),
+        });
+      }
+      await this.auditWork(uow, id, vendorId ? 'vendor_assigned' : 'vendor_removed');
+      return this.workOrderDetail(uow, id);
+    });
+  }
+
+  /** Active vendors to give work to, with their compliance. */
+  activeVendors(access: OrganisationAccess, meta: RequestMeta) {
+    return this.vendors.list(access, 'ACTIVE', meta);
+  }
+
   /** Takes assigned (not yet started) work back to the open pool. */
   unassign(access: OrganisationAccess, id: string, meta: RequestMeta) {
     return this.inProperty(access, meta, async (uow) => {
@@ -290,7 +332,7 @@ export class MaintenanceService {
       if (work.status !== 'ASSIGNED') {
         throw invalidState('Only assigned work that has not started can be unassigned');
       }
-      await uow.updateWorkOrder(id, { status: 'OPEN', assignedToUserId: null });
+      await uow.updateWorkOrder(id, { status: 'OPEN', assignedToUserId: null, vendorId: null });
       await this.auditWork(uow, id, 'unassigned');
       return this.workOrderDetail(uow, id);
     });

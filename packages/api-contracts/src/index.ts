@@ -1285,7 +1285,13 @@ export interface MaintenanceRequestDto extends MaintenancePlaceDto {
 export interface MaintenanceEventDto {
   id: string;
   /** SLA_BREACHED: `to` is RESPONSE or RESOLUTION (internal). */
-  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE' | 'SLA_BREACHED';
+  type:
+    | 'STATUS_CHANGED'
+    | 'ASSIGNEE_CHANGED'
+    | 'PRIORITY_CHANGED'
+    | 'NOTE'
+    | 'SLA_BREACHED'
+    | 'VENDOR_CHANGED';
   visibility: 'RESIDENT' | 'INTERNAL';
   /** e.g. a status, a priority, or a user id for assignee changes. */
   from: string | null;
@@ -1311,6 +1317,8 @@ export interface WorkOrderDto extends MaintenancePlaceDto {
   /** The note given when it was paused, completed or cancelled. */
   statusNote: string | null;
   assignedTo: { userId: string; name: string } | null;
+  /** An outside contractor doing the work (Phase 9). */
+  vendor: { id: string; name: string } | null;
   dueAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -1609,4 +1617,78 @@ export interface CreateFacilityBookingRequest {
   /** Consecutive slots; defaults to 1. */
   slots?: number;
   purpose?: string;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Vendors (Phase 9)
+// ---------------------------------------------------------------------------------------------
+
+export type VendorStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+export type VendorDocumentKind = 'INSURANCE' | 'LICENCE' | 'CONTRACT' | 'CERTIFICATE' | 'OTHER';
+/** From the documents not voided: any expired, any expiring within 30 days, or none on file. */
+export type VendorCompliance = 'OK' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_DOCUMENTS';
+
+export interface VendorDto {
+  id: string;
+  name: string;
+  /** The trades the vendor covers. */
+  categories: MaintenanceCategory[];
+  contactName: string | null;
+  email: string | null;
+  phone: string | null;
+  taxReference: string | null;
+  notes: string | null;
+  status: VendorStatus;
+  /** Why it is suspended. */
+  statusNote: string | null;
+  compliance: VendorCompliance;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface VendorDocumentDto {
+  id: string;
+  kind: VendorDocumentKind;
+  title: string;
+  reference: string | null;
+  validFrom: string | null;
+  /** The last day it is valid; null when it does not expire. */
+  expiresOn: string | null;
+  expired: boolean;
+  addedBy: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+export interface VendorDetailDto {
+  vendor: VendorDto;
+  /** Newest first, voided ones included. */
+  documents: VendorDocumentDto[];
+}
+
+export interface CreateVendorRequest {
+  name: string;
+  categories?: MaintenanceCategory[];
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  taxReference?: string | null;
+  notes?: string | null;
+}
+
+export interface AddVendorDocumentRequest {
+  kind: VendorDocumentKind;
+  title: string;
+  reference?: string | null;
+  validFrom?: string | null;
+  expiresOn?: string | null;
+}
+
+/** Maintenance managers: GET …/maintenance/vendors (active vendors to give work to). */
+export interface MaintenanceVendorDto {
+  id: string;
+  name: string;
+  categories: MaintenanceCategory[];
+  compliance: VendorCompliance;
 }

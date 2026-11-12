@@ -135,6 +135,10 @@ Code: `apps/api/src/modules/access-control` (registry, policy, guard, startup ch
   facility, closure and booking of the property) and `property.facility.manage` (set up
   facilities, opening hours and closures; approve, reject, cancel at any time, mark used or
   no-show). Availability shows only places left, never who booked.
+  For vendors (Phase 9) `organisation.vendor.read` and `organisation.vendor.manage` are
+  organisation-level: organisation admins hold both, finance officers read. Property staff never
+  see the register; maintenance managers see active vendors to give work to through their
+  property's maintenance routes.
 - **System roles** live in `access-control/domain/roles.ts`:
 
   | Role | Grantable at | Permissions today |

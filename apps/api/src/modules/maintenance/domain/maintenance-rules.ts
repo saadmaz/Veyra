@@ -1,4 +1,4 @@
-import { DomainError, Money } from '@veyra/domain';
+import { DomainError, Money, TRADES, type Trade } from '@veyra/domain';
 import { z } from 'zod';
 
 /*
@@ -7,21 +7,9 @@ import { z } from 'zod';
  * give a clear answer before it does.
  */
 
-export const CATEGORIES = [
-  'PLUMBING',
-  'ELECTRICAL',
-  'HVAC',
-  'APPLIANCE',
-  'STRUCTURAL',
-  'CARPENTRY',
-  'PAINTING',
-  'PEST_CONTROL',
-  'CLEANING',
-  'LIFT',
-  'SECURITY_SYSTEM',
-  'OTHER',
-] as const;
-export type Category = (typeof CATEGORIES)[number];
+/** The trades of maintenance work, shared with vendors (@veyra/domain). */
+export const CATEGORIES = TRADES;
+export type Category = Trade;
 
 export const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 export type Priority = (typeof PRIORITIES)[number];
@@ -185,6 +173,7 @@ export const myWorkQuerySchema = z.object({
 });
 
 export const assignSchema = z.object({ userId: z.uuid() });
+export const vendorAssignSchema = z.object({ vendorId: z.uuid().nullable() });
 
 export const updateWorkOrderSchema = z
   .object({

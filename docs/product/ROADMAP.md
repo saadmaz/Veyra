@@ -208,6 +208,26 @@ Decisions (owner, 2026-11-12, the recommended options):
 | 4 | Console: residents' booking pages with availability, the manager's facility setup and booking queue; browser journeys | ✅ Done |
 | 5 | Phase 8 exit review | ✅ Done ([PHASE_8_REVIEW](../reviews/PHASE_8_REVIEW.md)) |
 
+## Phase 9 plan (Staff, vendors and assets)
+
+Decisions (2026-11-12, the recommended options; the owner asked to proceed with recommendations):
+
+- **Vendors** belong to the organisation and can be given work orders at any of its properties;
+  compliance documents are recorded with expiry dates (files can be attached later).
+- **Vendor portal, quotations, purchase requests and orders** wait for a later phase (PRD 3.8
+  allows phasing); vendors get no login in Phase 9.
+- **Assets** belong to a property; preventive maintenance schedules raise work orders when due.
+- **Staff operations**: departments, shifts with handover notes, and checklists completed by staff
+  and verified by a supervisor. No attendance or leave integrations (PRD: only if legally reviewed).
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Vendors: register, suspension and archiving, compliance documents with expiry, work orders given to active vendors (logged), API and roles | ✅ Done |
+| 2 | Assets and preventive maintenance: asset register, schedules that raise work orders, service history | |
+| 3 | Staff operations: departments, shifts and handovers, checklists with supervisor verification | |
+| 4 | Console screens and browser journeys | |
+| 5 | Phase 9 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,

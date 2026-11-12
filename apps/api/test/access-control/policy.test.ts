@@ -96,7 +96,7 @@ describe('organisation-level permissions', () => {
       'ACTIVE',
       now,
     );
-    expect([...permissions]).toEqual(['organisation.profile.read']);
+    expect([...permissions]).toEqual(['organisation.profile.read', 'organisation.vendor.read']);
   });
 
   it('gives a property-scoped member only the baseline profile read, never more', () => {
