@@ -975,6 +975,15 @@ expiry, rehash on sign-in, idempotent sign-out).
 - CI: gitleaks scans the checkout before dependencies are installed; `bun audit` fails on high
   and critical advisories.
 
+### Part 4: launch readiness
+
+- CI `smoke` job: builds the image, starts PostgreSQL, Redis, migrations, API, worker and console
+  in production mode (`infra/compose/full-stack.yml`), then `infra/smoke/smoke.ts` walks sign-up,
+  the two-step sign-in requirement and set-up, an organisation, property and unit, the dashboard
+  and the trial subscription, and checks the console's security headers.
+- `infra/scripts/restore-drill.sh` in the same job: a logical backup restored into a fresh
+  database with identical row counts in every table.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

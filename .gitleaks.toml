@@ -14,6 +14,9 @@ paths = [
   '''^\.env\.example$''',
   '''^docker-compose\.yml$''',
   '''^infra/seaweedfs/.*''',
+  # Throwaway credentials of the local full-stack smoke environment.
+  '''^infra/compose/.*''',
+  '''^infra/smoke/.*''',
   '''(^|/)test/.*''',
   '''(^|/)e2e/.*''',
   '''^bun\.lock$''',
