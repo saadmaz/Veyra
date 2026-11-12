@@ -132,6 +132,12 @@ contracts are kept separate from ORM/database models.
 
 - Domain events are written to an **outbox table** in the same transaction as the state
   change, then relayed to BullMQ by the worker. This prevents "saved but event lost".
+  Implemented in Phase 7 Part 4 (`@veyra/db` outbox helpers, `apps/worker/src/outbox-relay.ts`):
+  every `OUTBOX_POLL_MS` the worker claims due events with `FOR UPDATE SKIP LOCKED`, enqueues
+  one tenant job per event with the outbox id as job id and idempotency key, then marks them
+  published; a failure holds the event back (30 s per attempt, at most an hour). Delivery is at
+  least once. Events carry ids, never personal data. The outbox has no RLS (it is how the worker
+  finds tenant work); the job then runs inside the tenant's RLS context.
 - Every job carries a **job envelope**: `organisationId`, optional `propertyId`, `actorId`,
   `requestId`, `idempotencyKey`. Workers re-establish tenant context from the envelope and
   re-check permissions for user-initiated work.

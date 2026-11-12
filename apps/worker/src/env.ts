@@ -8,6 +8,13 @@ export const workerEnvSchema = z.object({
     .string()
     .url()
     .refine((url) => /^rediss?:\/\//.test(url), 'REDIS_URL must be a Redis URL'),
+  /** The restricted application role (veyra_app): tenant jobs run under row-level security. */
+  DATABASE_URL: z
+    .string()
+    .url()
+    .refine((url) => /^postgres(ql)?:\/\//.test(url), 'DATABASE_URL must be a PostgreSQL URL'),
+  /** How often the outbox relay looks for due events. */
+  OUTBOX_POLL_MS: z.coerce.number().int().min(1000).max(300000).default(15000),
 });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;

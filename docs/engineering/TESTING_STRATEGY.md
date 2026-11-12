@@ -566,6 +566,25 @@ expiry, rehash on sign-in, idempotent sign-out).
   remove; only the uploader or a manager removes, and the object is deleted; at most 10 per
   request, none on a cancelled request.
 
+### Part 4: SLAs and the outbox relay
+
+- `packages/db` integration (+6 in `maintenance.int.test.ts`): due times are scheduled in the
+  outbox with ids only; a missed target is recorded once, with an internal history event, never
+  before it is due and not for a stale due time; a met target is not recorded; a breach that is
+  not true, or recorded with other changes, is refused; a priority change that moves a target
+  into the future clears it and schedules the new time; the outbox claim returns due events of a
+  type oldest first, published ones never again, and a failure holds an event back.
+- `apps/api` unit (+3): `overdue` (only past a target not yet met), the queue order, SLA target
+  input.
+- `apps/api` integration (+3 in `maintenance.int.test.ts`): managers set targets (one per
+  priority), finance reads them; new requests get due times, recomputed on a priority change;
+  the worker's check (run as the worker does) records a breach once, visible to staff only, and
+  the overdue request leads the queue; technicians cannot read the queue.
+- `apps/worker` unit (+6, `test/outbox-relay.test.ts`): due events become tenant jobs keyed by the
+  outbox id and are marked published; an event without a tenant, or a queue failure, is held
+  back without blocking the others; the SLA check runs in the tenant's context, refuses a
+  malformed payload, and is a tenant job. The env test requires `DATABASE_URL`.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

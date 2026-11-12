@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -19,11 +20,13 @@ import type {
   MaintenanceEventDto,
   MaintenanceRequestDetailDto,
   MaintenanceRequestDto,
+  MaintenanceSlaTargetDto,
   WorkOrderDetailDto,
   WorkOrderDto,
 } from '@veyra/api-contracts';
 import type { Request } from 'express';
 import type { z } from 'zod';
+import { CLOCK, type Clock } from '../../../platform/clock';
 import { requestMeta } from '../../../platform/request-meta';
 import { ZodValidationPipe } from '../../../platform/validation/zod-validation.pipe';
 import { CurrentAccess, type OrganisationAccess, RequirePermission } from '../../access-control';
@@ -44,7 +47,9 @@ import {
   optionalNoteSchema,
   reasonSchema,
   requestListQuerySchema,
+  type SlaTargetsInput,
   type StaffRequestInput,
+  slaTargetsSchema,
   staffRequestSchema,
   type UploadInput,
   updateRequestSchema,
@@ -54,12 +59,19 @@ import {
   workOrderListQuerySchema,
 } from '../domain/maintenance-rules';
 import {
+  requestAt,
   toAttachment,
   toEvent,
   toRequest,
   toWorkOrder,
   toWorkOrderDetail,
 } from './maintenance-dto';
+
+const PRIORITY_ORDER = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
+const sortTargets = (targets: MaintenanceSlaTargetDto[]) =>
+  [...targets].sort(
+    (a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority),
+  );
 
 const staff = (access: OrganisationAccess): Viewer => ({
   kind: 'staff',
@@ -94,7 +106,47 @@ export class MaintenanceController {
   constructor(
     private readonly maintenance: MaintenanceService,
     @Inject(AttachmentsService) private readonly attachments: AttachmentsService,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
+
+  // ------------------------------------------------------------------ SLAs and queue
+
+  @Get(`${M}/sla-targets`)
+  @RequirePermission('property.maintenance.read')
+  @ApiOperation({ summary: 'Response and resolution targets per priority.' })
+  async slaTargets(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<{ data: MaintenanceSlaTargetDto[] }> {
+    return { data: sortTargets(await this.maintenance.slaTargets(access, requestMeta(req))) };
+  }
+
+  @Put(`${M}/sla-targets`)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({ summary: 'Replace the targets (they apply to requests raised from now on).' })
+  async replaceSlaTargets(
+    @CurrentAccess() access: OrganisationAccess,
+    @Body(new ZodValidationPipe(slaTargetsSchema)) body: SlaTargetsInput,
+    @Req() req: Request,
+  ): Promise<{ data: MaintenanceSlaTargetDto[] }> {
+    const targets = await this.maintenance.replaceSlaTargets(access, body, requestMeta(req));
+    return { data: sortTargets(targets) };
+  }
+
+  @Get(`${M}/queue`)
+  @RequirePermission('property.maintenance.read')
+  @ApiOperation({
+    summary:
+      'New and accepted requests: overdue first, then by priority and due time (at most 500).',
+  })
+  async queue(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<{ data: MaintenanceRequestDto[] }> {
+    const now = this.clock.now();
+    const rows = await this.maintenance.queue(access, now, requestMeta(req));
+    return { data: rows.map(requestAt(now)) };
+  }
 
   // ------------------------------------------------------------------ requests
 

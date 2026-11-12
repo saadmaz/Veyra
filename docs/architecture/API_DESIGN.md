@@ -290,6 +290,15 @@ Technicians, under the property's `my-work-orders` (`property.maintenance.work`)
 `POST {id}/complete { note }` (what was done), `POST {id}/notes`, `POST {id}/costs`. Work assigned
 to someone else is 404. A transition that is not allowed is 409 `INVALID_STATE_TRANSITION`.
 
+**SLAs** (Phase 7 Part 4). `GET maintenance/sla-targets` (read) and `PUT maintenance/sla-targets`
+(manage, `{ targets: [{ priority, responseMinutes, resolutionMinutes }] }`, at most one per
+priority, resolution not before response) replace the property's targets for requests raised
+from then on; existing requests keep their due times unless their priority changes.
+`GET maintenance/queue` (read) lists new and accepted requests, overdue first, then by priority,
+then the next due time, at most 500. Every request carries `overdue: { response, resolution }`,
+computed when the response is built, and `responseBreachedAt` / `resolutionBreachedAt`, recorded
+by the worker shortly after a target is missed (the `SLA_BREACHED` history event is internal).
+
 **Attachments** (Phase 7 Part 3, ADR 0007). Three steps: ask (`POST …/attachments` with
 `{ fileName, contentType: image/jpeg | image/png | image/webp | image/heic | application/pdf,
 sizeBytes ≤ 10 MB, kind?, visibility? }`, 201 `{ attachmentId, upload: { url, method: PUT,
