@@ -83,6 +83,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   NO_LONGER_OWED: 'The invoice no longer owes that much. Ask for a new approval.',
   NO_LONGER_UNUSED: 'Less of the payment is unused now. Ask for a new approval.',
   INVALID_MONEY: 'Enter a valid amount in the property currency.',
+  ASSIGNEE_NOT_ALLOWED: 'This person cannot be given maintenance work at this property.',
   TOO_MANY_PENDING:
     'Several transfers are already waiting for finance to check them. Please wait for their answer.',
 };
@@ -118,6 +119,8 @@ export const ROLE_LABELS: Record<string, string> = {
   ORGANISATION_ADMIN: 'Organisation admin',
   FINANCE_OFFICER: 'Finance officer',
   PROPERTY_MANAGER: 'Property manager',
+  MAINTENANCE_MANAGER: 'Maintenance manager',
+  TECHNICIAN: 'Technician',
 };
 
 /** Roles that can be given for the whole organisation (property managers are per property). */

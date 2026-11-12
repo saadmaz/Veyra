@@ -244,6 +244,52 @@ Finance checks them under the property's `finance/`:
 | POST | `bank-transfers/{id}/confirm` | manage, never the submitter (403 `SAME_PERSON`); `{ receivedOn? }` (default: the date the resident gave); records a `BANK_TRANSFER` payment for that account with the resident's reference, applied oldest first like any payment; 409 `ALREADY_DECIDED` |
 | POST | `bank-transfers/{id}/reject` | manage, never the submitter; `{ reason }` (shown to the resident) |
 
+## Maintenance (Phase 7)
+
+Residents, under `/organisations/{orgId}/properties/{propertyId}/units/{unitId}/maintenance-requests`
+(`unit.maintenance.request`; other units' requests are 404). Responses carry the request and its
+**resident-visible** events only: never work orders, internal notes, assignees or costs.
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| GET | (the base path) | the unit's requests, newest first, at most 200 |
+| POST | (the base path) | `{ category, priority? (MEDIUM), title, description, locationDetail? }`; 201 `SUBMITTED`, numbered `MR-000042`; 409 `ARCHIVED` for an archived unit |
+| GET | `{id}` | `{ request, events }` |
+| POST | `{id}/cancel` | the requester only (403 `NOT_REQUESTER`); `{ reason }`; not once work is live (409) |
+| POST | `{id}/confirm` | a current resident only (403 for staff); `RESOLVED → CLOSED` |
+| POST | `{id}/reopen` | a current resident only; `{ reason }`; `RESOLVED → ACCEPTED` |
+| POST | `{id}/notes` | `{ body }`, shown to staff and the unit's residents; 409 once the request is final |
+
+Staff, under the property's `maintenance/` (`property.maintenance.read` to read, `.manage` for the rest):
+
+| Method | Path | Access |
+| ------ | ---- | ------ |
+| GET | `requests?status=&unitId=` | read |
+| POST | `requests` | manage; as above plus exactly one of `unitId`, `commonAreaId` |
+| GET | `requests/{id}` | read; `{ request, workOrders, events }` (every event) |
+| PATCH | `requests/{id}` | manage; `{ priority?, category? }` while new or accepted; the priority recomputes the SLA due times |
+| POST | `requests/{id}/accept` | manage; `{ priority?, category?, note? }` (the note is shown to the requester) |
+| POST | `requests/{id}/reject`, `…/cancel` | manage; `{ reason }` shown to the requester; cancel only with no live work |
+| POST | `requests/{id}/resolve` | manage; `{ note? }`; only with completed work and none live (409) |
+| POST | `requests/{id}/close` | manage; a resolved request, without waiting for the requester |
+| POST | `requests/{id}/notes` | manage; `{ body, visibility: RESIDENT \| INTERNAL }` |
+| GET | `assignees` | manage; people holding `property.maintenance.work` here |
+| GET | `work-orders?status=&assignedToUserId=&requestId=` | read |
+| POST | `work-orders` | manage; `{ requestId }` (an accepted request: its place, title, category, priority and description by default) or exactly one of `unitId`, `commonAreaId` with `title` and `category`; `assignedToUserId?`, `dueAt?`; numbered `WO-000042`; 422 `ASSIGNEE_NOT_ALLOWED` |
+| GET | `work-orders/{id}` | read; `{ workOrder, costs, totalCost, events }` |
+| PATCH | `work-orders/{id}` | manage; `{ priority?, dueAt? }` while live |
+| POST | `work-orders/{id}/assign` | manage; `{ userId }`: open work becomes assigned; live work is reassigned |
+| POST | `work-orders/{id}/unassign` | manage; assigned work that has not started |
+| POST | `work-orders/{id}/cancel` | manage; `{ reason }` |
+| POST | `work-orders/{id}/notes` | manage; `{ body, visibility }` (RESIDENT only for work with a request, else 422) |
+| POST | `work-orders/{id}/costs` | manage; `{ kind: LABOUR \| MATERIAL \| OTHER, description, amount }` in the property's currency (422 `INVALID_MONEY` for too many decimals); not on cancelled work |
+| POST | `costs/{id}/void` | manage; `{ reason }`; once |
+
+Technicians, under the property's `my-work-orders` (`property.maintenance.work`): `GET ?status=`,
+`GET {id}`, `POST {id}/start` (assigned or on hold), `POST {id}/hold { reason }`,
+`POST {id}/complete { note }` (what was done), `POST {id}/notes`, `POST {id}/costs`. Work assigned
+to someone else is 404. A transition that is not allowed is 409 `INVALID_STATE_TRANSITION`.
+
 ## Pagination
 
 Cursor-based: `?limit=50&cursor=<opaque>`; response `{ "data": [...], "nextCursor": "..." | null }`.

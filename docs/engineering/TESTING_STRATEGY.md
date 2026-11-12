@@ -521,6 +521,27 @@ expiry, rehash on sign-in, idempotent sign-out).
   requests.
 - Another organisation, and a connection without tenant context, see none of it.
 
+### Part 2: roles and API
+
+- `apps/api` unit (+9, `test/maintenance/maintenance-rules.test.ts`): transitions matching the
+  database, resolving only with completed work, staff and work order inputs (exactly one place),
+  exact cost amounts, numbering, and which roles hold each maintenance permission. The policy
+  tests and the property manager's permission list in `properties.int.test.ts` include the new
+  permissions.
+- `apps/api` integration (9, `maintenance.int.test.ts`): a household member and a tenant raise
+  and see the unit's requests; another unit's owner gets 404, a technician and a guard 403;
+  residents see only resident-visible history (no internal notes, work orders or costs); only the
+  requester cancels, and not with live work. The full journey: work can be given only to holders
+  of `property.maintenance.work` at the property (not a guard or another property's technician;
+  the assignee list agrees); only the assignee sees and progresses their work (another
+  technician gets 404, and no technician reads the queue); hold and resume; costs exact to the
+  minor unit; resolve refused while work is live; staff cannot confirm for a resident; a household
+  member reopens, new work, resolve again, the tenant confirms, with the full resident history in
+  order. Rejection reasons reach the resident and final requests stay final. Staff raise work for
+  a common area (no resident note allowed), reassign, unassign, cancel (no costs afterwards),
+  report problems, change priority, and void a cost once. A finance officer reads but cannot
+  write; another property is 404.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment
