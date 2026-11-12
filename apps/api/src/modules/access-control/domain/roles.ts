@@ -55,6 +55,10 @@ export const ROLES = {
       // an owner or tenant of the unit (the account is resolved from their own records).
       'unit.finance.read',
       'unit.finance.pay',
+      'unit.maintenance.request',
+      'property.maintenance.read',
+      'property.maintenance.manage',
+      'property.maintenance.work',
     ],
   },
   PROPERTY_MANAGER: {
@@ -76,7 +80,36 @@ export const ROLES = {
       'property.visitor.manage',
       // Reads the property's billing; finance officers run it (ACCESS_CONTROL section 4).
       'property.finance.read',
+      // Runs maintenance (ACCESS_CONTROL section 4: M), and may do work themselves.
+      'unit.maintenance.request',
+      'property.maintenance.read',
+      'property.maintenance.manage',
+      'property.maintenance.work',
     ],
+  },
+  MAINTENANCE_MANAGER: {
+    name: 'Maintenance manager',
+    grantableAt: ['PROPERTY'],
+    // Runs maintenance for a property: triage, work orders, technicians, costs. Sees who lives
+    // where (to arrange access), not finance or visitors.
+    permissions: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.resident.read',
+      'unit.profile.read',
+      'unit.residents.read',
+      'unit.maintenance.request',
+      'property.maintenance.read',
+      'property.maintenance.manage',
+      'property.maintenance.work',
+    ],
+  },
+  TECHNICIAN: {
+    name: 'Technician',
+    grantableAt: ['PROPERTY'],
+    // Only the work assigned to them (ACCESS_CONTROL section 4: O). No resident data: a work
+    // order shows the unit or common area and the problem, not who reported it.
+    permissions: ['property.profile.read', 'property.structure.read', 'property.maintenance.work'],
   },
   SECURITY_SUPERVISOR: {
     name: 'Security supervisor',
@@ -110,6 +143,8 @@ export const ROLES = {
       'property.finance.read',
       'property.finance.manage',
       'property.finance.approve',
+      // Maintenance costs for reporting (ACCESS_CONTROL section 4: R).
+      'property.maintenance.read',
     ],
   },
   // ------------------------------------------------------------------ derived resident roles
@@ -124,6 +159,7 @@ export const ROLES = {
       'unit.visitor.invite',
       'unit.finance.read',
       'unit.finance.pay',
+      'unit.maintenance.request',
     ],
   },
   TENANT: {
@@ -137,14 +173,16 @@ export const ROLES = {
       'unit.visitor.invite',
       'unit.finance.read',
       'unit.finance.pay',
+      'unit.maintenance.request',
     ],
   },
   HOUSEHOLD_MEMBER: {
     name: 'Household member',
     grantableAt: ['UNIT'],
     derived: true,
-    // Household members may register visitors (owner decision, 2026-11-11); bookings come later.
-    permissions: ['unit.profile.read', 'unit.visitor.invite'],
+    // Household members may register visitors and raise maintenance requests (owner decisions,
+    // 2026-11-11); bookings come later.
+    permissions: ['unit.profile.read', 'unit.visitor.invite', 'unit.maintenance.request'],
   },
 } as const satisfies Record<string, RoleDefinition>;
 

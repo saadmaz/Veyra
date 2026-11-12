@@ -55,6 +55,14 @@ export const PERMISSIONS = [
   'unit.finance.read',
   /** Tell finance about a bank transfer you made for your own account on a unit. */
   'unit.finance.pay',
+  /** Raise and follow a unit's maintenance requests (its residents, and staff on their behalf). */
+  'unit.maintenance.request',
+  /** View the property's maintenance requests and work orders, with internal notes and costs. */
+  'property.maintenance.read',
+  /** Triage requests, raise, assign and cancel work orders, record and void costs. */
+  'property.maintenance.manage',
+  /** Be assigned work orders and carry them out: only the work assigned to you. */
+  'property.maintenance.work',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

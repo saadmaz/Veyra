@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { type DbClient, withTenantTransaction } from '@veyra/db';
 import { DB_CLIENT } from '../../../platform/infrastructure/infrastructure.module';
-import type { GrantRepository, LoadedGrants } from '../application/access-control.service';
+import type {
+  GrantRepository,
+  LoadedGrants,
+  PermissionHolder,
+} from '../application/access-control.service';
 import type { Grant } from '../domain/policy';
 
 /** Derived grants are valid "today" by construction; the window only satisfies the Grant shape. */
@@ -17,6 +21,34 @@ const ALWAYS = new Date(0);
 @Injectable()
 export class PrismaGrantRepository implements GrantRepository {
   constructor(@Inject(DB_CLIENT) private readonly db: DbClient) {}
+
+  membershipHolders(
+    organisationId: string,
+    propertyId: string,
+    roles: readonly string[],
+  ): Promise<PermissionHolder[]> {
+    if (roles.length === 0) return Promise.resolve([]);
+    return withTenantTransaction(this.db, { organisationId }, async (tx) => {
+      const rows = await tx.membership.findMany({
+        where: {
+          organisationId,
+          role: { in: [...roles] },
+          status: 'ACTIVE',
+          OR: [{ scopeType: 'ORGANISATION' }, { scopeType: 'PROPERTY', scopeId: propertyId }],
+          AND: [{ OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }] }],
+          user: { status: 'ACTIVE' },
+        },
+        select: { userId: true, user: { select: { displayName: true } } },
+        take: 500,
+      });
+      // One row per membership: a user with several qualifying roles appears once.
+      const seen = new Map<string, PermissionHolder>();
+      for (const row of rows) {
+        seen.set(row.userId, { userId: row.userId, displayName: row.user.displayName });
+      }
+      return [...seen.values()];
+    });
+  }
 
   loadGrants(
     userId: string,

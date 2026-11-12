@@ -13,7 +13,7 @@ import {
   permissionsForAssignment,
   propertiesWithPermission,
 } from '../domain/policy';
-import { roleDefinition } from '../domain/roles';
+import { ROLE_KEYS, ROLES, type RoleDefinition, roleDefinition } from '../domain/roles';
 
 /** What a request may do at one scope. Resolved per request, never cached. */
 export interface OrganisationAccess {
@@ -36,6 +36,12 @@ export interface LoadedGrants {
   unitInProperty?: boolean;
 }
 
+/** Someone who can be given work at a property (see usersWithPropertyPermission). */
+export interface PermissionHolder {
+  userId: string;
+  displayName: string;
+}
+
 export interface GrantRepository {
   /**
    * Memberships plus derived resident grants (OWNER / TENANT / HOUSEHOLD_MEMBER, scope UNIT,
@@ -47,6 +53,16 @@ export interface GrantRepository {
     propertyId?: string,
     unitId?: string,
   ): Promise<LoadedGrants | null>;
+  /**
+   * ACTIVE users with an ACTIVE membership of one of the roles, granted for the whole
+   * organisation or for the property, whose window has not ended. Effectiveness is checked again
+   * by the policy.
+   */
+  membershipHolders(
+    organisationId: string,
+    propertyId: string,
+    roles: readonly string[],
+  ): Promise<PermissionHolder[]>;
 }
 export const GRANT_REPOSITORY = Symbol('GRANT_REPOSITORY');
 
@@ -141,6 +157,58 @@ export class AccessControlService {
     const permissions = permissionsAt(loaded.grants, loaded.organisationStatus, scope, now);
     if (!permissions.has(permission)) throw forbidden();
     return { userId, organisationId, propertyId, unitId, permissions };
+  }
+
+  /**
+   * Whether a user holds a property permission at a property right now (for checks on someone
+   * other than the caller, e.g. that a work order's assignee may do the work).
+   */
+  async holdsPropertyPermission(
+    userId: string,
+    organisationId: string,
+    propertyId: string,
+    permission: Permission,
+  ): Promise<boolean> {
+    if (permissionScope(permission) !== 'property') {
+      throw new Error(`${permission} is not property-scoped`);
+    }
+    const loaded = await this.grants.loadGrants(userId, organisationId, propertyId);
+    if (!loaded?.property) return false;
+    const scope: AccessScope = {
+      type: 'PROPERTY',
+      propertyId,
+      propertyStatus: loaded.property.status,
+    };
+    return permissionsAt(loaded.grants, loaded.organisationStatus, scope, this.clock.now()).has(
+      permission,
+    );
+  }
+
+  /** Everyone who holds a property permission at the property through a membership, by name. */
+  async usersWithPropertyPermission(
+    organisationId: string,
+    propertyId: string,
+    permission: Permission,
+  ): Promise<PermissionHolder[]> {
+    if (permissionScope(permission) !== 'property') {
+      throw new Error(`${permission} is not property-scoped`);
+    }
+    const roles = ROLE_KEYS.filter(
+      (key) =>
+        !(ROLES[key] as RoleDefinition).derived &&
+        (ROLES[key].permissions as readonly Permission[]).includes(permission),
+    );
+    const holders = await this.grants.membershipHolders(organisationId, propertyId, roles);
+    const result: PermissionHolder[] = [];
+    for (const holder of holders) {
+      // The policy decides (lifecycle, archived property, validity), not the query.
+      if (
+        await this.holdsPropertyPermission(holder.userId, organisationId, propertyId, permission)
+      ) {
+        result.push({ userId: holder.userId, displayName: holder.displayName });
+      }
+    }
+    return result.sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
   /** Current derived resident grants of the user in the organisation (for "my units"). */

@@ -304,6 +304,7 @@ describe('unit scope and derived resident roles', () => {
     expect([...permissionsAt(owner, 'ACTIVE', unitIn(U1), now)].sort()).toEqual([
       'unit.finance.pay',
       'unit.finance.read',
+      'unit.maintenance.request',
       'unit.profile.read',
       'unit.residents.read',
       'unit.visitor.invite',
@@ -322,7 +323,11 @@ describe('unit scope and derived resident roles', () => {
       unitIn(U1),
       now,
     );
-    expect([...permissions].sort()).toEqual(['unit.profile.read', 'unit.visitor.invite']);
+    expect([...permissions].sort()).toEqual([
+      'unit.maintenance.request',
+      'unit.profile.read',
+      'unit.visitor.invite',
+    ]);
   });
 
   it('a security guard operates the gate of their property only, with no resident access', () => {

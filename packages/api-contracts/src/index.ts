@@ -1214,3 +1214,169 @@ export interface RejectBankTransferRequest {
   /** Shown to the resident. */
   reason: string;
 }
+
+// Maintenance and work orders (Phase 7).
+
+export type MaintenanceCategory =
+  | 'PLUMBING'
+  | 'ELECTRICAL'
+  | 'HVAC'
+  | 'APPLIANCE'
+  | 'STRUCTURAL'
+  | 'CARPENTRY'
+  | 'PAINTING'
+  | 'PEST_CONTROL'
+  | 'CLEANING'
+  | 'LIFT'
+  | 'SECURITY_SYSTEM'
+  | 'OTHER';
+export type MaintenancePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type MaintenanceRequestStatus =
+  | 'SUBMITTED'
+  | 'ACCEPTED'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'REJECTED'
+  | 'CANCELLED';
+export type WorkOrderStatus =
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'ON_HOLD'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+/** Where: a unit or a common area (exactly one is set). */
+export interface MaintenancePlaceDto {
+  unitId: string | null;
+  unitNumber: string | null;
+  commonAreaId: string | null;
+  commonAreaName: string | null;
+}
+
+export interface MaintenanceRequestDto extends MaintenancePlaceDto {
+  id: string;
+  /** e.g. "MR-000042". */
+  number: string;
+  category: MaintenanceCategory;
+  priority: MaintenancePriority;
+  title: string;
+  description: string;
+  locationDetail: string | null;
+  status: MaintenanceRequestStatus;
+  /** The reason given when it was rejected, cancelled or last reopened. */
+  statusNote: string | null;
+  submittedBy: { userId: string; name: string };
+  acceptedAt: string | null;
+  /** From the property's SLA target for the priority; null without one. */
+  responseDueAt: string | null;
+  resolutionDueAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  reopenCount: number;
+  createdAt: string;
+}
+
+export interface MaintenanceEventDto {
+  id: string;
+  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE';
+  visibility: 'RESIDENT' | 'INTERNAL';
+  /** e.g. a status, a priority, or a user id for assignee changes. */
+  from: string | null;
+  to: string | null;
+  body: string | null;
+  actor: { userId: string; name: string } | null;
+  /** Set for events of a work order, e.g. "WO-000042". */
+  workOrderNumber: string | null;
+  createdAt: string;
+}
+
+export interface WorkOrderDto extends MaintenancePlaceDto {
+  id: string;
+  /** e.g. "WO-000042". */
+  number: string;
+  requestId: string | null;
+  requestNumber: string | null;
+  category: MaintenanceCategory;
+  priority: MaintenancePriority;
+  title: string;
+  description: string | null;
+  status: WorkOrderStatus;
+  /** The note given when it was paused, completed or cancelled. */
+  statusNote: string | null;
+  assignedTo: { userId: string; name: string } | null;
+  dueAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface WorkOrderCostDto {
+  id: string;
+  kind: 'LABOUR' | 'MATERIAL' | 'OTHER';
+  description: string;
+  amount: MoneyDto;
+  recordedBy: { userId: string; name: string };
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+/** Staff: GET …/maintenance/requests/:id */
+export interface MaintenanceRequestDetailDto {
+  request: MaintenanceRequestDto;
+  workOrders: WorkOrderDto[];
+  /** Every event, internal ones included. */
+  events: MaintenanceEventDto[];
+}
+
+/** Residents: GET …/units/:unitId/maintenance-requests/:id (resident-visible history only). */
+export interface ResidentMaintenanceRequestDetailDto {
+  request: MaintenanceRequestDto;
+  events: MaintenanceEventDto[];
+}
+
+export interface WorkOrderDetailDto {
+  workOrder: WorkOrderDto;
+  costs: WorkOrderCostDto[];
+  /** Sum of the costs not voided. */
+  totalCost: MoneyDto;
+  events: MaintenanceEventDto[];
+}
+
+export interface MaintenanceAssigneeDto {
+  userId: string;
+  name: string;
+}
+
+export interface CreateMaintenanceRequestRequest {
+  category: MaintenanceCategory;
+  /** Defaults to MEDIUM. */
+  priority?: MaintenancePriority;
+  title: string;
+  description: string;
+  locationDetail?: string;
+  /** Staff only: exactly one of these (residents use their unit's route). */
+  unitId?: string;
+  commonAreaId?: string;
+}
+
+export interface CreateWorkOrderRequest {
+  /** Either a request (its place, title and category by default)… */
+  requestId?: string;
+  /** …or exactly one place. */
+  unitId?: string;
+  commonAreaId?: string;
+  title?: string;
+  description?: string;
+  category?: MaintenanceCategory;
+  priority?: MaintenancePriority;
+  assignedToUserId?: string;
+  dueAt?: string;
+}
+
+export interface RecordWorkOrderCostRequest {
+  kind: 'LABOUR' | 'MATERIAL' | 'OTHER';
+  description: string;
+  amount: string;
+}
