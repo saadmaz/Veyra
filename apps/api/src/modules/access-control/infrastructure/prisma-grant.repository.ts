@@ -6,6 +6,7 @@ import type {
   LoadedGrants,
   PermissionHolder,
 } from '../application/access-control.service';
+import { entitlementOf } from '../domain/entitlements';
 import type { Grant } from '../domain/policy';
 
 /** Derived grants are valid "today" by construction; the window only satisfies the Grant shape. */
@@ -90,7 +91,26 @@ export class PrismaGrantRepository implements GrantRepository {
           })),
         ];
 
-        const loaded: LoadedGrants = { organisationStatus: organisation.status, grants };
+        const subscription = await tx.subscription.findUnique({
+          where: { organisationId },
+          select: { status: true, trialEndsAt: true, plan: { select: { features: true } } },
+        });
+        const entitlement = entitlementOf(
+          subscription
+            ? {
+                status: subscription.status,
+                trialEndsAt: subscription.trialEndsAt,
+                features: subscription.plan.features,
+              }
+            : null,
+          new Date(),
+        );
+        // A lapsed subscription makes an active organisation read-only (rule 4).
+        const organisationStatus =
+          entitlement.lapsed && organisation.status === 'ACTIVE'
+            ? 'SUSPENDED'
+            : organisation.status;
+        const loaded: LoadedGrants = { organisationStatus, entitlement, grants };
         if (propertyId !== undefined) {
           // Filtering by organisation_id as well as RLS: a property id from another tenant is
           // simply not found.

@@ -21,6 +21,7 @@ import { PropertiesModule } from './modules/properties/properties.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { ResidentsModule } from './modules/residents/residents.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { VendorsModule } from './modules/vendors/vendors.module';
 import { VisitorsModule } from './modules/visitors/visitors.module';
 import { ConfigModule } from './platform/config/config.module';
@@ -55,6 +56,7 @@ export class AppModule implements NestModule {
         IntegrationsModule,
         GovernanceModule,
         ReportingModule,
+        SubscriptionsModule,
       ],
       controllers: [HealthController],
       providers: [

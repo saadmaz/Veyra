@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { databaseErrorCode } from '@veyra/db';
 import { DomainError } from '@veyra/domain';
 import type { Request, Response } from 'express';
 import { ApiError } from './api-error';
@@ -81,6 +82,22 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return {
         status: HttpStatus.UNPROCESSABLE_ENTITY,
         body: { error: { code: exception.code, message: exception.message } },
+      };
+    }
+
+    const dbCode = databaseErrorCode(exception);
+    if (dbCode === 'VE401' || dbCode === 'VE402') {
+      return {
+        status: HttpStatus.CONFLICT,
+        body: {
+          error: {
+            code: 'PLAN_LIMIT_REACHED',
+            message:
+              dbCode === 'VE401'
+                ? 'Your plan allows no more properties. Change the plan to add more.'
+                : 'Your plan allows no more units. Change the plan to add more.',
+          },
+        },
       };
     }
 

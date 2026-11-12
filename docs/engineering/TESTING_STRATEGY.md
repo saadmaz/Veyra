@@ -889,6 +889,19 @@ expiry, rehash on sign-in, idempotent sign-out).
   a webhook endpoint, sees the secret once, sends a test, reads the delivery and disables it.
   axe WCAG 2.2 AA.
 
+## Phase 13 tests
+
+### Part 1: subscriptions
+
+- `packages/db` integration (4, `subscriptions.int.test.ts`): new organisations get a logged
+  30-day trial; subscriptions, plans and history are read-only to the application; property and
+  unit limits; isolation.
+- `apps/api` unit (3, `test/access-control/entitlements.test.ts`): every permission has a
+  feature, plan filtering, when a subscription lapses.
+- `apps/api` integration (4, `subscriptions.int.test.ts`): the plan page for admins only; a
+  smaller plan turns routes off (403) and permissions away for everyone; limits answer 409
+  `PLAN_LIMIT_REACHED`; an ended trial makes the organisation read-only until reactivated.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

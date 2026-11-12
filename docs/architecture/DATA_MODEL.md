@@ -444,6 +444,17 @@ Who may decide (a holder of `property.approval.decide`, or a current seat on the
 checked by the application. Finance's own maker-checker approvals (`finance_approvals`, Phase 6)
 are separate and unchanged.
 
+**Subscriptions** (Phase 13, migration `20261130090000_subscriptions`):
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `plans` | code, name, features (keys beyond core), max_properties?, max_units?, active, position | Platform records seeded by the migration (Starter, Professional, Enterprise); the application reads them only. |
+| `subscriptions` | organisation (one each), plan, status (`TRIAL`/`ACTIVE`/`PAST_DUE`/`CANCELLED`), trial_ends_at? (exactly for trials) | Created by the database with each new organisation (a 30-day Enterprise trial); existing organisations were moved to Enterprise. The application role can only read them. |
+| `subscription_events` | from/to plan, from/to status, reason?, actor_user? | Written by the database on every change; append-only. |
+
+Inserting a property or a unit beyond the plan's limit fails with the application's own SQLSTATE
+`VE401` or `VE402`, answered as 409 `PLAN_LIMIT_REACHED`.
+
 **Webhooks** (Phase 12, migration `20261129090000_webhooks`):
 
 | Table | Key fields | Rules |
