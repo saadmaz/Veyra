@@ -1,0 +1,24 @@
+# Secret scanning (Phase 14 Part 3), run in CI on every push and pull request.
+# Starts from gitleaks' default rules. The allowlist covers only values that are public by design:
+# development-only defaults in .env.example and docker-compose, and test fixtures. Real secrets
+# never belong in the repository; production values come from the secrets manager.
+
+title = "VEYRA gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Development defaults and test fixtures, public by design"
+paths = [
+  '''^\.env\.example$''',
+  '''^docker-compose\.yml$''',
+  '''^infra/seaweedfs/.*''',
+  '''(^|/)test/.*''',
+  '''(^|/)e2e/.*''',
+  '''^bun\.lock$''',
+  # Installed packages and build output are not ours (the scan runs before install anyway).
+  '''(^|/)node_modules/''',
+  '''(^|/)(\.next|dist|\.turbo|coverage|playwright-report|test-results)/''',
+  '''^packages/db/src/generated/''',
+]

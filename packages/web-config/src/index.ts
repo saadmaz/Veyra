@@ -24,3 +24,5 @@ export const baselineSecurityHeaders: HeaderRule[] = [
 export const noIndexHeaders: HeaderRule[] = [
   { source: '/:path*', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] },
 ];
+
+export { type CspOptions, contentSecurityPolicy, cspHeaders, originOf } from './csp';

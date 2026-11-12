@@ -4,12 +4,12 @@ import { databaseErrorCode } from '@veyra/db';
 import { CLOCK, type Clock } from '../../../platform/clock';
 import { ApiError } from '../../../platform/errors/api-error';
 import type { RequestMeta } from '../../../platform/request-meta';
+import { checkUpload } from '../../../platform/storage/check-upload';
+import { FILE_SCANNER, type FileScanner } from '../../../platform/storage/file-scanner';
 import {
   OBJECT_STORAGE,
   type ObjectStorage,
-  SNIFF_BYTES,
   safeFileName,
-  sniffFileType,
 } from '../../../platform/storage/object-storage';
 import type { OrganisationAccess } from '../../access-control';
 import type { UploadInput } from '../domain/maintenance-rules';
@@ -51,6 +51,7 @@ export class AttachmentsService {
     @Inject(MAINTENANCE_REPOSITORY) private readonly repository: MaintenanceRepository,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage | null,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(FILE_SCANNER) private readonly scanner: FileScanner,
   ) {}
 
   /** Records a pending attachment and hands out a signed upload URL for it. */
@@ -122,16 +123,7 @@ export class AttachmentsService {
     if (pending.status === 'READY') return pending;
     if (pending.status === 'REJECTED') throw rejected();
 
-    const stored = await storage.stat(pending.storageKey);
-    if (!stored) {
-      throw new ApiError(409, 'UPLOAD_MISSING', 'The file has not arrived yet. Upload it again.');
-    }
-    const actualType =
-      stored.sizeBytes === pending.sizeBytes
-        ? sniffFileType(await storage.readStart(pending.storageKey, SNIFF_BYTES))
-        : null;
-    const ok = actualType === pending.contentType;
-    if (!ok) await storage.remove(pending.storageKey);
+    const ok = await checkUpload(storage, this.scanner, pending);
 
     const result = await this.inProperty(access, meta, async (uow) => {
       const current = await uow.attachment(id, { lock: true });

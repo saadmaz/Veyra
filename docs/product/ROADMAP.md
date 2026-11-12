@@ -310,7 +310,7 @@ a provider.
 | ---- | ----- | ------ |
 | 1 | Email verification and password reset: one-time links (hashes only), no account enumeration, reset ends every session; console pages and a reminder | ✅ Done |
 | 2 | Multi-factor authentication (TOTP) with recovery codes, required for privileged roles' changes and for platform administrators | ✅ Done (`MFA_ENFORCEMENT`, on by default in production) |
-| 3 | Operational hardening: structured JSON logging with redaction, secret scanning and dependency audit in CI, Content-Security-Policy, upload malware scanning adapter | |
+| 3 | Operational hardening: structured JSON logging with redaction, secret scanning and dependency audit in CI, Content-Security-Policy, upload malware scanning adapter | ✅ Done (ClamAV adapter; the worker still logs plain text) |
 | 4 | Launch readiness: production database roles, backup and restore runbook, full-stack smoke test, launch checklist | |
 | 5 | Phase 14 exit review | |
 
