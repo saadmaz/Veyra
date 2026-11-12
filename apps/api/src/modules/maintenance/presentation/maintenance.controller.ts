@@ -21,6 +21,7 @@ import type {
   MaintenanceRequestDetailDto,
   MaintenanceRequestDto,
   MaintenanceSlaTargetDto,
+  MaintenanceVendorDto,
   WorkOrderDetailDto,
   WorkOrderDto,
 } from '@veyra/api-contracts';
@@ -55,6 +56,7 @@ import {
   updateRequestSchema,
   updateWorkOrderSchema,
   uploadSchema,
+  vendorAssignSchema,
   voidCostSchema,
   workOrderListQuerySchema,
 } from '../domain/maintenance-rules';
@@ -438,6 +440,39 @@ export class MaintenanceController {
   ): Promise<WorkOrderDetailDto> {
     return toWorkOrderDetail(
       await this.maintenance.assign(access, id, body.userId, requestMeta(req)),
+    );
+  }
+
+  @Get(`${M}/vendors`)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({ summary: 'Active vendors that can be given work, with their compliance.' })
+  async vendors(
+    @CurrentAccess() access: OrganisationAccess,
+    @Req() req: Request,
+  ): Promise<{ data: MaintenanceVendorDto[] }> {
+    const rows = await this.maintenance.activeVendors(access, requestMeta(req));
+    return {
+      data: rows.map((r) => ({
+        id: r.vendor.id,
+        name: r.vendor.name,
+        categories: r.vendor.categories,
+        compliance: r.compliance,
+      })),
+    };
+  }
+
+  @Post(`${M}/work-orders/:workOrderId/vendor`)
+  @HttpCode(200)
+  @RequirePermission('property.maintenance.manage')
+  @ApiOperation({ summary: 'Give the work to an active vendor, or take the vendor off it (null).' })
+  async assignVendor(
+    @CurrentAccess() access: OrganisationAccess,
+    @Param('workOrderId', uuid) id: string,
+    @Body(new ZodValidationPipe(vendorAssignSchema)) body: z.infer<typeof vendorAssignSchema>,
+    @Req() req: Request,
+  ): Promise<WorkOrderDetailDto> {
+    return toWorkOrderDetail(
+      await this.maintenance.assignVendor(access, id, body.vendorId, requestMeta(req)),
     );
   }
 

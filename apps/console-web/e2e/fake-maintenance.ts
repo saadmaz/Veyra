@@ -652,6 +652,7 @@ export class FakeMaintenance {
         status: assignee ? 'ASSIGNED' : 'OPEN',
         statusNote: null,
         assignedTo: assignee ? { userId: assignee.userId, name: assignee.name } : null,
+        vendor: null,
         dueAt: null,
         startedAt: null,
         completedAt: null,

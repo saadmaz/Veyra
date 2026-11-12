@@ -7,3 +7,4 @@ export {
   type JobEnvelope,
   type TenantContext,
 } from './tenant-context';
+export { TRADES, type Trade } from './trades';

@@ -331,14 +331,29 @@ All five tables have RLS by organisation; the application has no DELETE grant ex
 hours. Daylight saving: slot boundaries and lengths are property-local wall-clock times; a booking
 across a daylight-saving change is as long on the clock as it looks, not in elapsed time.
 
-## 9. Identity vs person vs relationship
+## 9. Vendors (Phase 9, implemented)
+
+Migration `20261119090000_vendors`. Outside contractors of an organisation (not of one property)
+and the documents that keep them compliant.
+
+| Table | Key fields | Rules |
+| ----- | ---------- | ----- |
+| `vendors` | name, categories (trades, the `MaintenanceCategory` values), contact_name?, email?, phone?, tax_reference?, notes?, status (`ACTIVE`/`SUSPENDED`/`ARCHIVED`), status_note?, archived_at? | Start ACTIVE. Name unique ignoring case among vendors not archived. Suspended with a reason (cleared when reactivated). Archived only without open work orders; archived is final. Email stored lower-case. |
+| `vendor_documents` | vendor, kind (`INSURANCE`/`LICENCE`/`CONTRACT`/`CERTIFICATE`/`OTHER`), title, reference?, valid_from?, expires_on? (last valid day), created_by_user, voided_at?, voided_by_user?, void_reason? | Not added to archived vendors; expiry not before the start. Never edited: voided once with a reason. |
+| `work_orders.vendor_id` | the vendor doing the work | Only an ACTIVE vendor is given work. Assigned, started, paused and completed work has a technician, a vendor or both; open work has neither. Every vendor change is logged by the database (`VENDOR_CHANGED`, internal). |
+
+Compliance (computed by the API, not stored): `EXPIRED` when a document not voided is past its
+expiry, `EXPIRING_SOON` when one expires within 30 days (organisation time zone), `NO_DOCUMENTS`
+without any, else `OK`. Both tables have RLS by organisation and no DELETE grant.
+
+## 10. Identity vs person vs relationship
 
 A login account (`User`) is not a resident, owner, tenant or unit. A `Person` (person profile)
 holds the personal fields the product needs and may exist without a login. Relationships to
 units (ownership, tenancy, household membership) are separate, effective-dated records. One
 person may relate to many units and properties, and hold many roles.
 
-## 10. Conceptual entity catalogue (later phases)
+## 11. Conceptual entity catalogue (later phases)
 
 Starting point for discovery, not a final schema. Validate entities and cardinalities when the
 owning module is built.
@@ -357,7 +372,7 @@ File bytes live in object storage. The database stores metadata, ownership, acce
 checksum, version and storage key. Downloads use short-lived signed URLs issued only after a
 server-side authorisation check.
 
-## 11. Data lifecycle
+## 12. Data lifecycle
 
 - Retention is defined per data category and jurisdiction.
 - Correction and deletion are supported where legally required.

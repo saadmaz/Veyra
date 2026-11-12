@@ -115,6 +115,10 @@ export function eventText(e: MaintenanceEventDto, names: (userId: string) => str
       return e.to
         ? `Work ${e.workOrderNumber ?? ''} assigned to ${names(e.to)}`.replace('  ', ' ')
         : `Work ${e.workOrderNumber ?? ''} unassigned`.replace('  ', ' ');
+    case 'VENDOR_CHANGED':
+      return e.to
+        ? `Work ${e.workOrderNumber ?? ''} given to a vendor by ${who}`.replace('  ', ' ')
+        : `Vendor taken off work ${e.workOrderNumber ?? ''} by ${who}`.trim();
     case 'SLA_BREACHED':
       return e.to === 'RESPONSE' ? 'Response target missed' : 'Resolution target missed';
     default:

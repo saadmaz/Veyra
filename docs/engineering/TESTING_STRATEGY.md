@@ -668,6 +668,24 @@ expiry, rehash on sign-in, idempotent sign-out).
   room bookable with approval; the tenant's booking waits; the manager approves it from the
   queue and finds it under confirmed. axe WCAG 2.2 AA on each screen.
 
+## Phase 9 tests
+
+### Part 1: vendors
+
+- `packages/db` integration (6, `vendors.int.test.ts`): vendors start active with trimmed,
+  lower-case details and a name unique (ignoring case) among live ones; archived frees the name
+  and is final; suspending needs a reason that clears on reactivation; documents are never edited,
+  voided once, not added to archived vendors, never expire before they start; work orders go to an
+  active vendor without a technician, logged as `VENDOR_CHANGED` with the actor; open work cannot
+  have a vendor; a vendor with open work is not archived; suspended vendors get no work; another
+  organisation sees nothing and the application cannot delete.
+- `apps/api` integration (3, `vendors.int.test.ts`): admins register vendors (duplicate names
+  409, bad email 400), finance reads but cannot change, a property's maintenance manager cannot
+  open the register; compliance moves from expired to no documents (voided) to expiring soon;
+  managers see only active vendors, give work to one (assigned, logged), are refused a suspended
+  one, cannot archive a vendor with open work until the vendor is taken off it (back to open).
+- `apps/api` unit (access control): finance officers now read vendors.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

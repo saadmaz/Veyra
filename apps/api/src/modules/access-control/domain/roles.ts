@@ -62,6 +62,8 @@ export const ROLES = {
       'unit.facility.book',
       'property.facility.read',
       'property.facility.manage',
+      'organisation.vendor.read',
+      'organisation.vendor.manage',
     ],
   },
   PROPERTY_MANAGER: {
@@ -153,6 +155,8 @@ export const ROLES = {
       'property.finance.approve',
       // Maintenance costs for reporting (ACCESS_CONTROL section 4: R).
       'property.maintenance.read',
+      // Vendors they pay (Phase 9).
+      'organisation.vendor.read',
     ],
   },
   // ------------------------------------------------------------------ derived resident roles

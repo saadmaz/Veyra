@@ -72,6 +72,8 @@ model User {
   maintenanceAccepted     MaintenanceRequest[]     @relation("MaintenanceRequestAcceptedBy")
   workOrdersAssigned      WorkOrder[]              @relation("WorkOrderAssignee")
   workOrdersCreated       WorkOrder[]              @relation("WorkOrderCreatedBy")
+  vendorDocumentsAdded    VendorDocument[]         @relation("VendorDocumentCreatedBy")
+  vendorDocumentsVoided   VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded  WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
   workOrderCostsVoided    WorkOrderCost[]          @relation("WorkOrderCostVoidedBy")
   maintenanceEvents       MaintenanceEvent[]       @relation("MaintenanceEventActor")
@@ -159,6 +161,7 @@ model Organisation {
   memberships Membership[]
   invitations Invitation[]
   properties  Property[]
+  vendors     Vendor[]
   persons     Person[]
 
   @@map("organisations")
@@ -1756,6 +1759,8 @@ enum MaintenanceEventType {
   NOTE
   /// A response or resolution target was missed (written by the database only, Part 4).
   SLA_BREACHED
+  /// A work order's vendor changed (written by the database only, Phase 9).
+  VENDOR_CHANGED
 }
 
 enum MaintenanceEventVisibility {
@@ -1854,6 +1859,8 @@ model WorkOrder {
   /// The reason or note given with the latest status change that needs one (cancel, complete).
   statusNote       String?             @map("status_note")
   assignedToUserId String?             @map("assigned_to_user_id") @db.Uuid
+  /// An outside contractor doing the work (Phase 9), instead of or as well as a technician.
+  vendorId         String?             @map("vendor_id") @db.Uuid
   createdByUserId  String              @map("created_by_user_id") @db.Uuid
   dueAt            DateTime?           @map("due_at") @db.Timestamptz(3)
   startedAt        DateTime?           @map("started_at") @db.Timestamptz(3)
@@ -1866,6 +1873,7 @@ model WorkOrder {
   unit        Unit?                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   commonArea  CommonArea?             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
   assignedTo  User?                   @relation("WorkOrderAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  vendor      Vendor?                 @relation(fields: [organisationId, vendorId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
   createdBy   User                    @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   costs       WorkOrderCost[]
   events      MaintenanceEvent[]
@@ -1876,6 +1884,7 @@ model WorkOrder {
   @@index([organisationId, propertyId, status, createdAt])
   @@index([organisationId, assignedToUserId, status])
   @@index([organisationId, requestId])
+  @@index([organisationId, vendorId])
   @@map("work_orders")
 }
 
@@ -2181,4 +2190,83 @@ model FacilityBookingEvent {
 
   @@index([organisationId, bookingId, sequence])
   @@map("facility_booking_events")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Vendors (Phase 9). Outside contractors of an organisation, with the trades they cover and the
+// documents that keep them compliant (insurance, licences, contracts) and their expiry dates.
+// Work orders can be given to an active vendor. Rules are hand-written in migration
+// 20261119090000_vendors.
+// ---------------------------------------------------------------------------------------------
+
+enum VendorStatus {
+  ACTIVE
+  /// Kept on file but given no new work, with a reason.
+  SUSPENDED
+  /// Kept for history only. Final.
+  ARCHIVED
+}
+
+enum VendorDocumentKind {
+  INSURANCE
+  LICENCE
+  CONTRACT
+  CERTIFICATE
+  OTHER
+}
+
+model Vendor {
+  id             String                @id @default(uuid(7)) @db.Uuid
+  organisationId String                @map("organisation_id") @db.Uuid
+  /// Unique (ignoring case) among the organisation's vendors that are not archived.
+  name           String
+  /// The trades the vendor covers.
+  categories     MaintenanceCategory[]
+  contactName    String?               @map("contact_name")
+  email          String?
+  phone          String?
+  /// Tax or company registration number.
+  taxReference   String?               @map("tax_reference")
+  notes          String?
+  status         VendorStatus          @default(ACTIVE)
+  /// Why it was suspended (set while SUSPENDED).
+  statusNote     String?               @map("status_note")
+  archivedAt     DateTime?             @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  documents    VendorDocument[]
+  workOrders   WorkOrder[]
+
+  @@unique([organisationId, id])
+  @@index([organisationId, status])
+  @@map("vendors")
+}
+
+/// A compliance document of a vendor. Never edited: voided once with a reason, then added again.
+model VendorDocument {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  organisationId  String             @map("organisation_id") @db.Uuid
+  vendorId        String             @map("vendor_id") @db.Uuid
+  kind            VendorDocumentKind
+  title           String
+  /// Policy or licence number.
+  reference       String?
+  validFrom       DateTime?          @map("valid_from") @db.Date
+  /// The last day it is valid; null when it does not expire.
+  expiresOn       DateTime?          @map("expires_on") @db.Date
+  createdByUserId String             @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  voidedAt        DateTime?          @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId  String?            @map("voided_by_user_id") @db.Uuid
+  voidReason      String?            @map("void_reason")
+
+  vendor    Vendor @relation(fields: [organisationId, vendorId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User   @relation("VendorDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy  User?  @relation("VendorDocumentVoidedBy", fields: [voidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, vendorId])
+  @@index([organisationId, expiresOn])
+  @@map("vendor_documents")
 }

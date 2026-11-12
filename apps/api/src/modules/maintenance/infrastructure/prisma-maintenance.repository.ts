@@ -131,6 +131,8 @@ const WORK_ORDER_SELECT = {
   statusNote: true,
   assignedToUserId: true,
   assignedTo: { select: { displayName: true } },
+  vendorId: true,
+  vendor: { select: { name: true } },
   createdByUserId: true,
   dueAt: true,
   startedAt: true,
@@ -151,6 +153,8 @@ type WorkOrderRow = {
   statusNote: string | null;
   assignedToUserId: string | null;
   assignedTo: { displayName: string } | null;
+  vendorId: string | null;
+  vendor: { name: string } | null;
   createdByUserId: string;
   dueAt: Date | null;
   startedAt: Date | null;
@@ -176,6 +180,8 @@ const toWorkOrder = (row: WorkOrderRow): WorkOrderRecord => ({
   statusNote: row.statusNote,
   assignedToUserId: row.assignedToUserId,
   assignedToName: row.assignedTo?.displayName ?? null,
+  vendorId: row.vendorId,
+  vendorName: row.vendor?.name ?? null,
   createdByUserId: row.createdByUserId,
   dueAt: row.dueAt,
   startedAt: row.startedAt,
@@ -417,6 +423,7 @@ class PrismaMaintenanceUnitOfWork implements MaintenanceUnitOfWork {
       status?: WorkOrderStatus;
       statusNote?: string | null;
       assignedToUserId?: string | null;
+      vendorId?: string | null;
       priority?: Priority;
       dueAt?: Date | null;
     },
@@ -424,6 +431,13 @@ class PrismaMaintenanceUnitOfWork implements MaintenanceUnitOfWork {
     await this.tx.workOrder.update({
       where: { id, organisationId: this.organisationId, propertyId: this.propertyId },
       data: patch,
+    });
+  }
+
+  vendor(id: string) {
+    return this.tx.vendor.findFirst({
+      where: { organisationId: this.organisationId, id },
+      select: { id: true, status: true },
     });
   }
 

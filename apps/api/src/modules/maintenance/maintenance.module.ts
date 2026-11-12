@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { VendorsModule } from '../vendors/vendors.module';
 import { AttachmentsService } from './application/attachments.service';
 import { MaintenanceService } from './application/maintenance.service';
 import { MAINTENANCE_REPOSITORY } from './application/maintenance-ports';
@@ -14,7 +15,7 @@ import { UnitMaintenanceController } from './presentation/unit-maintenance.contr
  * maintenance tables.
  */
 @Module({
-  imports: [AccessControlModule],
+  imports: [AccessControlModule, VendorsModule],
   controllers: [MaintenanceController, UnitMaintenanceController],
   providers: [
     MaintenanceService,

@@ -51,6 +51,9 @@ export interface WorkOrderRecord extends Place {
   statusNote: string | null;
   assignedToUserId: string | null;
   assignedToName: string | null;
+  /** An outside contractor doing the work (Phase 9). */
+  vendorId: string | null;
+  vendorName: string | null;
   createdByUserId: string;
   dueAt: Date | null;
   startedAt: Date | null;
@@ -78,7 +81,13 @@ export interface EventRecord {
   requestId: string | null;
   workOrderId: string | null;
   workOrderNumber: bigint | null;
-  type: 'STATUS_CHANGED' | 'ASSIGNEE_CHANGED' | 'PRIORITY_CHANGED' | 'NOTE' | 'SLA_BREACHED';
+  type:
+    | 'STATUS_CHANGED'
+    | 'ASSIGNEE_CHANGED'
+    | 'PRIORITY_CHANGED'
+    | 'NOTE'
+    | 'SLA_BREACHED'
+    | 'VENDOR_CHANGED';
   visibility: Visibility;
   fromValue: string | null;
   toValue: string | null;
@@ -184,10 +193,13 @@ export interface MaintenanceUnitOfWork {
       status?: WorkOrderStatus;
       statusNote?: string | null;
       assignedToUserId?: string | null;
+      vendorId?: string | null;
       priority?: Priority;
       dueAt?: Date | null;
     },
   ): Promise<void>;
+  /** A vendor of the organisation and whether it can take work. */
+  vendor(id: string): Promise<{ id: string; status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' } | null>;
 
   costs(workOrderId: string): Promise<CostRecord[]>;
   cost(id: string): Promise<CostRecord | null>;
