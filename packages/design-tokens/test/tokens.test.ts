@@ -20,3 +20,38 @@ describe('design tokens', () => {
     expect(css).toContain('--color-bg: #0f1113;');
   });
 });
+
+/** WCAG 2.x contrast ratio of two hex colours. */
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('contrast (WCAG 2.2 AA, normal text)', () => {
+  it('keeps text and status colours at 4.5:1 on the page and on cards, in both schemes', () => {
+    for (const scheme of Object.values(colors)) {
+      for (const token of [
+        'text',
+        'textMuted',
+        'accent',
+        'success',
+        'warning',
+        'danger',
+      ] as const) {
+        for (const background of [scheme.bg, scheme.surface]) {
+          expect(
+            contrast(scheme[token], background),
+            `${token} on ${background}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+});

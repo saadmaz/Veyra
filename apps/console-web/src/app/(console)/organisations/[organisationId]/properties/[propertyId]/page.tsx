@@ -184,6 +184,23 @@ export default function PropertyPage() {
           </div>
         </Card>
       ) : null}
+      {can('property.maintenance.read') || can('property.maintenance.work') ? (
+        <Card title="Maintenance">
+          <p className="muted">
+            Problems reported by residents and staff, work orders, costs and response targets.
+          </p>
+          <div className="form__actions">
+            {can('property.maintenance.read') ? (
+              <ButtonLink href={`${base}/maintenance`}>Open maintenance</ButtonLink>
+            ) : null}
+            {can('property.maintenance.work') ? (
+              <ButtonLink href={`${base}/my-work`} variant="secondary">
+                My work
+              </ButtonLink>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
       {can('property.finance.read') ? (
         <Card title="Finance">
           <p className="muted">

@@ -28,7 +28,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 4     | Resident and unit management             | Done. Exit review: [PHASE_4_REVIEW](../reviews/PHASE_4_REVIEW.md) |
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
 | 6     | Finance and billing                      | Done. Exit review: [PHASE_6_REVIEW](../reviews/PHASE_6_REVIEW.md) |
-| 7     | Maintenance and work orders              | In progress (Parts 1-4 done) |
+| 7     | Maintenance and work orders              | Done. Exit review: [PHASE_7_REVIEW](../reviews/PHASE_7_REVIEW.md) |
 | 8     | Facilities and reservations              | |
 | 9     | Staff, vendors and assets                | |
 | 10    | Communications and documents             | |
@@ -186,7 +186,7 @@ Decisions (owner, 2026-11-11):
 | 2 | Roles and API: Maintenance Manager and Technician; residents raise, follow, confirm or reopen their unit's requests (resident-visible history only); staff triage, accept, reject, raise and assign work orders, add notes; technicians see and progress only their own work and record costs | ✅ Done |
 | 3 | File storage: S3-compatible adapter (MinIO in Docker Compose), signed upload and download URLs, type and size limits, tenant-scoped keys; photos on requests and work orders | ✅ Done (SeaweedFS instead of MinIO, whose images are no longer published; ADR 0007) |
 | 4 | SLAs: targets per property in the API; a worker job marks response and resolution breaches; the manager's queue sorted by urgency and breach | ✅ Done (breaches recorded by the database, scheduled through the outbox; the worker's outbox relay is now built) |
-| 5 | Console: residents' maintenance pages, the manager's queue and request page, the technician's work list; browser journeys; Phase 7 exit review | |
+| 5 | Console: residents' maintenance pages, the manager's queue and request page, the technician's work list; browser journeys; Phase 7 exit review | ✅ Done |
 
 ## Release gates
 
@@ -217,6 +217,9 @@ readiness, user training and release communication, and known limitations docume
   is no screen yet for online payment intents or for resolving an `AMOUNT_MISMATCH` callback; the
   invoice and payment lists show the API's 200 most recent with no paging; the chart of accounts
   is read-only (no API to add or rename accounts yet).
+- Maintenance console: request and work order lists show the 200 most recent (the queue 500)
+  with no paging; voiding a cost asks for the reason with the browser's prompt; the property's
+  member screens cannot yet invite Maintenance Managers or Technicians (use the API).
 - Outbox and SLAs: published outbox rows are kept (no retention job yet); the relay polls every
   15 seconds, so a breach is recorded up to that long (plus queue time) after it happens; there is
   no end-to-end test of worker, Redis and database together (each part is tested); breaches are

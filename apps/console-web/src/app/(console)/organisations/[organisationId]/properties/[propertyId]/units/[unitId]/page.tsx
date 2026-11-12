@@ -141,6 +141,17 @@ export default function UnitPage() {
         </Card>
       ) : null}
 
+      {u.permissions.includes('unit.maintenance.request') && u.myRoles.length > 0 ? (
+        <Card title="Maintenance">
+          <p className="muted">
+            Tell the property team what needs fixing and follow their progress.
+          </p>
+          <div className="form__actions">
+            <ButtonLink href={`${unitPath}/maintenance`}>Report or follow a problem</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
+
       {u.permissions.includes('unit.visitor.invite') ? (
         <>
           <WalkInRequestsCard

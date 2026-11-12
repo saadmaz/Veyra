@@ -20,6 +20,7 @@ import type {
   WalkInRequestDto,
 } from '@veyra/api-contracts';
 import { FakeFinance } from './fake-finance';
+import { FakeMaintenance, STORAGE_ORIGIN } from './fake-maintenance';
 
 /**
  * In-memory stand-in for the VEYRA API, answering the console's browser requests through
@@ -88,6 +89,10 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.finance.read',
       'property.finance.manage',
       'property.finance.approve',
+      'unit.maintenance.request',
+      'property.maintenance.read',
+      'property.maintenance.manage',
+      'property.maintenance.work',
     ],
   },
   FINANCE_OFFICER: {
@@ -100,6 +105,7 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.finance.read',
       'property.finance.manage',
       'property.finance.approve',
+      'property.maintenance.read',
     ],
   },
   PROPERTY_MANAGER: {
@@ -119,7 +125,29 @@ const ROLES: Record<string, { organisation: string[]; property: string[] }> = {
       'property.visitor.read',
       // Reads billing; finance officers run it.
       'property.finance.read',
+      'unit.maintenance.request',
+      'property.maintenance.read',
+      'property.maintenance.manage',
+      'property.maintenance.work',
     ],
+  },
+  MAINTENANCE_MANAGER: {
+    organisation: [],
+    property: [
+      'property.profile.read',
+      'property.structure.read',
+      'property.resident.read',
+      'unit.profile.read',
+      'unit.residents.read',
+      'unit.maintenance.request',
+      'property.maintenance.read',
+      'property.maintenance.manage',
+      'property.maintenance.work',
+    ],
+  },
+  TECHNICIAN: {
+    organisation: [],
+    property: ['property.profile.read', 'property.structure.read', 'property.maintenance.work'],
   },
   SECURITY_SUPERVISOR: {
     organisation: [],
@@ -205,6 +233,7 @@ export class FakeApi {
   vehicles: (VehicleDto & { propertyId: string })[] = [];
   emergencyContacts: (EmergencyContactDto & { personId: string })[] = [];
   finance = new FakeFinance();
+  maintenance = new FakeMaintenance();
   currentUserId: string | null = null;
   /** When true, every request fails at the network level. */
   offline = false;
@@ -336,6 +365,31 @@ export class FakeApi {
 
   async install(page: Page): Promise<void> {
     await page.route(`${API}/**`, (route) => this.handle(route));
+    // The object storage that signed upload and download URLs point at (ADR 0007).
+    await page.route(`${STORAGE_ORIGIN}/**`, async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() === 'PUT') {
+        const status = this.maintenance.storeUpload(
+          url,
+          new Uint8Array(request.postDataBuffer() ?? []),
+        );
+        await route.fulfill({ status, headers: { 'access-control-allow-origin': '*' } });
+        return;
+      }
+      if (request.method() === 'OPTIONS') {
+        await route.fulfill({
+          status: 204,
+          headers: {
+            'access-control-allow-origin': '*',
+            'access-control-allow-methods': 'PUT, GET',
+            'access-control-allow-headers': 'content-type',
+          },
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'text/plain', body: 'file' });
+    });
   }
 
   private get currentUser(): FakeUser | undefined {
@@ -727,7 +781,22 @@ export class FakeApi {
         const permissions = ['unit.profile.read', 'unit.visitor.invite'];
         if (roles.includes('OWNER') || roles.includes('TENANT'))
           permissions.push('unit.residents.read', 'unit.finance.read', 'unit.finance.pay');
+        permissions.push('unit.maintenance.request');
         const usub = own[2] ?? '';
+        if (usub === '/maintenance-requests' || usub.startsWith('/maintenance-requests/')) {
+          const reply = this.maintenance.handleUnit({
+            method,
+            sub: usub.slice('/maintenance-requests'.length),
+            body,
+            url,
+            property,
+            user,
+            units: [],
+            unit,
+            isResident: true,
+          });
+          return this.reply(route, reply.status, reply.body);
+        }
         if (usub === '/my-finance' || usub.startsWith('/my-finance/')) {
           if (!permissions.includes('unit.finance.read'))
             return this.error(route, 403, 'FORBIDDEN');
@@ -835,6 +904,28 @@ export class FakeApi {
       user.id,
     );
     if (residentRoute) return residentRoute;
+
+    if (sub.startsWith('/maintenance') || sub.startsWith('/my-work-orders')) {
+      const reply = this.maintenance.handleProperty({
+        method,
+        sub,
+        body,
+        url,
+        property,
+        permissions: pp,
+        user,
+        units: mine(this.units),
+        commonAreas: mine(this.commonAreas),
+        assignees: this.users
+          .filter((u) =>
+            (this.propertyPermissions(organisation.id, property.id, u.id) ?? []).includes(
+              'property.maintenance.work',
+            ),
+          )
+          .map((u) => ({ userId: u.id, name: u.displayName })),
+      });
+      if (reply) return this.reply(route, reply.status, reply.body);
+    }
 
     if (sub === '/finance' || sub.startsWith('/finance/')) {
       const reply = this.finance.handle({

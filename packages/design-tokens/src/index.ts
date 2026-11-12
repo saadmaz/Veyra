@@ -13,7 +13,7 @@ export const colors = {
     accent: '#1f4e46',
     accentContrast: '#ffffff',
     success: '#1d7a4d',
-    warning: '#a8670b',
+    warning: '#975c0a',
     danger: '#b42318',
   },
   dark: {
