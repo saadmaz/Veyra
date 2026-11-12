@@ -29,7 +29,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 5     | Visitor and access management            | Done. Exit review: [PHASE_5_REVIEW](../reviews/PHASE_5_REVIEW.md) |
 | 6     | Finance and billing                      | Done. Exit review: [PHASE_6_REVIEW](../reviews/PHASE_6_REVIEW.md) |
 | 7     | Maintenance and work orders              | Done. Exit review: [PHASE_7_REVIEW](../reviews/PHASE_7_REVIEW.md) |
-| 8     | Facilities and reservations              | |
+| 8     | Facilities and reservations              | Done. Exit review: [PHASE_8_REVIEW](../reviews/PHASE_8_REVIEW.md) |
 | 9     | Staff, vendors and assets                | |
 | 10    | Communications and documents             | |
 | 11    | Governance and incident management       | |
@@ -206,7 +206,7 @@ Decisions (owner, 2026-11-12, the recommended options):
 | 2 | Roles and API: facility setup and closures for managers; availability in the property's time zone; residents book, list and cancel (within the cancellation window) for their unit; staff book on behalf, approve, reject, cancel and mark used or no-show | ✅ Done (household members wait for delegation) |
 | 3 | Fees and deposits: per-slot fee and deposit charge types on a facility; an invoice to the unit when a booking is confirmed; deposit refunds and cancellation credits as credit notes | ✅ Done (in the booking's own transaction; paid amounts are refunded through finance) |
 | 4 | Console: residents' booking pages with availability, the manager's facility setup and booking queue; browser journeys | ✅ Done |
-| 5 | Phase 8 exit review | |
+| 5 | Phase 8 exit review | ✅ Done ([PHASE_8_REVIEW](../reviews/PHASE_8_REVIEW.md)) |
 
 ## Release gates
 
