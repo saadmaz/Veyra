@@ -33,7 +33,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 9     | Staff, vendors and assets                | Done. Exit review: [PHASE_9_REVIEW](../reviews/PHASE_9_REVIEW.md) |
 | 10    | Communications and documents             | Done. Exit review: [PHASE_10_REVIEW](../reviews/PHASE_10_REVIEW.md) |
 | 11    | Governance and incident management       | Done. Exit review: [PHASE_11_REVIEW](../reviews/PHASE_11_REVIEW.md) |
-| 12    | Analytics and integrations               | |
+| 12    | Analytics and integrations               | Done. Exit review: [PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md) |
 | 13    | SaaS administration and subscriptions    | |
 | 14    | Security hardening and commercial launch | |
 
@@ -277,7 +277,7 @@ customer need (Phase 13/14).
 | 2 | Exports: CSV reports per area with export permissions, an audit record per export and small-group suppression | ✅ Done (occupancy by building, arrears, maintenance requests, visits, incidents) |
 | 3 | Webhooks: endpoints per organisation, event subscriptions, signed deliveries retried by the worker, delivery log | ✅ Done (incident and approval events; secrets derived from one master key, never stored) |
 | 4 | Console screens and browser journeys | ✅ Done (figures and exports on the property page, webhooks for organisation admins) |
-| 5 | Phase 12 exit review | |
+| 5 | Phase 12 exit review | ✅ Done ([PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md)) |
 
 ## Release gates
 
