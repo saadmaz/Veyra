@@ -2283,3 +2283,32 @@ export interface WebhookEndpointDetailDto {
   /** The latest 50. */
   deliveries: WebhookDeliveryDto[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Subscriptions (Phase 13 Part 1)
+// ---------------------------------------------------------------------------------------------
+
+export interface SubscriptionDto {
+  plan: {
+    code: string;
+    name: string;
+    /** Feature keys beyond core, e.g. finance, incidents. */
+    features: string[];
+    maxProperties: number | null;
+    maxUnits: number | null;
+  };
+  status: 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED';
+  trialEndsAt: string | null;
+  /** Cancelled, or the trial has ended: the organisation is read-only. */
+  lapsed: boolean;
+  usage: { properties: number; units: number };
+  /** Latest first. */
+  history: {
+    fromPlan: string | null;
+    toPlan: string;
+    fromStatus: string | null;
+    toStatus: string;
+    reason: string | null;
+    createdAt: string;
+  }[];
+}

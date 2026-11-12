@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK, type Clock } from '../../../platform/clock';
 import { ApiError } from '../../../platform/errors/api-error';
+import { type Entitlement, entitled } from '../domain/entitlements';
 import { type Permission, permissionScope } from '../domain/permissions';
 import {
   type AccessScope,
@@ -27,7 +28,10 @@ export interface OrganisationAccess {
 }
 
 export interface LoadedGrants {
+  /** The organisation's status; a lapsed subscription reads as SUSPENDED (read-only). */
   organisationStatus: OrganisationStatus;
+  /** What the subscription allows (rule 5). */
+  entitlement: Entitlement;
   /** All of the user's memberships in the organisation, at every scope. */
   grants: Grant[];
   /** Present when a property was asked for: its status, or null if it is not in the organisation. */
@@ -65,6 +69,18 @@ export interface GrantRepository {
   ): Promise<PermissionHolder[]>;
 }
 export const GRANT_REPOSITORY = Symbol('GRANT_REPOSITORY');
+
+/** Permissions at a scope, as far as the subscription allows. */
+function entitledPermissions(
+  loaded: LoadedGrants,
+  scope: AccessScope,
+  now: Date,
+): ReadonlySet<Permission> {
+  return entitled(
+    permissionsAt(loaded.grants, loaded.organisationStatus, scope, now),
+    loaded.entitlement,
+  );
+}
 
 const forbidden = () =>
   new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action');
@@ -125,7 +141,7 @@ export class AccessControlService {
       propertyStatus: loaded.property.status,
     };
     if (!hasCoveringGrant(loaded.grants, scope, now)) throw notFound();
-    const permissions = permissionsAt(loaded.grants, loaded.organisationStatus, scope, now);
+    const permissions = entitledPermissions(loaded, scope, now);
     if (!permissions.has(permission)) throw forbidden();
     return { userId, organisationId, propertyId, permissions };
   }
@@ -154,7 +170,7 @@ export class AccessControlService {
       propertyStatus: loaded.property.status,
     };
     if (!hasCoveringGrant(loaded.grants, scope, now)) throw notFound();
-    const permissions = permissionsAt(loaded.grants, loaded.organisationStatus, scope, now);
+    const permissions = entitledPermissions(loaded, scope, now);
     if (!permissions.has(permission)) throw forbidden();
     return { userId, organisationId, propertyId, unitId, permissions };
   }
@@ -179,9 +195,7 @@ export class AccessControlService {
       propertyId,
       propertyStatus: loaded.property.status,
     };
-    return permissionsAt(loaded.grants, loaded.organisationStatus, scope, this.clock.now()).has(
-      permission,
-    );
+    return entitledPermissions(loaded, scope, this.clock.now()).has(permission);
   }
 
   /** Everyone who holds a property permission at the property through a membership, by name. */
@@ -228,12 +242,7 @@ export class AccessControlService {
     return {
       userId,
       organisationId,
-      permissions: permissionsAt(
-        loaded.grants,
-        loaded.organisationStatus,
-        { type: 'ORGANISATION' },
-        now,
-      ),
+      permissions: entitledPermissions(loaded, { type: 'ORGANISATION' }, now),
     };
   }
 

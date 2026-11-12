@@ -279,6 +279,24 @@ customer need (Phase 13/14).
 | 4 | Console screens and browser journeys | ✅ Done (figures and exports on the property page, webhooks for organisation admins) |
 | 5 | Phase 12 exit review | ✅ Done ([PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md)) |
 
+## Phase 13 plan (SaaS administration and subscriptions)
+
+Decisions (2026-11-12, the recommended options): three plans (Starter, Professional, Enterprise)
+kept in the database with their features and property and unit limits; every permission belongs
+to a feature; existing organisations move to Enterprise (no change), new ones start a 30-day
+Enterprise trial; a cancelled subscription or an ended trial leaves the organisation read-only;
+payment overdue keeps working (grace). No billing provider yet: plan changes are made by
+platform administrators. Platform administrators see no tenant data; support access is
+time-boxed, reason-logged, approved by the organisation and visible to it.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Plans, subscriptions and entitlements: features per plan enforced on every request, limits enforced by the database, read-only when lapsed, history | ✅ Done |
+| 2 | Platform administration: platform admins, organisation list without tenant data, plan and status changes, suspension, all audited | |
+| 3 | Support access: requested with a reason, approved by an organisation admin, time-boxed, read-only, visible and revocable | |
+| 4 | Console screens and browser journeys | |
+| 5 | Phase 13 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,

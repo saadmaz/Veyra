@@ -97,6 +97,7 @@ model User {
   resolutionsRecorded      Resolution[]             @relation("ResolutionRecordedBy")
   approvalRequestsMade     ApprovalRequest[]        @relation("ApprovalRequestRequestedBy")
   approvalDecisionsMade    ApprovalDecision[]       @relation("ApprovalDecisionBy")
+  subscriptionChanges      SubscriptionEvent[]      @relation("SubscriptionEventActor")
   webhookEndpointsCreated  WebhookEndpoint[]        @relation("WebhookEndpointCreatedBy")
   vendorDocumentsVoided    VendorDocument[]         @relation("VendorDocumentVoidedBy")
   workOrderCostsRecorded   WorkOrderCost[]          @relation("WorkOrderCostRecordedBy")
@@ -192,6 +193,8 @@ model Organisation {
   persons                Person[]
   webhookEndpoints       WebhookEndpoint[]
   webhookDeliveries      WebhookDelivery[]
+  subscription           Subscription?
+  subscriptionEvents     SubscriptionEvent[]
 
   @@map("organisations")
 }
@@ -3364,4 +3367,72 @@ model WebhookDelivery {
   @@unique([endpointId, eventId])
   @@index([organisationId, endpointId, createdAt])
   @@map("webhook_deliveries")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Plans and subscriptions (Phase 13 Part 1). Plans are platform records: the features they turn
+// on (permissions belong to features in access-control/domain/entitlements.ts) and their limits.
+// Every organisation has one subscription; its history is append-only. A cancelled subscription
+// or an ended trial leaves the organisation read-only. Rules are hand-written in migration
+// 20261130090000_subscriptions.
+// ---------------------------------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  /// Payment overdue: everything still works (grace).
+  PAST_DUE
+  /// Read-only until reactivated.
+  CANCELLED
+}
+
+model Plan {
+  code          String   @id
+  name          String
+  /// Feature keys, e.g. finance, incidents (core is always on).
+  features      String[]
+  /// Null: no limit.
+  maxProperties Int?     @map("max_properties")
+  maxUnits      Int?     @map("max_units")
+  /// Offered to new subscriptions.
+  active        Boolean  @default(true)
+  position      Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  organisationId String             @id @map("organisation_id") @db.Uuid
+  planCode       String             @map("plan_code")
+  status         SubscriptionStatus
+  trialEndsAt    DateTime?          @map("trial_ends_at") @db.Timestamptz(3)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  plan         Plan         @relation(fields: [planCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("subscriptions")
+}
+
+/// Every change of plan or status. Append-only.
+model SubscriptionEvent {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  organisationId String              @map("organisation_id") @db.Uuid
+  fromPlan       String?             @map("from_plan")
+  toPlan         String              @map("to_plan")
+  fromStatus     SubscriptionStatus? @map("from_status")
+  toStatus       SubscriptionStatus  @map("to_status")
+  reason         String?
+  actorUserId    String?             @map("actor_user_id") @db.Uuid
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actor        User?        @relation("SubscriptionEventActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, createdAt])
+  @@map("subscription_events")
 }

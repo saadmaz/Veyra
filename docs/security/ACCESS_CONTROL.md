@@ -301,10 +301,18 @@ next request of an existing session.
   `organisation.updated`, `membership.granted`, `membership.status_changed`,
   `invitation.created`, `invitation.revoked`, `invitation.accepted`.
 
+### 6.4a Subscription entitlements (rule 5, Phase 13)
+
+Every permission belongs to a feature (`access-control/domain/entitlements.ts`, checked at
+compile time); a plan turns features on, `core` always is. Permissions of features outside the
+plan are removed whenever access is evaluated, so their routes answer 403 and the console hides
+them. A cancelled subscription or an ended trial makes an active organisation read-only (rule 4);
+`PAST_DUE` keeps everything working. The plan page uses `organisation.member.read`, a read
+permission only organisation admins hold, so it stays visible while read-only.
+
 ### 6.5 Not yet implemented
 
 - MFA for privileged mutations (rule 7) depends on MFA in authentication (ADR 0005 gap).
-- Subscription entitlements (rule 5): Phase 13.
 - Building and unit scopes and derived owner/tenant grants: later Phase 3 parts and Phase 4.
 - Property managers cannot invite others to their property yet (organisation admins do).
 - Platform super admin support access.
