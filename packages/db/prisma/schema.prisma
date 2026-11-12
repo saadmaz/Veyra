@@ -77,6 +77,11 @@ model User {
   maintenanceEvents       MaintenanceEvent[]       @relation("MaintenanceEventActor")
   attachmentsUploaded     MaintenanceAttachment[]  @relation("MaintenanceAttachmentUploadedBy")
   attachmentsRemoved      MaintenanceAttachment[]  @relation("MaintenanceAttachmentRemovedBy")
+  facilityClosures        FacilityClosure[]        @relation("FacilityClosureCreatedBy")
+  facilityClosuresLifted  FacilityClosure[]        @relation("FacilityClosureLiftedBy")
+  facilityBookingsMade    FacilityBooking[]        @relation("FacilityBookingBookedBy")
+  facilityBookingsDecided FacilityBooking[]        @relation("FacilityBookingDecidedBy")
+  facilityBookingEvents   FacilityBookingEvent[]   @relation("FacilityBookingEventActor")
 
   @@map("users")
 }
@@ -376,6 +381,12 @@ model Property {
   maintenanceEvents      MaintenanceEvent[]
   maintenanceAttachments MaintenanceAttachment[]
 
+  facilities            Facility[]
+  facilityOpeningHours  FacilityOpeningHours[]
+  facilityClosures      FacilityClosure[]
+  facilityBookings      FacilityBooking[]
+  facilityBookingEvents FacilityBookingEvent[]
+
   @@unique([organisationId, id])
   @@unique([organisationId, code])
   @@map("properties")
@@ -469,6 +480,7 @@ model Unit {
 
   maintenanceRequests MaintenanceRequest[]
   workOrders          WorkOrder[]
+  facilityBookings    FacilityBooking[]
 
   @@unique([organisationId, propertyId, id])
   @@index([organisationId, propertyId])
@@ -494,6 +506,7 @@ model CommonArea {
 
   maintenanceRequests MaintenanceRequest[]
   workOrders          WorkOrder[]
+  facility            Facility?
 
   @@unique([organisationId, propertyId, id])
   @@unique([propertyId, name])
@@ -1970,4 +1983,181 @@ model MaintenanceAttachment {
   @@index([organisationId, requestId])
   @@index([organisationId, workOrderId])
   @@map("maintenance_attachments")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Facilities and reservations (Phase 8). A facility is the booking setup of a common area: slot
+// length, capacity, opening hours, notice and advance windows, a per-unit limit and whether
+// bookings need approval. Bookings are made for a unit in whole slots inside opening hours and
+// outside closures; capacity and limits are checked by the database under a per-facility lock.
+// Every status change is logged by the database. Rules are hand-written in migration
+// 20261117090000_facilities.
+// ---------------------------------------------------------------------------------------------
+
+enum FacilityStatus {
+  ACTIVE
+  /// Kept for history; takes no new bookings.
+  ARCHIVED
+}
+
+enum FacilityBookingStatus {
+  /// Waiting for staff approval. Holds its place.
+  PENDING
+  CONFIRMED
+  /// Declined by staff with a reason. Final.
+  REJECTED
+  /// Withdrawn (with a reason once confirmed). Final.
+  CANCELLED
+  /// Used. Final.
+  COMPLETED
+  /// Not used. Final.
+  NO_SHOW
+}
+
+/// The booking setup of one common area.
+model Facility {
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  organisationId      String         @map("organisation_id") @db.Uuid
+  propertyId          String         @map("property_id") @db.Uuid
+  commonAreaId        String         @map("common_area_id") @db.Uuid
+  /// Rules shown to residents, e.g. "No glass by the pool".
+  description         String?
+  status              FacilityStatus @default(ACTIVE)
+  /// Length of one slot; bookings are whole slots starting on a slot boundary of an opening range.
+  slotMinutes         Int            @map("slot_minutes")
+  /// Bookings that may overlap at any moment (1 = exclusive use).
+  capacity            Int            @default(1)
+  /// Bookings wait for staff approval when true; otherwise they are confirmed at once.
+  approvalRequired    Boolean        @default(false) @map("approval_required")
+  /// How long before its start a booking must be made.
+  minNoticeMinutes    Int            @default(0) @map("min_notice_minutes")
+  /// How far ahead a booking may start.
+  maxAdvanceDays      Int            @default(30) @map("max_advance_days")
+  maxSlotsPerBooking  Int            @default(1) @map("max_slots_per_booking")
+  /// Pending or confirmed bookings of this facility that a unit may hold before they end; null = no limit.
+  maxUpcomingPerUnit  Int?           @map("max_upcoming_per_unit")
+  /// Residents cannot cancel later than this before the start (staff can).
+  cancellationMinutes Int            @default(0) @map("cancellation_minutes")
+  archivedAt          DateTime?      @map("archived_at") @db.Timestamptz(3)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property     Property               @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  commonArea   CommonArea             @relation(fields: [organisationId, propertyId, commonAreaId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  openingHours FacilityOpeningHours[]
+  closures     FacilityClosure[]
+  bookings     FacilityBooking[]
+
+  @@unique([organisationId, propertyId, commonAreaId])
+  @@unique([organisationId, propertyId, id])
+  @@index([organisationId, propertyId])
+  @@map("facilities")
+}
+
+/// When a facility is open on a weekday, in the property's local time. A day may have several
+/// ranges that never overlap. Replaced (deleted and added) when staff change them.
+model FacilityOpeningHours {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  propertyId     String   @map("property_id") @db.Uuid
+  facilityId     String   @map("facility_id") @db.Uuid
+  /// ISO weekday: 1 = Monday ... 7 = Sunday.
+  weekday        Int
+  opensAt        DateTime @map("opens_at") @db.Time(0)
+  /// Later than opens_at; 24:00 closes at midnight.
+  closesAt       DateTime @map("closes_at") @db.Time(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  facility Facility @relation(fields: [organisationId, propertyId, facilityId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, facilityId, weekday])
+  @@map("facility_opening_hours")
+}
+
+/// A period when a facility cannot be booked (maintenance, private event). Never overlaps a
+/// pending or confirmed booking: those are cancelled first. Lifted, never deleted.
+model FacilityClosure {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  organisationId  String    @map("organisation_id") @db.Uuid
+  propertyId      String    @map("property_id") @db.Uuid
+  facilityId      String    @map("facility_id") @db.Uuid
+  startsAt        DateTime  @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime  @map("ends_at") @db.Timestamptz(3)
+  reason          String
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  liftedAt        DateTime? @map("lifted_at") @db.Timestamptz(3)
+  liftedByUserId  String?   @map("lifted_by_user_id") @db.Uuid
+
+  property  Property @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  facility  Facility @relation(fields: [organisationId, propertyId, facilityId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User     @relation("FacilityClosureCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  liftedBy  User?    @relation("FacilityClosureLiftedBy", fields: [liftedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, facilityId, startsAt])
+  @@map("facility_closures")
+}
+
+/// A reservation of a facility for a unit. Where and when never change; the status moves only
+/// along the allowed transitions, each logged in facility_booking_events.
+model FacilityBooking {
+  id              String                @id @default(uuid(7)) @db.Uuid
+  organisationId  String                @map("organisation_id") @db.Uuid
+  propertyId      String                @map("property_id") @db.Uuid
+  facilityId      String                @map("facility_id") @db.Uuid
+  unitId          String                @map("unit_id") @db.Uuid
+  /// Sequential per property, assigned on insert (BK-000042).
+  bookingNumber   BigInt?               @map("booking_number")
+  startsAt        DateTime              @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime              @map("ends_at") @db.Timestamptz(3)
+  /// Whole slots booked; set by the database.
+  slotCount       Int                   @default(0) @map("slot_count")
+  /// Set by the database on insert: PENDING when the facility needs approval, else CONFIRMED.
+  status          FacilityBookingStatus @default(PENDING)
+  /// The reason given with the latest status change that needs one (reject, cancel once confirmed).
+  statusNote      String?               @map("status_note")
+  /// What the booking is for, e.g. "Birthday party".
+  purpose         String?
+  bookedByUserId  String                @map("booked_by_user_id") @db.Uuid
+  /// Who approved or rejected a pending booking, and when.
+  decidedByUserId String?               @map("decided_by_user_id") @db.Uuid
+  decidedAt       DateTime?             @map("decided_at") @db.Timestamptz(3)
+  cancelledAt     DateTime?             @map("cancelled_at") @db.Timestamptz(3)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property  Property               @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  facility  Facility               @relation(fields: [organisationId, propertyId, facilityId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  unit      Unit                   @relation(fields: [organisationId, propertyId, unitId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  bookedBy  User                   @relation("FacilityBookingBookedBy", fields: [bookedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decidedBy User?                  @relation("FacilityBookingDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  events    FacilityBookingEvent[]
+
+  @@unique([organisationId, propertyId, id])
+  @@unique([propertyId, bookingNumber])
+  @@index([organisationId, facilityId, startsAt])
+  @@index([organisationId, unitId, startsAt])
+  @@map("facility_bookings")
+}
+
+/// Append-only history of a booking's status, written by the database.
+model FacilityBookingEvent {
+  id             String                 @id @default(uuid(7)) @db.Uuid
+  sequence       BigInt                 @unique @default(autoincrement())
+  organisationId String                 @map("organisation_id") @db.Uuid
+  propertyId     String                 @map("property_id") @db.Uuid
+  bookingId      String                 @map("booking_id") @db.Uuid
+  fromStatus     FacilityBookingStatus? @map("from_status")
+  toStatus       FacilityBookingStatus  @map("to_status")
+  note           String?
+  actorUserId    String?                @map("actor_user_id") @db.Uuid
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property        @relation(fields: [organisationId, propertyId], references: [organisationId, id], onDelete: Restrict, onUpdate: Restrict)
+  booking  FacilityBooking @relation(fields: [organisationId, propertyId, bookingId], references: [organisationId, propertyId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor    User?           @relation("FacilityBookingEventActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([organisationId, bookingId, sequence])
+  @@map("facility_booking_events")
 }

@@ -188,6 +188,26 @@ Decisions (owner, 2026-11-11):
 | 4 | SLAs: targets per property in the API; a worker job marks response and resolution breaches; the manager's queue sorted by urgency and breach | ✅ Done (breaches recorded by the database, scheduled through the outbox; the worker's outbox relay is now built) |
 | 5 | Console: residents' maintenance pages, the manager's queue and request page, the technician's work list; browser journeys; Phase 7 exit review | ✅ Done |
 
+## Phase 8 plan (Facilities and reservations)
+
+Decisions (owner, 2026-11-12, the recommended options):
+
+- **Who books:** owners and tenants for their unit; household members only when delegated;
+  staff on a resident's behalf from the console.
+- **Fees and deposits:** charged to the unit's account through the Phase 6 ledger (an invoice on
+  confirmation); deposits refunded by credit note. No card payment at booking.
+- **Approval:** a per-facility setting: confirmed at once or waiting for a manager.
+- **Time model:** fixed-length slots inside weekly opening hours, in the property's time zone.
+  Waitlists stay later (PRD 3.6).
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Data foundation: facilities on common areas, weekly opening hours, closures, bookings in whole slots with notice/advance windows, per-unit limit and capacity checked under a per-facility lock, approval per facility, validated transitions with reasons, append-only history written by the database, RLS | ✅ Done |
+| 2 | Roles and API: facility setup and closures for managers; availability in the property's time zone; residents book, list and cancel (within the cancellation window) for their unit; staff book on behalf, approve, reject, cancel and mark used or no-show | |
+| 3 | Fees and deposits: per-slot fee and deposit charge types on a facility; an invoice to the unit when a booking is confirmed; deposit refunds and cancellation credits as credit notes | |
+| 4 | Console: residents' booking pages with availability, the manager's facility setup and booking queue; browser journeys | |
+| 5 | Phase 8 exit review | |
+
 ## Release gates
 
 No stage is complete on a feature demo alone. Each release requires: acceptance criteria met,
