@@ -36,7 +36,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 12    | Analytics and integrations               | Done. Exit review: [PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md) |
 | 13    | SaaS administration and subscriptions    | Done. Exit review: [PHASE_13_REVIEW](../reviews/PHASE_13_REVIEW.md) |
 | 14    | Security hardening and commercial launch | Done. Exit review: [PHASE_14_REVIEW](../reviews/PHASE_14_REVIEW.md) |
-| 15    | Mobile apps (resident and staff)         | In progress |
+| 15    | Mobile apps (resident and staff)         | Done. Exit review: [PHASE_15_REVIEW](../reviews/PHASE_15_REVIEW.md) |
 
 ## Stage 0 discovery still required
 
@@ -328,7 +328,7 @@ GitHub Actions for testing and pilots, store builds through EAS once the develop
 | 2 | VEYRA Resident: sign-in with two-step sign-in, homes, visitor passes with QR codes and walk-in approvals, maintenance requests, facility bookings, bills and statement, announcements and notifications, documents | ✅ Done (no photo upload or push yet) |
 | 3 | VEYRA Staff: sign-in with two-step sign-in, property choice, gate (QR scan and codes, admit, deny, walk-ins, departures, offline list and queue), my work orders, incident reports, my shifts | ✅ Done (no photo upload or push yet) |
 | 4 | Android APKs from CI for both apps, install guide | ✅ Done ([MOBILE_APPS](../operations/MOBILE_APPS.md)) |
-| 5 | Phase 15 exit review | |
+| 5 | Phase 15 exit review | ✅ Done ([PHASE_15_REVIEW](../reviews/PHASE_15_REVIEW.md)) |
 
 ## Release gates
 
