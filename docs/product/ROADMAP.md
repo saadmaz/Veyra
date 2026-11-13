@@ -38,6 +38,8 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 14    | Security hardening and commercial launch | Done. Exit review: [PHASE_14_REVIEW](../reviews/PHASE_14_REVIEW.md) |
 | 15    | Mobile apps (resident and staff)         | Done. Exit review: [PHASE_15_REVIEW](../reviews/PHASE_15_REVIEW.md) |
 
+Everything still open after Phase 15, in phases from 16 onwards: [REMAINING_PLAN](REMAINING_PLAN.md).
+
 ## Stage 0 discovery still required
 
 - Interview management, finance, security, residents, maintenance and committee members.
