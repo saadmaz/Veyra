@@ -4,7 +4,9 @@ name: Android APKs
 # - Run it by hand (Actions → Android APKs → Run workflow) with the API address the phones
 #   should use; the address is built into the app.
 # - It also runs on pull requests and on main when a mobile app or what it uses changes, so a
-#   native build failure shows up before release.
+#   native build failure shows up before release. To keep runner minutes down, those runs build
+#   only the app that changed (both when a shared package, the lockfile or this file changes),
+#   pull requests build for phones (arm64) only, and Gradle downloads are cached.
 # The APKs are signed with the build's throwaway key: for testing and pilots only, never for a
 # store. Store builds go through EAS once the developer accounts exist.
 
@@ -47,20 +49,60 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: pick apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apps: ${{ steps.pick.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Pick the apps to build
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # Manual runs, and anything we cannot diff, build both apps.
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo 'apps=["resident","staff"]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE" HEAD)
+          shared='^(packages/(client|api-contracts|design-tokens|domain)/|infra/mobile/|bun\.lock$|\.github/workflows/android-apks\.yml$)'
+          apps=()
+          if echo "$files" | grep -qE "$shared"; then
+            apps=(resident staff)
+          else
+            if echo "$files" | grep -q '^apps/resident-mobile/'; then apps+=(resident); fi
+            if echo "$files" | grep -q '^apps/staff-mobile/'; then apps+=(staff); fi
+          fi
+          json=""
+          for app in "${apps[@]}"; do json="$json\"$app\","; done
+          echo "apps=[${json%,}]" >> "$GITHUB_OUTPUT"
+          echo "Building: [${json%,}]"
+
   apk:
     name: apk (${{ matrix.app }})
+    needs: changes
+    if: needs.changes.outputs.apps != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        app: [resident, staff]
+        app: ${{ fromJSON(needs.changes.outputs.apps) }}
     env:
       # 10.0.2.2 is the Android emulator's address for the machine running it.
       EXPO_PUBLIC_API_BASE_URL: ${{ inputs.api_base_url || 'http://10.0.2.2:4000/api/v1' }}
       EXPO_NO_TELEMETRY: "1"
       TURBO_TELEMETRY_DISABLED: "1"
       APP_DIR: apps/${{ matrix.app }}-mobile
+      # Phones (arm64) everywhere; the emulator (x86_64) only for builds people install.
+      ARCHS: ${{ github.event_name == 'pull_request' && 'arm64-v8a' || 'arm64-v8a,x86_64' }}
 
     steps:
       - uses: actions/checkout@v7
@@ -76,6 +118,15 @@ jobs:
       - name: Use JDK 17 (installed on the runner)
         run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
 
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ matrix.app }}-${{ hashFiles('bun.lock') }}
+          restore-keys: gradle-${{ matrix.app }}-
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -88,8 +139,7 @@ jobs:
 
       - name: Build the APK
         working-directory: ${{ env.APP_DIR }}/android
-        # Phones (arm64) and the emulator (x86_64).
-        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures="$ARCHS"
 
       - name: Name the APK
         run: |

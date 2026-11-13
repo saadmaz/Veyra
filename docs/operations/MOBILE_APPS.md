@@ -33,7 +33,10 @@ private networks.
 
 The workflow also runs on every pull request and every merge that changes a mobile app or a
 package it uses, with the emulator address. Those APKs only reach an API running on the same
-machine as an emulator.
+machine as an emulator. To save runner minutes they build only the app that changed (both when a
+shared package, the lockfile or the workflow changes), and pull-request builds are for phones
+(arm64) only, so they will not install on an x86_64 emulator. Merges to `main`
+build for phones and the emulator; manual runs build both apps.
 
 ## 3. Install on an Android phone
 

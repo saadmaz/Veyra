@@ -107,7 +107,7 @@ test.describe('maintenance', () => {
     // The technician sees only their work, does it, records a cost and finishes.
     api.currentUserId = tech.id;
     await page.goto(base);
-    await page.getByRole('link', { name: 'My work' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'My work' }).click();
     await page.getByRole('link', { name: 'Kitchen tap leaks' }).click();
     await page.getByRole('button', { name: 'Start work' }).click();
     await expect(page.getByText('in progress').first()).toBeVisible();
