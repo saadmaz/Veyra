@@ -1,9 +1,12 @@
 import type { PropertyDetailResponse } from '@veyra/api-contracts';
 import { Stack } from 'expo-router';
 import { useMemo } from 'react';
+import { View } from 'react-native';
+import { TabBar } from '@/components/tab-bar';
 import { Loaded, Screen, usePalette } from '@/components/ui';
 import { GateProvider } from '@/lib/gate-context';
 import { SiteProvider, useSiteParams } from '@/lib/site';
+import { STAFF_TABS, visibleTabs } from '@/lib/tabs';
 import { useApiQuery } from '@/lib/use-api';
 
 /** Loads the property once for all of its screens (time zone, permissions). */
@@ -32,22 +35,25 @@ export default function SiteLayout() {
     );
   }
   const stack = (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: palette.surface },
-        headerTintColor: palette.text,
-        contentStyle: { backgroundColor: palette.bg },
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: site.property.name }} />
-      <Stack.Screen name="gate" options={{ title: 'Gate' }} />
-      <Stack.Screen name="walk-in" options={{ title: 'Walk-in visitor' }} />
-      <Stack.Screen name="inside" options={{ title: 'Inside now' }} />
-      <Stack.Screen name="work/index" options={{ title: 'My work' }} />
-      <Stack.Screen name="work/[workOrderId]" options={{ title: 'Work order' }} />
-      <Stack.Screen name="incident" options={{ title: 'Report an incident' }} />
-      <Stack.Screen name="shifts" options={{ title: 'My shifts' }} />
-    </Stack>
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: palette.surface },
+          headerTintColor: palette.text,
+          contentStyle: { backgroundColor: palette.bg },
+        }}
+      >
+        <Stack.Screen name="index" options={{ title: site.property.name }} />
+        <Stack.Screen name="gate" options={{ title: 'Gate' }} />
+        <Stack.Screen name="walk-in" options={{ title: 'Walk-in visitor' }} />
+        <Stack.Screen name="inside" options={{ title: 'Inside now' }} />
+        <Stack.Screen name="work/index" options={{ title: 'My work' }} />
+        <Stack.Screen name="work/[workOrderId]" options={{ title: 'Work order' }} />
+        <Stack.Screen name="incident" options={{ title: 'Report an incident' }} />
+        <Stack.Screen name="shifts" options={{ title: 'My shifts' }} />
+      </Stack>
+      <TabBar route={site.route} tabs={visibleTabs(STAFF_TABS, site.can)} />
+    </View>
   );
   return (
     <SiteProvider site={site}>
