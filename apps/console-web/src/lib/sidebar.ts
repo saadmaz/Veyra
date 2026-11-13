@@ -105,7 +105,7 @@ export function sidebarGroups(pathname: string): NavGroup[] {
     label: 'Account',
     items: [
       { label: 'All organisations', href: '/organisations', icon: 'building' },
-      { label: 'Account security', href: '/account/security', icon: 'lock' },
+      { label: 'Two-step sign-in', href: '/account/security', icon: 'lock' },
     ],
   });
   return groups;

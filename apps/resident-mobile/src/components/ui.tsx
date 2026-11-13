@@ -120,7 +120,7 @@ export function Badge({ children, tone = 'neutral' }: { children: ReactNode; ton
   const palette = usePalette();
   const color = toneColor(palette, tone);
   return (
-    <View style={[styles.badge, { backgroundColor: tint(color, 0.12) }]}>
+    <View style={[styles.badge, { backgroundColor: tint(color, 0.08) }]}>
       <View style={[styles.badgeDot, { backgroundColor: color }]} />
       <Text style={[styles.badgeText, { color }]}>{children}</Text>
     </View>

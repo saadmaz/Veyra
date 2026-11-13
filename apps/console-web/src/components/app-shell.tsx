@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="shell">
         <aside className="sidebar">
           <div className="sidebar__top">
-            <Link href="/organisations" className="brand" aria-label="VEYRA home">
+            <Link href="/organisations" className="brand">
               <span className="brand__mark" aria-hidden="true">
                 V
               </span>
@@ -87,12 +87,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               <summary aria-label="Open navigation">
                 <Icon name="menu" size={20} />
               </summary>
-              {nav}
+              <div className="sidebar__panel">
+                {nav}
+                <AccountMenu displayName={session.user.displayName} email={session.user.email} />
+              </div>
             </details>
           </div>
           <OrganisationSwitcher />
           <div className="sidebar__desktop">{nav}</div>
-          <AccountMenu displayName={session.user.displayName} email={session.user.email} />
+          <div className="sidebar__desktop sidebar__footer">
+            <AccountMenu displayName={session.user.displayName} email={session.user.email} />
+          </div>
         </aside>
         <main id="main" className="page" tabIndex={-1}>
           {session.user.emailVerified ? null : <ConfirmEmailBanner />}
@@ -156,7 +161,7 @@ function OrganisationSwitcher() {
   return (
     <div className="switcher">
       <label htmlFor="organisation-switcher" className="switcher__label">
-        Organisation
+        Switch organisation
       </label>
       <select
         id="organisation-switcher"

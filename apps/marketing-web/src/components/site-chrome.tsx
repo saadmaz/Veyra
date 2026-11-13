@@ -11,7 +11,7 @@ const nav = [
 
 export function Logo() {
   return (
-    <Link href="/" className="logo" aria-label="VEYRA home">
+    <Link href="/" className="logo">
       <span className="logo-mark" aria-hidden="true">
         V
       </span>

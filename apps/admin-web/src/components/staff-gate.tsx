@@ -88,7 +88,7 @@ export function StaffGate({ children }: { children: ReactNode }) {
   return (
     <div className="admin">
       <aside className="sidebar">
-        <a href="/" className="brand" aria-label="Platform Admin home">
+        <a href="/" className="brand">
           <span className="brand__mark" aria-hidden="true">
             V
           </span>
