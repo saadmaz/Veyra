@@ -326,7 +326,7 @@ GitHub Actions for testing and pilots, store builds through EAS once the develop
 | ---- | ----- | ------ |
 | 1 | Shared client `@veyra/client` (request layer for cookie and bearer sessions, error messages, labels, time zones, money, uploads, offline-gate checks); the console moves onto it; ADR 0008 | ✅ Done |
 | 2 | VEYRA Resident: sign-in with two-step sign-in, homes, visitor passes with QR codes and walk-in approvals, maintenance requests, facility bookings, bills and statement, announcements and notifications, documents | ✅ Done (no photo upload or push yet) |
-| 3 | VEYRA Staff: sign-in with two-step sign-in, property choice, gate (QR scan and codes, admit, deny, walk-ins, departures, offline list and queue), my work orders, incident reports, my shifts | |
+| 3 | VEYRA Staff: sign-in with two-step sign-in, property choice, gate (QR scan and codes, admit, deny, walk-ins, departures, offline list and queue), my work orders, incident reports, my shifts | ✅ Done (no photo upload or push yet) |
 | 4 | Android APKs from CI for both apps, install guide | |
 | 5 | Phase 15 exit review | |
 
@@ -339,6 +339,10 @@ readiness, user training and release communication, and known limitations docume
 
 ## Technical debt
 
+- Mobile: the staff app copies the resident app's UI building blocks (`ui.tsx`, `use-api.ts`,
+  `dates.ts`); move them to a shared package once the workspace uses one React version (the apps
+  pin React 19.3.0 for React Native, the web apps 19.3.1). No photo upload or push notifications
+  in the apps yet.
 - Finance: invoice lists return the 200 most recent matching the filters (no paging yet);
   creating a one-off invoice is not idempotent (no `Idempotency-Key` yet; payments in Part 3
   will need it); the chart of accounts has no add, rename or archive endpoints yet (archiving must

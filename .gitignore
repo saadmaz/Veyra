@@ -24,6 +24,8 @@ packages/db/src/generated/
 expo-env.d.ts
 apps/resident-mobile/ios/
 apps/resident-mobile/android/
+apps/staff-mobile/ios/
+apps/staff-mobile/android/
 *.jks
 *.p8
 *.p12

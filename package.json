@@ -15,6 +15,7 @@
     "dev:marketing": "turbo run dev --filter=@veyra/marketing-web",
     "dev:admin": "turbo run dev --filter=@veyra/admin-web",
     "dev:mobile": "bun run --cwd apps/resident-mobile dev",
+    "dev:staff": "bun run --cwd apps/staff-mobile dev",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "turbo run typecheck",

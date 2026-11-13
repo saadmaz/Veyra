@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "VEYRA Staff",
+    "slug": "veyra-staff",
+    "scheme": "veyra-staff",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.veyra.staff",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.veyra.staff"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "VEYRA Staff uses the camera to scan visitor pass QR codes at the gate.",
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
+  }
+}
