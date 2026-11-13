@@ -33,6 +33,7 @@ app. Overviews with ports and URLs: [apps/README.md](../../apps/README.md),
 │   │   ├── app/                  screens/routes
 │   │   ├── src/lib/              API client, config, non-UI logic
 │   │   └── test/
+│   ├── staff-mobile/             VEYRA Staff: gate, work orders, incidents, shifts (Expo)
 │   ├── marketing-web/            Public website (Next.js)
 │   └── admin-web/                Internal platform admin (Next.js)
 ├── packages/
@@ -95,7 +96,7 @@ Shared UI stays separate from feature code. No global `utils` dumping ground.
 | `apps/worker` | `domain`, `db`, `emails` |
 | `apps/console-web`, `apps/admin-web` | `domain` (value objects only), `api-contracts`, `client`, `design-tokens`, `web-config` |
 | `apps/marketing-web` | `design-tokens`, `web-config` |
-| `apps/resident-mobile` | `api-contracts`, `design-tokens` |
+| `apps/resident-mobile`, `apps/staff-mobile` | `api-contracts`, `client`, `design-tokens` |
 
 Client apps talk to the API over HTTP and never to the database. Business logic is never
 duplicated in web or mobile.
