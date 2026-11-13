@@ -14,10 +14,10 @@ describe('design tokens', () => {
 
   it('renders CSS custom properties with a dark-mode override', () => {
     const css = cssVariables();
-    expect(css).toContain('--color-text-muted: #5b616b;');
+    expect(css).toContain('--color-text-muted: #5c5c63;');
     expect(css).toContain('--space-4: 1rem;');
     expect(css).toContain('@media (prefers-color-scheme: dark)');
-    expect(css).toContain('--color-bg: #0f1113;');
+    expect(css).toContain('--color-bg: #0c0c0d;');
   });
 });
 

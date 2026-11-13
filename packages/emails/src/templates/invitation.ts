@@ -27,7 +27,7 @@ export function invitationEmail(input: InvitationEmailInput): RenderedEmail {
     subject,
     `<p style="margin:0 0 16px;">${escapeHtml(greeting)}</p>
 <p style="margin:0 0 16px;">${escapeHtml(input.inviterName)} has invited you to join <strong>${escapeHtml(where)}</strong> as <strong>${escapeHtml(input.roleLabel)}</strong>.</p>
-<p style="margin:0 0 24px;"><a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;background:#1f4e46;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;">Accept invitation</a></p>
+<p style="margin:0 0 24px;"><a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;background:#18181b;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;">Accept invitation</a></p>
 <p style="margin:0;font-size:13px;color:#5b616b;">This link expires on ${expiry} UTC and can be used once. If you did not expect this invitation, you can ignore this email.</p>`,
   );
 
