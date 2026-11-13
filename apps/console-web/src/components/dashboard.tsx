@@ -90,12 +90,15 @@ export function PropertyFigures({ propertyPath }: { propertyPath: string }) {
   }
   if (areas.length === 0) return null;
   return (
-    <Card title={`Today (${d.asOf})`}>
-      <div className="form">
+    <section className="kpi-board" aria-label={`Today (${d.asOf})`}>
+      <h2 className="kpi-board__title">
+        Today <span className="muted">· {d.asOf}</span>
+      </h2>
+      <div className="kpi-grid">
         {areas.map((a) => (
-          <section key={a.title} aria-label={`${a.title} figures`}>
-            <h3 className="section-title">{a.title}</h3>
-            <dl className="details">
+          <section key={a.title} className="kpi" aria-label={`${a.title} figures`}>
+            <h3 className="kpi__title">{a.title}</h3>
+            <dl className="kpi__figures">
               {a.figures.map(([label, value]) => (
                 <Figure key={label} label={label} value={value} />
               ))}
@@ -103,7 +106,7 @@ export function PropertyFigures({ propertyPath }: { propertyPath: string }) {
           </section>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
 

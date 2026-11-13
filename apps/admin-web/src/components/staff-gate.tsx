@@ -44,48 +44,76 @@ export function StaffGate({ children }: { children: ReactNode }) {
 
   if (state.kind === 'loading') {
     return (
-      <p className="muted" role="status">
-        Loading…
-      </p>
+      <div className="center">
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      </div>
     );
   }
   if (state.kind === 'error') {
     return (
-      <div role="alert" className="alert">
-        {state.message}{' '}
-        <button type="button" className="button button--secondary" onClick={() => void check()}>
-          Try again
-        </button>
+      <div className="center">
+        <div role="alert" className="alert">
+          {state.message}{' '}
+          <button type="button" className="button button--secondary" onClick={() => void check()}>
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
-  if (state.kind === 'signed-out') return <SignIn onSignedIn={() => void check()} />;
+  if (state.kind === 'signed-out') {
+    return (
+      <div className="center">
+        <SignIn onSignedIn={() => void check()} />
+      </div>
+    );
+  }
   if (state.kind === 'not-staff') {
     return (
-      <section className="panel" aria-labelledby="refused">
-        <h1 id="refused">Not for this account</h1>
-        <p className="muted">
-          {state.email} is not a VEYRA platform administrator. Ask an operator if you should be.
-        </p>
-        <button type="button" className="button button--secondary" onClick={() => void signOut()}>
-          Sign out
-        </button>
-      </section>
+      <div className="center">
+        <section className="panel" aria-labelledby="refused">
+          <h1 id="refused">Not for this account</h1>
+          <p className="muted">
+            {state.email} is not a VEYRA platform administrator. Ask an operator if you should be.
+          </p>
+          <button type="button" className="button button--secondary" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </section>
+      </div>
     );
   }
   return (
-    <>
-      <header className="topbar">
-        <span className="eyebrow">VEYRA · INTERNAL</span>
-        <span className="muted">
-          {state.email}{' '}
+    <div className="admin">
+      <aside className="sidebar">
+        <a href="/" className="brand" aria-label="Platform Admin home">
+          <span className="brand__mark" aria-hidden="true">
+            V
+          </span>
+          <span className="brand__text">
+            <span className="brand__word">VEYRA</span>
+            <span className="brand__sub">Platform admin</span>
+          </span>
+        </a>
+        <nav aria-label="Main">
+          <a href="/" className="sidebar__link" aria-current="page">
+            Organisations
+          </a>
+        </nav>
+        <p className="sidebar__notice">Production · every action is audited</p>
+        <div className="sidebar__account">
+          <span className="sidebar__email" title={state.email}>
+            {state.email}
+          </span>
           <button type="button" className="link-button" onClick={() => void signOut()}>
             Sign out
           </button>
-        </span>
-      </header>
-      {children}
-    </>
+        </div>
+      </aside>
+      <div className="admin__main">{children}</div>
+    </div>
   );
 }
 
@@ -113,7 +141,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <section className="panel" aria-labelledby="sign-in">
-      <p className="eyebrow">VEYRA · INTERNAL</p>
+      <p className="eyebrow">VEYRA · Internal</p>
       <h1 id="sign-in">Platform Admin</h1>
       <form className="form" onSubmit={submit} aria-label="Sign in">
         <label className="field">

@@ -3,6 +3,7 @@
 import type { AcceptInvitationResponse } from '@veyra/api-contracts';
 import Link from 'next/link';
 import { type ReactNode, useEffect, useState } from 'react';
+import { AuthFrame } from '@/components/auth-frame';
 import { Alert, Button, ButtonLink, ErrorState, LoadingState } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { errorMessage, roleLabel } from '@/lib/messages';
@@ -133,15 +134,12 @@ export default function AcceptInvitationPage() {
   }
 
   return (
-    <main id="main" className="auth">
-      <div className="auth__panel">
-        <p className="brand brand--large">VEYRA</p>
-        <h1 className="auth__title">Accept invitation</h1>
-        {content}
-        <p className="auth__switch">
-          <Link href="/organisations">Go to your organisations</Link>
-        </p>
-      </div>
-    </main>
+    <AuthFrame>
+      <h1 className="auth__title">Accept invitation</h1>
+      {content}
+      <p className="auth__switch">
+        <Link href="/organisations">Go to your organisations</Link>
+      </p>
+    </AuthFrame>
   );
 }

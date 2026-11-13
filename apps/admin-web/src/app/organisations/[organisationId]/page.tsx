@@ -8,10 +8,8 @@ import { StaffGate } from '@/components/staff-gate';
 export default function OrganisationPage() {
   const { organisationId } = useParams<{ organisationId: string }>();
   return (
-    <div className="shell shell--top">
-      <StaffGate>
-        <OrganisationDetail id={organisationId} />
-      </StaffGate>
-    </div>
+    <StaffGate>
+      <OrganisationDetail id={organisationId} />
+    </StaffGate>
   );
 }
