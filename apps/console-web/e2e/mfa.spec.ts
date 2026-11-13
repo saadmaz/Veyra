@@ -2,10 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 import { FakeApi } from './fake-api';
 
-/** On narrow screens the sidebar is a menu; open it before using its links. */
+/** Below 60rem the sidebar collapses into a menu; open it before using its links. */
 async function openNavigation(page: Page) {
-  const menu = page.locator('summary[aria-label="Open navigation"]');
-  if (await menu.isVisible()) await menu.click();
+  if ((page.viewportSize()?.width ?? 1280) >= 960) return;
+  await page.locator('summary[aria-label="Open navigation"]').click();
 }
 
 /*
