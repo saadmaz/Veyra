@@ -48,6 +48,19 @@
   },
   "overrides": [
     {
+      "includes": ["apps/*-mobile/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noReactNativeRawText": {
+              "level": "error",
+              "options": { "skip": ["Title", "Body", "Muted", "Heading", "Badge", "Notice"] }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["apps/api/src/**/*.module.ts"],
       "linter": {
         "rules": {

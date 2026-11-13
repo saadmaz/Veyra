@@ -984,6 +984,14 @@ expiry, rehash on sign-in, idempotent sign-out).
 - `infra/scripts/restore-drill.sh` in the same job: a logical backup restored into a fresh
   database with identical row counts in every table.
 
+### Phase 15: mobile apps
+
+- `@veyra/client` unit tests: bearer and cookie sessions, the 401 hook, network errors versus
+  aborts, path safety, upload failures, gate hashing, and the moved console helpers.
+- Each app's `src/lib` has Vitest unit tests (resident: property-time-zone days and times, QR
+  matrix). Screens are typechecked, and `expo export --platform android` bundles them as a
+  check that every import resolves. Device journeys (Maestro) come with the first store release.
+
 ## Critical scenarios to add as features land
 
 Cross-tenant access, unauthorised financial access, expired memberships, duplicate payment

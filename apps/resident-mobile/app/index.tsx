@@ -1,62 +1,142 @@
-import { colors, fontSize, space } from '@veyra/design-tokens';
-import { Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, useColorScheme, View } from 'react-native';
-import { type ApiStatus, checkApiStatus } from '@/lib/api-client';
-import { apiBaseUrl } from '@/lib/config';
+import type { MyOrganisationDto, MyUnitDto } from '@veyra/api-contracts';
+import { residentRoleLabel } from '@veyra/client/messages';
+import { Stack, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorText,
+  Muted,
+  Row,
+  Screen,
+  Title,
+  usePalette,
+} from '@/components/ui';
+import { useClient, useSession } from '@/lib/session';
 
-export default function HomeScreen() {
-  const palette = colors[useColorScheme() === 'dark' ? 'dark' : 'light'];
-  const [status, setStatus] = useState<ApiStatus | 'checking'>('checking');
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let baseUrl: string;
-    try {
-      baseUrl = apiBaseUrl();
-    } catch {
-      setStatus('offline');
-      return;
-    }
-    checkApiStatus(baseUrl, { signal: controller.signal }).then((result) => {
-      if (!controller.signal.aborted) setStatus(result);
-    });
-    return () => controller.abort();
-  }, []);
-
-  const statusLabel = {
-    checking: 'Checking connection…',
-    online: 'Connected to VEYRA',
-    degraded: 'VEYRA is having problems. Some features may not work.',
-    offline: 'Cannot reach VEYRA. Check your connection.',
-  }[status];
-
-  return (
-    <View style={[styles.screen, { backgroundColor: palette.bg }]}>
-      <Stack.Screen options={{ title: 'VEYRA' }} />
-      <Text style={[styles.eyebrow, { color: palette.accent }]}>VEYRA RESIDENT</Text>
-      <Text style={[styles.title, { color: palette.text }]}>Your home, in one app.</Text>
-      <Text style={[styles.body, { color: palette.textMuted }]}>
-        Visitor passes, maintenance requests, bookings, bills and announcements arrive as each
-        feature is released. Sign-in arrives with Phase 2.
-      </Text>
-      <Text
-        accessibilityRole="text"
-        style={[
-          styles.status,
-          { color: status === 'online' ? palette.success : palette.textMuted },
-        ]}
-      >
-        {statusLabel}
-      </Text>
-    </View>
-  );
+interface HomeEntry extends MyUnitDto {
+  organisationId: string;
+  organisationName: string;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: space[6], justifyContent: 'center' },
-  eyebrow: { fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 2, marginBottom: space[3] },
-  title: { fontSize: fontSize.xl, fontWeight: '700', marginBottom: space[4] },
-  body: { fontSize: fontSize.md, lineHeight: 24, marginBottom: space[6] },
-  status: { fontSize: fontSize.sm },
-});
+type HomesState =
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown }
+  | { status: 'ready'; homes: HomeEntry[] };
+
+/** Every home this person has, across organisations. One home opens straight away. */
+export default function HomesScreen() {
+  const { state, signOut } = useSession();
+  const client = useClient();
+  const router = useRouter();
+  const palette = usePalette();
+  const [homes, setHomes] = useState<HomesState>({ status: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const orgs = await client.get<{ data: MyOrganisationDto[] }>('/organisations');
+      const lists = await Promise.all(
+        orgs.data.map(async ({ organisation }) => {
+          const units = await client.get<{ data: MyUnitDto[] }>(
+            `/organisations/${organisation.id}/my-units`,
+          );
+          return units.data.map((u) => ({
+            ...u,
+            organisationId: organisation.id,
+            organisationName: organisation.name,
+          }));
+        }),
+      );
+      setHomes({ status: 'ready', homes: lists.flat() });
+    } catch (error) {
+      setHomes({ status: 'error', error });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [client]);
+
+  useEffect(() => {
+    if (state.status === 'signed-in') void load();
+  }, [state.status, load]);
+
+  const open = useCallback(
+    (h: HomeEntry) => router.push(`/home/${h.organisationId}/${h.propertyId}/${h.unitId}`),
+    [router],
+  );
+
+  if (state.status === 'unconfigured') {
+    return (
+      <Screen>
+        <Title>This app is not set up</Title>
+        <Muted>
+          It was built without the address of the VEYRA service. Ask your property manager for the
+          right app.
+        </Muted>
+      </Screen>
+    );
+  }
+  if (state.status !== 'signed-in') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', backgroundColor: palette.bg }}>
+        <ActivityIndicator color={palette.accent} accessibilityLabel="Loading" />
+      </View>
+    );
+  }
+
+  return (
+    <Screen
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true);
+        void load();
+      }}
+    >
+      <Stack.Screen options={{ title: 'Your homes' }} />
+      <Muted>Signed in as {state.user.displayName}</Muted>
+      {homes.status === 'loading' ? (
+        <ActivityIndicator color={palette.accent} accessibilityLabel="Loading" />
+      ) : null}
+      {homes.status === 'error' ? (
+        <>
+          <ErrorText error={homes.error} />
+          <Button title="Try again" variant="secondary" onPress={() => void load()} />
+        </>
+      ) : null}
+      {homes.status === 'ready' && homes.homes.length === 0 ? (
+        <Card>
+          <Title>No homes yet</Title>
+          <Muted>
+            When your property manager adds you to a unit, it appears here. If you were invited,
+            open the invitation email and accept it first.
+          </Muted>
+        </Card>
+      ) : null}
+      {homes.status === 'ready'
+        ? homes.homes.map((h) => (
+            <Card
+              key={`${h.organisationId}:${h.unitId}`}
+              onPress={() => open(h)}
+              label={`Open unit ${h.unitNumber}, ${h.propertyName}`}
+            >
+              <Title>
+                Unit {h.unitNumber}
+                {h.buildingName ? `, ${h.buildingName}` : ''}
+              </Title>
+              <Muted>
+                {h.propertyName} · {h.organisationName}
+              </Muted>
+              <Row>
+                {h.roles.map((role) => (
+                  <Badge key={role}>{residentRoleLabel(role)}</Badge>
+                ))}
+              </Row>
+            </Card>
+          ))
+        : null}
+      <Button title="Sign out" variant="secondary" onPress={() => void signOut()} />
+    </Screen>
+  );
+}
