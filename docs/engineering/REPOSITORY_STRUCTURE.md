@@ -41,6 +41,7 @@ app. Overviews with ports and URLs: [apps/README.md](../../apps/README.md),
 │   ├── api-contracts/            API wire types (error envelope, pagination, money, health)
 │   ├── design-tokens/            Colour/spacing/type tokens; CSS variables for web, objects for mobile
 │   ├── emails/                   Transactional email templates (HTML + text)
+│   ├── client/                   API client and presentation helpers shared by console and mobile apps
 │   └── web-config/               Shared Next.js security headers
 ├── docs/
 ├── .github/workflows/ci.yml
@@ -89,9 +90,10 @@ Shared UI stays separate from feature code. No global `utils` dumping ground.
 | `packages/domain` | nothing internal; no frameworks |
 | `packages/db` | `domain` |
 | `packages/api-contracts`, `design-tokens`, `emails`, `web-config` | nothing internal |
+| `packages/client` | `api-contracts`, `domain` (value objects only); no DOM, no React |
 | `apps/api` | `domain`, `db`, `api-contracts` |
 | `apps/worker` | `domain`, `db`, `emails` |
-| `apps/console-web`, `apps/admin-web` | `domain` (value objects only), `api-contracts`, `design-tokens`, `web-config` |
+| `apps/console-web`, `apps/admin-web` | `domain` (value objects only), `api-contracts`, `client`, `design-tokens`, `web-config` |
 | `apps/marketing-web` | `design-tokens`, `web-config` |
 | `apps/resident-mobile` | `api-contracts`, `design-tokens` |
 

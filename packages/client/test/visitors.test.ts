@@ -5,7 +5,7 @@ import {
   instantToZonedLocal,
   secondsUntil,
   zonedLocalToInstant,
-} from '../src/lib/visitors';
+} from '../src/visitors';
 
 describe('property-local times', () => {
   it("converts a wall-clock time at the property to an instant, whatever the device's zone", () => {

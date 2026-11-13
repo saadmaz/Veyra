@@ -9,7 +9,7 @@ import {
   periodStatus,
   sharesSumToOne,
   todayIn,
-} from '../src/lib/residents';
+} from '../src/residents';
 
 describe('parseShare', () => {
   it('reads whole numbers and fractions', () => {

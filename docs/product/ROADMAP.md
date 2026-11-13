@@ -36,6 +36,7 @@ Stages are the product view; phases are the engineering increments that deliver 
 | 12    | Analytics and integrations               | Done. Exit review: [PHASE_12_REVIEW](../reviews/PHASE_12_REVIEW.md) |
 | 13    | SaaS administration and subscriptions    | Done. Exit review: [PHASE_13_REVIEW](../reviews/PHASE_13_REVIEW.md) |
 | 14    | Security hardening and commercial launch | Done. Exit review: [PHASE_14_REVIEW](../reviews/PHASE_14_REVIEW.md) |
+| 15    | Mobile apps (resident and staff)         | In progress |
 
 ## Stage 0 discovery still required
 
@@ -313,6 +314,21 @@ a provider.
 | 3 | Operational hardening: structured JSON logging with redaction, secret scanning and dependency audit in CI, Content-Security-Policy, upload malware scanning adapter | ✅ Done (ClamAV adapter; the worker still logs plain text) |
 | 4 | Launch readiness: production database roles, backup and restore runbook, full-stack smoke test, launch checklist | ✅ Done (one image; smoke test and restore drill in CI) |
 | 5 | Phase 14 exit review | ✅ Done ([PHASE_14_REVIEW](../reviews/PHASE_14_REVIEW.md)) |
+
+## Phase 15 plan (Mobile apps: resident and staff)
+
+Decisions (2026-11-13, the recommended options, ADR 0008): two Expo apps, VEYRA Resident and
+VEYRA Staff, on a shared API client package used by the console too; bearer sessions from the
+secure store; the offline gate shares the console's checks; installable Android APKs built in
+GitHub Actions for testing and pilots, store builds through EAS once the developer accounts exist.
+
+| Part | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Shared client `@veyra/client` (request layer for cookie and bearer sessions, error messages, labels, time zones, money, uploads, offline-gate checks); the console moves onto it; ADR 0008 | ✅ Done |
+| 2 | VEYRA Resident: sign-in with two-step sign-in, homes, visitor passes with QR codes and walk-in approvals, maintenance requests, facility bookings, bills and statement, announcements and notifications, documents | |
+| 3 | VEYRA Staff: sign-in with two-step sign-in, property choice, gate (QR scan and codes, admit, deny, walk-ins, departures, offline list and queue), my work orders, incident reports, my shifts | |
+| 4 | Android APKs from CI for both apps, install guide | |
+| 5 | Phase 15 exit review | |
 
 ## Release gates
 

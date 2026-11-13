@@ -66,6 +66,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@veyra/api-contracts": "workspace:*",
+        "@veyra/client": "workspace:*",
         "@veyra/design-tokens": "workspace:*",
         "@veyra/domain": "workspace:*",
         "@veyra/web-config": "workspace:*",
@@ -131,6 +132,14 @@
     "packages/api-contracts": {
       "name": "@veyra/api-contracts",
       "version": "0.0.0",
+    },
+    "packages/client": {
+      "name": "@veyra/client",
+      "version": "0.0.0",
+      "dependencies": {
+        "@veyra/api-contracts": "workspace:*",
+        "@veyra/domain": "workspace:*",
+      },
     },
     "packages/db": {
       "name": "@veyra/db",
@@ -960,6 +969,8 @@
     "@veyra/api": ["@veyra/api@workspace:apps/api"],
 
     "@veyra/api-contracts": ["@veyra/api-contracts@workspace:packages/api-contracts"],
+
+    "@veyra/client": ["@veyra/client@workspace:packages/client"],
 
     "@veyra/console-web": ["@veyra/console-web@workspace:apps/console-web"],
 
