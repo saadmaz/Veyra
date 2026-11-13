@@ -13,9 +13,6 @@
     "android": {
       "package": "com.veyra.resident"
     },
-    "plugins": ["expo-router", "expo-status-bar", "expo-secure-store"],
-    "experiments": {
-      "typedRoutes": true
-    }
+    "plugins": ["expo-router", "expo-status-bar", "expo-secure-store"]
   }
 }

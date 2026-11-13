@@ -325,7 +325,7 @@ GitHub Actions for testing and pilots, store builds through EAS once the develop
 | Part | Scope | Status |
 | ---- | ----- | ------ |
 | 1 | Shared client `@veyra/client` (request layer for cookie and bearer sessions, error messages, labels, time zones, money, uploads, offline-gate checks); the console moves onto it; ADR 0008 | ✅ Done |
-| 2 | VEYRA Resident: sign-in with two-step sign-in, homes, visitor passes with QR codes and walk-in approvals, maintenance requests, facility bookings, bills and statement, announcements and notifications, documents | |
+| 2 | VEYRA Resident: sign-in with two-step sign-in, homes, visitor passes with QR codes and walk-in approvals, maintenance requests, facility bookings, bills and statement, announcements and notifications, documents | ✅ Done (no photo upload or push yet) |
 | 3 | VEYRA Staff: sign-in with two-step sign-in, property choice, gate (QR scan and codes, admit, deny, walk-ins, departures, offline list and queue), my work orders, incident reports, my shifts | |
 | 4 | Android APKs from CI for both apps, install guide | |
 | 5 | Phase 15 exit review | |
