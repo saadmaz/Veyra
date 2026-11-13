@@ -36,7 +36,7 @@ export function accountEmail(input: AccountEmailInput): RenderedEmail {
     copy.subject,
     `<p style="margin:0 0 16px;">${escapeHtml(greeting)}</p>
 <p style="margin:0 0 16px;">${escapeHtml(copy.lead)}</p>
-<p style="margin:0 0 24px;"><a href="${escapeHtml(input.url)}" style="display:inline-block;background:#1f4e46;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;">${escapeHtml(copy.button)}</a></p>
+<p style="margin:0 0 24px;"><a href="${escapeHtml(input.url)}" style="display:inline-block;background:#18181b;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;">${escapeHtml(copy.button)}</a></p>
 <p style="margin:0;font-size:13px;color:#5b616b;">This link expires on ${expiry} UTC and can be used once. ${escapeHtml(copy.ignore)}</p>`,
   );
   const text = [

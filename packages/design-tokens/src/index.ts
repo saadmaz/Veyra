@@ -1,29 +1,29 @@
 /**
- * VEYRA design tokens. Web apps consume them as CSS custom properties (`cssVariables()`);
+ * VEYRA design tokens (Graphite theme, ADR 0009). Web apps consume them as CSS custom properties (`cssVariables()`);
  * the React Native app imports the objects directly. Components use tokens, never raw values.
  */
 
 export const colors = {
   light: {
-    bg: '#f7f7f5',
+    bg: '#f8f8f8',
     surface: '#ffffff',
-    text: '#15171a',
-    textMuted: '#5b616b',
-    border: '#e3e4e0',
-    accent: '#1f4e46',
+    text: '#111113',
+    textMuted: '#5c5c63',
+    border: '#e6e6e8',
+    accent: '#18181b',
     accentContrast: '#ffffff',
     success: '#1d7a4d',
     warning: '#975c0a',
     danger: '#b42318',
   },
   dark: {
-    bg: '#0f1113',
-    surface: '#171a1d',
-    text: '#eceeef',
-    textMuted: '#9aa1aa',
-    border: '#2a2e33',
-    accent: '#7cc4b5',
-    accentContrast: '#0f1113',
+    bg: '#0c0c0d',
+    surface: '#161618',
+    text: '#f4f4f5',
+    textMuted: '#a3a3aa',
+    border: '#2a2a2e',
+    accent: '#e8e8ea',
+    accentContrast: '#0c0c0d',
     success: '#4cc38a',
     warning: '#f0b44c',
     danger: '#f97066',
