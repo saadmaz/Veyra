@@ -45,6 +45,11 @@ bun run --cwd apps/staff-mobile dev
 
 Scanning needs a real phone (Expo Go includes the camera module).
 
+## Installable APK
+
+GitHub Actions builds an Android APK of this app (workflow **Android APKs**). How to build it
+with your API address and install it: [docs/operations/MOBILE_APPS.md](../../docs/operations/MOBILE_APPS.md).
+
 ## Structure
 
 ```

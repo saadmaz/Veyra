@@ -32,6 +32,11 @@ Scan the QR code with Expo Go (Android) or the Camera app (iOS), or press `a` or
 emulator or simulator. Sign in with a resident account (accept its invitation in the console
 first).
 
+## Installable APK
+
+GitHub Actions builds an Android APK of this app (workflow **Android APKs**). How to build it
+with your API address and install it: [docs/operations/MOBILE_APPS.md](../../docs/operations/MOBILE_APPS.md).
+
 ## Structure
 
 ```
