@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@veyra/api-contracts": "workspace:*",
+    "@veyra/client": "workspace:*",
     "@veyra/design-tokens": "workspace:*",
     "@veyra/domain": "workspace:*",
     "@veyra/web-config": "workspace:*",

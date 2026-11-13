@@ -1,12 +1,6 @@
 import type { FacilityDto } from '@veyra/api-contracts';
 import { describe, expect, it } from 'vitest';
-import {
-  describeHours,
-  describeRules,
-  everyDay,
-  formatDuration,
-  todayIn,
-} from '../src/lib/facilities';
+import { describeHours, describeRules, everyDay, formatDuration, todayIn } from '../src/facilities';
 
 const facility: FacilityDto = {
   id: 'f',

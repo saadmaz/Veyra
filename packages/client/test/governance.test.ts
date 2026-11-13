@@ -1,6 +1,6 @@
 import type { ApprovalRequestDto } from '@veyra/api-contracts';
 import { describe, expect, it } from 'vitest';
-import { approvalProgress, incidentMoves } from '../src/lib/governance';
+import { approvalProgress, incidentMoves } from '../src/governance';
 
 describe('governance helpers', () => {
   it('offer the next incident moves, closing only with every follow-up done', () => {

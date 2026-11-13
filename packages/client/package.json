@@ -1,0 +1,59 @@
+{
+  "name": "@veyra/client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "VEYRA API client and presentation helpers shared by the console and the mobile apps (ADR 0008). No business rules: the API decides.",
+  "main": "dist/http.js",
+  "types": "dist/http.d.ts",
+  "exports": {
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "default": "./dist/http.js"
+    },
+    "./messages": {
+      "types": "./dist/messages.d.ts",
+      "default": "./dist/messages.js"
+    },
+    "./visitors": {
+      "types": "./dist/visitors.d.ts",
+      "default": "./dist/visitors.js"
+    },
+    "./residents": {
+      "types": "./dist/residents.d.ts",
+      "default": "./dist/residents.js"
+    },
+    "./facilities": {
+      "types": "./dist/facilities.d.ts",
+      "default": "./dist/facilities.js"
+    },
+    "./governance": {
+      "types": "./dist/governance.d.ts",
+      "default": "./dist/governance.js"
+    },
+    "./finance": {
+      "types": "./dist/finance.d.ts",
+      "default": "./dist/finance.js"
+    },
+    "./maintenance": {
+      "types": "./dist/maintenance.d.ts",
+      "default": "./dist/maintenance.js"
+    },
+    "./communications": {
+      "types": "./dist/communications.d.ts",
+      "default": "./dist/communications.js"
+    },
+    "./offline-gate": {
+      "types": "./dist/offline-gate.d.ts",
+      "default": "./dist/offline-gate.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@veyra/api-contracts": "workspace:*",
+    "@veyra/domain": "workspace:*"
+  }
+}
