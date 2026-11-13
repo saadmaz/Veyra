@@ -174,7 +174,7 @@ test.describe('finance officers', () => {
     await expect(page.getByText('Refund requested.')).toBeVisible();
 
     // The requester cannot decide their own request.
-    await page.getByRole('link', { name: 'Approvals' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Approvals' }).click();
     const requests = page.getByRole('list', { name: 'Approval requests' });
     await expect(requests).toContainText('Refund of PKR 1,000.00');
     await expect(requests).toContainText('Someone else must approve this.');

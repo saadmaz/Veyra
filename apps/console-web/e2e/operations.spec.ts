@@ -100,7 +100,7 @@ test.describe('operations', () => {
     // The guard works the shift.
     api.currentUserId = guard.id;
     await page.goto(base);
-    await page.getByRole('link', { name: 'My shifts' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'My shifts' }).click();
     await expect(page.getByRole('heading', { name: 'My shifts', level: 1 })).toBeVisible();
     await page.getByRole('button', { name: 'Start shift' }).click();
     await expect(page.getByText('on shift')).toBeVisible();

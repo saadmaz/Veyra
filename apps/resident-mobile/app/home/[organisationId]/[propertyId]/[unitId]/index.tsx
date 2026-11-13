@@ -1,7 +1,7 @@
 import type { InboxItemDto, MyFinanceDto } from '@veyra/api-contracts';
 import { balanceText } from '@veyra/client/finance';
 import { useRouter } from 'expo-router';
-import { Badge, Card, Muted, Row, Screen, Title } from '@/components/ui';
+import { Badge, Card, Hero, Muted, Row, Screen, Section, Title } from '@/components/ui';
 import { useHome } from '@/lib/home';
 import { useApiQuery } from '@/lib/use-api';
 
@@ -75,16 +75,12 @@ export default function HomeScreen() {
       }}
       refreshing={inbox.refreshing}
     >
-      <Card>
-        <Title>
-          Unit {unit.unitNumber}
-          {unit.buildingName ? `, ${unit.buildingName}` : ''}
-        </Title>
-        <Muted>
-          {unit.propertyName}
-          {unit.floorName ? ` · ${unit.floorName}` : ''}
-        </Muted>
-      </Card>
+      <Hero
+        overline={unit.propertyName}
+        value={`Unit ${unit.unitNumber}`}
+        caption={[unit.buildingName, unit.floorName].filter(Boolean).join(' · ') || undefined}
+      />
+      <Section title="Your services" />
       {tiles
         .filter((t) => t.show)
         .map((t) => (

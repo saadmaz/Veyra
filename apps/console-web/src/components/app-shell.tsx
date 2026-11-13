@@ -7,13 +7,16 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
 import { signInPath } from '@/lib/navigation';
 import { useSession } from '@/lib/session';
+import { activeHref, sidebarGroups } from '@/lib/sidebar';
 import { useApiQuery } from '@/lib/use-api';
+import { Icon } from './icon';
 import { VerifyMfa } from './mfa';
 import { Alert, Button, ErrorState, LoadingState } from './ui';
 
 /**
- * Signed-in layout: redirects to sign-in when there is no session, then renders the header
- * (skip link, organisation switcher, account menu) around the page.
+ * Signed-in layout: redirects to sign-in when there is no session, then renders the sidebar
+ * (organisation switcher, navigation for the current organisation and property, account) and the
+ * page.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { session, refresh } = useSession();
@@ -39,23 +42,69 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
+  const groups = sidebarGroups(pathname);
+  const current = activeHref(pathname, groups);
+  const nav = (
+    <nav aria-label="Main" className="sidebar__nav">
+      {groups.map((group) => (
+        <div key={group.label} className="sidebar__group">
+          <p className="sidebar__label">{group.label}</p>
+          <ul>
+            {group.items.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="sidebar__link"
+                  aria-current={item.href === current ? 'page' : undefined}
+                >
+                  <Icon name={item.icon} />
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+
   return (
     <>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className="topbar">
-        <Link href="/organisations" className="brand" aria-label="VEYRA home">
-          VEYRA
-        </Link>
-        <OrganisationSwitcher />
-        <AccountMenu displayName={session.user.displayName} email={session.user.email} />
-      </header>
-      <main id="main" className="page" tabIndex={-1}>
-        {session.user.emailVerified ? null : <ConfirmEmailBanner />}
-        {session.user.mfaEnabled && !session.mfaVerified ? <VerifyMfa /> : null}
-        {children}
-      </main>
+      <div className="shell">
+        <aside className="sidebar">
+          <div className="sidebar__top">
+            <Link href="/organisations" className="brand">
+              <span className="brand__mark" aria-hidden="true">
+                V
+              </span>
+              <span className="brand__word">VEYRA</span>
+            </Link>
+            {/* Small screens: a native disclosure, so the menu works without JavaScript. */}
+            <details className="sidebar__menu">
+              <summary aria-label="Open navigation">
+                <Icon name="menu" size={20} />
+              </summary>
+              <div className="sidebar__panel">
+                {nav}
+                <AccountMenu displayName={session.user.displayName} email={session.user.email} />
+              </div>
+            </details>
+          </div>
+          <OrganisationSwitcher />
+          <div className="sidebar__desktop">{nav}</div>
+          <div className="sidebar__desktop sidebar__footer">
+            <AccountMenu displayName={session.user.displayName} email={session.user.email} />
+          </div>
+        </aside>
+        <main id="main" className="page" tabIndex={-1}>
+          {session.user.emailVerified ? null : <ConfirmEmailBanner />}
+          {session.user.mfaEnabled && !session.mfaVerified ? <VerifyMfa /> : null}
+          {children}
+        </main>
+      </div>
     </>
   );
 }
@@ -111,7 +160,7 @@ function OrganisationSwitcher() {
 
   return (
     <div className="switcher">
-      <label htmlFor="organisation-switcher" className="visually-hidden">
+      <label htmlFor="organisation-switcher" className="switcher__label">
         Switch organisation
       </label>
       <select
@@ -138,24 +187,35 @@ function AccountMenu({ displayName, email }: { displayName: string; email: strin
   const { signOut } = useSession();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
   return (
     <div className="account">
-      <span className="account__name" title={email}>
-        {displayName}
+      <span className="avatar" aria-hidden="true">
+        {initials}
       </span>
-      <Link href="/account/security" className="account__link">
-        Two-step sign-in
-      </Link>
+      <span className="account__text">
+        <span className="account__name">{displayName}</span>
+        <span className="account__email">{email}</span>
+      </span>
       <Button
         variant="secondary"
+        className="account__signout"
         busy={busy}
+        aria-label="Sign out"
+        title="Sign out"
         onClick={async () => {
           setBusy(true);
           await signOut().catch(() => undefined);
           router.replace('/sign-in');
         }}
       >
-        Sign out
+        <Icon name="logOut" size={16} />
       </Button>
     </div>
   );

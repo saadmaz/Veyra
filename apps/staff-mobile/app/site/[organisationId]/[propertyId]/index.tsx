@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { GateStatus } from '@/components/gate-status';
-import { Card, Muted, Screen, Title } from '@/components/ui';
+import { Card, Hero, Muted, Screen, Section, Title } from '@/components/ui';
 import { useSite } from '@/lib/site';
 
 /** What this person can do at the site, as the API's permissions allow. */
@@ -47,7 +47,13 @@ export default function SiteScreen() {
   ];
   return (
     <Screen>
+      <Hero
+        overline="Your site"
+        value={site.property.name}
+        caption="Only what your role allows is shown."
+      />
       <GateStatus />
+      <Section title="Tasks" />
       {tiles
         .filter((t) => t.show)
         .map((t) => (

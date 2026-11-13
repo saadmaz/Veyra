@@ -43,7 +43,7 @@ test.describe('communications', () => {
     await api.install(page);
 
     await page.goto(base);
-    await page.getByRole('link', { name: 'Announcements' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Announcements' }).click();
     await expect(page.getByRole('heading', { name: 'Announcements', level: 1 })).toBeVisible();
     const compose = page.getByRole('form', { name: 'New announcement' });
     await compose.getByLabel('Title').fill('Water off on Friday');

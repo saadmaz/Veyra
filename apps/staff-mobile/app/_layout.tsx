@@ -1,7 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 import { usePalette } from '@/components/ui';
 import { SessionProvider, useSession } from '@/lib/session';
 
@@ -10,7 +9,6 @@ const target = (status: string) =>
 
 function Navigator() {
   const palette = usePalette();
-  const scheme = useColorScheme();
   const { state } = useSession();
   const segments = useSegments();
   const router = useRouter();
@@ -26,7 +24,8 @@ function Navigator() {
 
   return (
     <>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      {/* The staff app is always dark (see usePalette), so the status bar is always light. */}
+      <StatusBar style="light" />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: palette.surface },

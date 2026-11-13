@@ -2,6 +2,12 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 import { FakeApi } from './fake-api';
 
+/** Below 60rem the sidebar collapses into a menu; open it before using its links. */
+async function openNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 1280) >= 960) return;
+  await page.locator('summary[aria-label="Open navigation"]').click();
+}
+
 /*
  * Two-step sign-in (Phase 14 Part 2): an organisation admin turns it on with an authenticator
  * app and sees the recovery codes once; a later session asks for a code before changes, accepts
@@ -26,6 +32,7 @@ test('an admin turns on two-step sign-in and verifies a later session', async ({
   await api.install(page);
 
   await page.goto('/organisations');
+  await openNavigation(page);
   await page.getByRole('link', { name: 'Two-step sign-in' }).click();
   await page.getByRole('button', { name: 'Set up an authenticator app' }).click();
   await expect(page.getByText('JBSWY3DPEHPK3PXP')).toBeVisible();

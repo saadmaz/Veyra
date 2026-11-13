@@ -2,6 +2,12 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 import { FakeApi } from './fake-api';
 
+/** Below 60rem the sidebar collapses into a menu; open it before using its links. */
+async function openNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 1280) >= 960) return;
+  await page.locator('summary[aria-label="Open navigation"]').click();
+}
+
 const PASSWORD = 'correct horse battery staple';
 
 /** WCAG 2.2 AA automated checks. Manual review is still required for full conformance. */
@@ -221,6 +227,7 @@ test.describe('error and empty states', () => {
     await api.install(page);
 
     await page.goto('/organisations');
+    await openNavigation(page);
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/sign-in/);
     await page.goto('/organisations');
