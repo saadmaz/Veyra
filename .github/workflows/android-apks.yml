@@ -119,7 +119,7 @@ jobs:
         run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
 
       - name: Cache Gradle downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
@@ -148,7 +148,7 @@ jobs:
             "dist-apk/veyra-${{ matrix.app }}-${GITHUB_SHA::7}.apk"
           ls -lh dist-apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: veyra-${{ matrix.app }}-apk
           path: dist-apk/*.apk
